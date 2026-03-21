@@ -1,0 +1,9 @@
+FROM nginx:1.28-alpine
+
+ENV BACKEND_UPSTREAM=http://backend:8080
+
+COPY deploy/nginx/frontend.conf.template /etc/nginx/templates/default.conf.template
+COPY frontend/dist/ /usr/share/nginx/html/
+
+EXPOSE 80
+

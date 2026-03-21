@@ -1,0 +1,41 @@
+/* Default CSS variables — overridden by theme store at runtime */
+:root {
+  --sl-primary: #005fb8;
+  --sl-primary-hover: #004e99;
+  --sl-primary-active: #003e7e;
+  --sl-primary-light: rgba(0, 95, 184, 0.08);
+  --sl-bg: #f3f3f3;
+  --sl-bg-secondary: #ffffff;
+  --sl-panel: #ffffff;
+  --sl-card: #ffffff;
+  --sl-card-hover: #f9f9f9;
+  --sl-border: #e5e5e5;
+  --sl-border-strong: #c4c4c4;
+  --sl-text: #1a1a1a;
+  --sl-text-secondary: #616161;
+  --sl-text-tertiary: #9e9e9e;
+  --sl-danger: #c42b1c;
+  --sl-success: #0f7b0f;
+  --sl-warning: #9d5d00;
+  --sl-shadow-card: 0 2px 8px rgba(0,0,0,0.04), 0 0 1px rgba(0,0,0,0.12);
+  --sl-shadow-flyout: 0 8px 32px rgba(0,0,0,0.08), 0 0 1px rgba(0,0,0,0.12);
+  --sl-radius: 8px;
+  --sl-radius-lg: 12px;
+  --sl-input-bg: #ffffff;
+  --sl-input-border: #e5e5e5;
+  --sl-input-focus: #005fb8;
+  --sl-sidebar-bg: #f3f3f3;
+  --sl-hover-bg: rgba(0,0,0,0.03);
+  --sl-active-bg: rgba(0,0,0,0.05);
+  --sl-selection: rgba(0,95,184,0.12);
+  --sl-scrollbar: rgba(0,0,0,0.2);
+  --sl-scrollbar-hover: rgba(0,0,0,0.35);
+  --sl-code-bg: #f6f6f6;
+  --sl-backdrop: rgba(0,0,0,0.3);
+
+  --sl-font: 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --sl-font-mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  --sl-background-image: none;
+  --sl-background-opacity: 0;
+}
+

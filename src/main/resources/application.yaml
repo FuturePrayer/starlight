@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: startlight
+  datasource:
+    url: ${STARLIGHT_DATASOURCE_URL:jdbc:h2:file:./data/starlight;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE}
+    username: ${STARLIGHT_DATASOURCE_USERNAME:sa}
+    password: ${STARLIGHT_DATASOURCE_PASSWORD:}
+#    driver-class-name: ${STARLIGHT_DATASOURCE_DRIVER:org.h2.Driver}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+starlight:
+  theme-dir: ${STARLIGHT_THEME_DIR:themes}
+
+sa-token: 
+  token-name: satoken
+  timeout: 2592000
+  active-timeout: -1
+  is-concurrent: true
+  is-share: true
+  token-style: uuid
+  is-log: false

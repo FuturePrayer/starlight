@@ -1,0 +1,340 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      artifact_id: ${{ steps.meta.outputs.artifact_id }}
+      owner_lc: ${{ steps.meta.outputs.owner_lc }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Validate tag, version and source branch
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout | tail -n 1 | tr -d '\r')"
+          ARTIFACT_ID="$(mvn -q help:evaluate -Dexpression=project.artifactId -DforceStdout | tail -n 1 | tr -d '\r')"
+          TAG="${GITHUB_REF_NAME}"
+          EXPECTED_TAG="v${VERSION}"
+
+          if [[ "${TAG}" != "${EXPECTED_TAG}" ]]; then
+            echo "Tag ${TAG} does not match pom.xml version ${VERSION}. Expected ${EXPECTED_TAG}." >&2
+            exit 1
+          fi
+
+          chmod +x scripts/check-tag-branch.sh
+          ./scripts/check-tag-branch.sh "${GITHUB_SHA}"
+
+          OWNER_LC="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_id=${ARTIFACT_ID}" >> "${GITHUB_OUTPUT}"
+          echo "owner_lc=${OWNER_LC}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+
+  build_frontend:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build standalone frontend
+        working-directory: frontend
+        run: npm run build:standalone
+
+      - name: Package frontend release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION='${{ needs.validate.outputs.version }}'
+          ARTIFACT_ID='${{ needs.validate.outputs.artifact_id }}'
+          mkdir -p .release/frontend
+          tar -czf ".release/frontend/${ARTIFACT_ID}-frontend-${VERSION}.tar.gz" -C frontend/dist .
+
+      - name: Upload frontend dist for image build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          if-no-files-found: error
+
+      - name: Upload frontend release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-release
+          path: .release/frontend/*.tar.gz
+          if-no-files-found: error
+
+  build_backend:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Build backend-only jar
+        run: mvn -B -DskipTests clean package
+
+      - name: Package backend release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION='${{ needs.validate.outputs.version }}'
+          ARTIFACT_ID='${{ needs.validate.outputs.artifact_id }}'
+          BACKEND_JAR="$(find target -maxdepth 1 -type f -name '*.jar' ! -name '*.original' | head -n 1)"
+          if [[ -z "${BACKEND_JAR}" ]]; then
+            echo "No backend jar found in target/." >&2
+            exit 1
+          fi
+          mkdir -p .release/backend
+          cp "${BACKEND_JAR}" ".release/backend/${ARTIFACT_ID}-backend-${VERSION}.jar"
+
+      - name: Upload backend release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-release
+          path: .release/backend/*.jar
+          if-no-files-found: error
+
+  build_combined:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend into Spring Boot static resources
+        working-directory: frontend
+        run: npm run build:combined
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Build combined jar
+        run: mvn -B -DskipTests clean package
+
+      - name: Package combined release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION='${{ needs.validate.outputs.version }}'
+          ARTIFACT_ID='${{ needs.validate.outputs.artifact_id }}'
+          COMBINED_JAR="$(find target -maxdepth 1 -type f -name '*.jar' ! -name '*.original' | head -n 1)"
+          if [[ -z "${COMBINED_JAR}" ]]; then
+            echo "No combined jar found in target/." >&2
+            exit 1
+          fi
+          mkdir -p .release/combined
+          cp "${COMBINED_JAR}" ".release/combined/${ARTIFACT_ID}-combined-${VERSION}.jar"
+
+      - name: Upload combined release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined-release
+          path: .release/combined/*.jar
+          if-no-files-found: error
+
+  publish_images:
+    needs:
+      - validate
+      - build_frontend
+      - build_backend
+      - build_combined
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: Download backend jar
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-release
+          path: .docker/backend
+
+      - name: Download combined jar
+        uses: actions/download-artifact@v4
+        with:
+          name: combined-release
+          path: .docker/combined
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.frontend
+          push: true
+          tags: ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}-frontend:${{ needs.validate.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=${{ needs.validate.outputs.artifact_id }}-frontend
+            org.opencontainers.image.version=${{ needs.validate.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          push: true
+          build-args: |
+            JAR_FILE=.docker/backend/${{ needs.validate.outputs.artifact_id }}-backend-${{ needs.validate.outputs.version }}.jar
+          tags: ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}-backend:${{ needs.validate.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=${{ needs.validate.outputs.artifact_id }}-backend
+            org.opencontainers.image.version=${{ needs.validate.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push combined image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.combined
+          push: true
+          build-args: |
+            JAR_FILE=.docker/combined/${{ needs.validate.outputs.artifact_id }}-combined-${{ needs.validate.outputs.version }}.jar
+          tags: |
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}:${{ needs.validate.outputs.version }}
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}:latest
+          labels: |
+            org.opencontainers.image.title=${{ needs.validate.outputs.artifact_id }}
+            org.opencontainers.image.version=${{ needs.validate.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+  publish_release:
+    needs:
+      - validate
+      - build_frontend
+      - build_backend
+      - build_combined
+      - publish_images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download frontend release asset
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-release
+          path: .release/frontend
+
+      - name: Download backend release asset
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-release
+          path: .release/backend
+
+      - name: Download combined release asset
+        uses: actions/download-artifact@v4
+        with:
+          name: combined-release
+          path: .release/combined
+
+      - name: Generate checksums and release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION='${{ needs.validate.outputs.version }}'
+          ARTIFACT_ID='${{ needs.validate.outputs.artifact_id }}'
+          OWNER='${{ needs.validate.outputs.owner_lc }}'
+          find .release -type f \( -name '*.jar' -o -name '*.tar.gz' \) -print0 | sort -z | xargs -0 sha256sum > .release/SHA256SUMS
+          cat > .release/RELEASE-NOTES.md <<EOF
+          ## Release ${VERSION}
+
+          ### Release assets
+          - ${ARTIFACT_ID}-frontend-${VERSION}.tar.gz
+          - ${ARTIFACT_ID}-backend-${VERSION}.jar
+          - ${ARTIFACT_ID}-combined-${VERSION}.jar
+          - SHA256SUMS
+
+          ### Container images
+          - ghcr.io/${OWNER}/${ARTIFACT_ID}-frontend:${VERSION}
+          - ghcr.io/${OWNER}/${ARTIFACT_ID}-backend:${VERSION}
+          - ghcr.io/${OWNER}/${ARTIFACT_ID}:${VERSION}
+          - ghcr.io/${OWNER}/${ARTIFACT_ID}:latest （仅 combined）
+          EOF
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.tag }}
+          body_path: .release/RELEASE-NOTES.md
+          files: |
+            .release/frontend/*.tar.gz
+            .release/backend/*.jar
+            .release/combined/*.jar
+            .release/SHA256SUMS
+

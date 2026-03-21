@@ -1,0 +1,10 @@
+.git
+.github
+.idea
+.vscode
+data
+target
+frontend/node_modules
+src/main/resources/static
+*.iml
+
