@@ -7,6 +7,38 @@ const md = new MarkdownIt({
   breaks: true
 })
 
+function renderCodeBlock(content, { lang = '', showLineNumbers = false } = {}) {
+  const normalizedCode = String(content || '').replace(/\n$/, '')
+  const lines = normalizedCode.split('\n')
+  const lineCount = Math.max(lines.length, 1)
+  const gutterWidth = String(lineCount).length
+  const langLabel = lang ? `<span class="sl-code-lang">${md.utils.escapeHtml(lang)}</span>` : ''
+
+  const lineHtml = lines.map((line, index) => {
+    const contentHtml = `<span class="sl-code-content">${md.utils.escapeHtml(line)}</span>`
+
+    if (!showLineNumbers) {
+      return `<span class="sl-code-line sl-code-line--plain">${contentHtml}</span>`
+    }
+
+    const lineNumber = String(index + 1).padStart(gutterWidth, ' ')
+    return `<span class="sl-code-line"><span class="sl-code-ln">${lineNumber}</span>${contentHtml}</span>`
+  }).join('')
+
+  return `<div class="sl-code-block">${langLabel}<pre><code>${lineHtml}</code></pre></div>`
+}
+
+// ── Code blocks: fenced blocks with line numbers, indented blocks with same spacing ──
+md.renderer.rules.fence = function (tokens, idx) {
+  const token = tokens[idx]
+  const lang = token.info ? token.info.trim().split(/\s+/)[0] : ''
+  return renderCodeBlock(token.content, { lang, showLineNumbers: true })
+}
+
+md.renderer.rules.code_block = function (tokens, idx) {
+  return renderCodeBlock(tokens[idx].content)
+}
+
 // Add id to headings for outline anchors
 const defaultRender = md.renderer.rules.heading_open || function (tokens, idx, options, env, self) {
   return self.renderToken(tokens, idx, options)

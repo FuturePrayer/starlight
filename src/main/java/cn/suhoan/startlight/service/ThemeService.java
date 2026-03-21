@@ -152,6 +152,16 @@ public class ThemeService {
         dark.put("backgroundImage", "");
         dark.put("backgroundOpacity", 0);
         list.add(dark);
+
+        Map<String, Object> golden = new HashMap<>();
+        golden.put("id", "golden-light");
+        golden.put("name", "琥珀金 浅色");
+        golden.put("cssUrl", "");
+        golden.put("previewColor", "#b8860b");
+        golden.put("backgroundImage", "");
+        golden.put("backgroundOpacity", 0);
+        list.add(golden);
+
         return list;
     }
 
