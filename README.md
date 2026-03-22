@@ -87,7 +87,6 @@ npm run build
 $env:STARLIGHT_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:5432/startlight"
 $env:STARLIGHT_DATASOURCE_USERNAME="postgres"
 $env:STARLIGHT_DATASOURCE_PASSWORD="postgres"
-$env:STARLIGHT_DATASOURCE_DRIVER="org.postgresql.Driver"
 mvn spring-boot:run
 ```
 
@@ -168,13 +167,13 @@ git push origin v0.0.1
 
 同时会发布三个容器镜像到 `ghcr.io`：
 
-- `ghcr.io/<owner>/startlight-frontend:<version>`
-- `ghcr.io/<owner>/startlight-backend:<version>`
-- `ghcr.io/<owner>/startlight:<version>`
+- `ghcr.io/futureprayer/startlight-frontend:<version>`
+- `ghcr.io/futureprayer/startlight-backend:<version>`
+- `ghcr.io/futureprayer/startlight:<version>`
 
 其中：
 
-- `ghcr.io/<owner>/startlight:latest` **只会指向最新的前后端合并镜像**
+- `ghcr.io/futureprayer/startlight:latest` **只会指向最新的前后端合并镜像**
 - 不会给 frontend-only / backend-only 镜像打 `latest`
 
 ---
@@ -221,7 +220,7 @@ java -jar startlight-backend-<version>.jar
 说明：
 
 - 这个包只提供后端 API 与主题文件接口
-- 你需要额外部署前端静态站点，或使用 `ghcr.io/<owner>/startlight-frontend:<version>`
+- 你需要额外部署前端静态站点，或使用 `ghcr.io/futureprayer/startlight-frontend:<version>`
 
 #### C. 使用前端单独包
 
@@ -250,29 +249,27 @@ java -jar startlight-backend-<version>.jar
 
 ### 方式二：使用 GHCR 容器镜像部署
 
-以下镜像名中的 `<owner>` 请替换为 GitHub 仓库所有者。
-
 #### A. 直接部署合并镜像（推荐）
 
 拉取并启动最新版：
 
 ```bash
-docker pull ghcr.io/<owner>/startlight:latest
-docker run -d --name startlight -p 8080:8080 ghcr.io/<owner>/startlight:latest
+docker pull ghcr.io/futureprayer/startlight:latest
+docker run -d --name startlight -p 8080:8080 ghcr.io/futureprayer/startlight:latest
 ```
 
 或者指定版本：
 
 ```bash
-docker pull ghcr.io/<owner>/startlight:<version>
-docker run -d --name startlight -p 8080:8080 ghcr.io/<owner>/startlight:<version>
+docker pull ghcr.io/futureprayer/startlight:<version>
+docker run -d --name startlight -p 8080:8080 ghcr.io/futureprayer/startlight:<version>
 ```
 
 #### B. 单独部署后端镜像
 
 ```bash
-docker pull ghcr.io/<owner>/startlight-backend:<version>
-docker run -d --name startlight-backend -p 8080:8080 ghcr.io/<owner>/startlight-backend:<version>
+docker pull ghcr.io/futureprayer/startlight-backend:<version>
+docker run -d --name startlight-backend -p 8080:8080 ghcr.io/futureprayer/startlight-backend:<version>
 ```
 
 #### C. 单独部署前端镜像
@@ -280,8 +277,8 @@ docker run -d --name startlight-backend -p 8080:8080 ghcr.io/<owner>/startlight-
 前端镜像基于 Nginx，并支持通过环境变量 `BACKEND_UPSTREAM` 反向代理后端：
 
 ```bash
-docker pull ghcr.io/<owner>/startlight-frontend:<version>
-docker run -d --name startlight-frontend -p 8081:80 -e BACKEND_UPSTREAM=http://host.docker.internal:8080 ghcr.io/<owner>/startlight-frontend:<version>
+docker pull ghcr.io/futureprayer/startlight-frontend:<version>
+docker run -d --name startlight-frontend -p 8081:80 -e BACKEND_UPSTREAM=http://host.docker.internal:8080 ghcr.io/futureprayer/startlight-frontend:<version>
 ```
 
 说明：
@@ -295,8 +292,8 @@ docker run -d --name startlight-frontend -p 8081:80 -e BACKEND_UPSTREAM=http://h
 ```bash
 docker network create startlight-net
 
-docker run -d --name startlight-backend --network startlight-net ghcr.io/<owner>/startlight-backend:<version>
-docker run -d --name startlight-frontend --network startlight-net -p 8080:80 -e BACKEND_UPSTREAM=http://startlight-backend:8080 ghcr.io/<owner>/startlight-frontend:<version>
+docker run -d --name startlight-backend --network startlight-net ghcr.io/futureprayer/startlight-backend:<version>
+docker run -d --name startlight-frontend --network startlight-net -p 8080:80 -e BACKEND_UPSTREAM=http://startlight-backend:8080 ghcr.io/futureprayer/startlight-frontend:<version>
 ```
 
 此时访问：

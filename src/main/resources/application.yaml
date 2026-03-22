@@ -13,6 +13,9 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  threads:
+    virtual:
+      enabled: true
 
 starlight:
   theme-dir: ${STARLIGHT_THEME_DIR:themes}
