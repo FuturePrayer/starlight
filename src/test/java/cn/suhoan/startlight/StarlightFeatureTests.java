@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -72,7 +73,7 @@ class StarlightFeatureTests {
         assertTrue(detail.get("outlineJson").toString().contains("子节"));
 
         LocalDateTime expiresAt = LocalDateTime.now().plusDays(1);
-        Map<String, Object> share = shareService.createShare(author, note, "PASSWORD", "secret1", expiresAt, "http://localhost:8080");
+        Map<String, Object> share = shareService.createShare(author, note, "PASSWORD", "secret1", expiresAt, ZonedDateTime.now().getOffset().getTotalSeconds() / 60 / 60, "http://localhost:8080");
         assertTrue(share.get("url").toString().contains("/s/"));
 
         String token = share.get("token").toString();

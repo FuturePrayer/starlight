@@ -39,6 +39,7 @@ export const categoryApi = {
 export const shareApi = {
   list: (noteId) => request(`/api/notes/${noteId}/shares`),
   create: (noteId, data) => request(`/api/notes/${noteId}/shares`, { method: 'POST', body: JSON.stringify(data) }),
+  delete: (noteId, shareId) => request(`/api/notes/${noteId}/shares/${shareId}`, { method: 'DELETE' }),
   open: (token, password) => {
     let url = `/api/shares/${token}`
     if (password) url += `?password=${encodeURIComponent(password)}`

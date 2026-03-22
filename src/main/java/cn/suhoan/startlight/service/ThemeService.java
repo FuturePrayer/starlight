@@ -162,6 +162,24 @@ public class ThemeService {
         golden.put("backgroundOpacity", 0);
         list.add(golden);
 
+        Map<String, Object> green = new HashMap<>();
+        green.put("id", "green-light");
+        green.put("name", "薄荷绿 浅色");
+        green.put("cssUrl", "");
+        green.put("previewColor", "#2e7d32");
+        green.put("backgroundImage", "");
+        green.put("backgroundOpacity", 0);
+        list.add(green);
+
+        Map<String, Object> red = new HashMap<>();
+        red.put("id", "red-light");
+        red.put("name", "樱花红 浅色");
+        red.put("cssUrl", "");
+        red.put("previewColor", "#c62828");
+        red.put("backgroundImage", "");
+        red.put("backgroundOpacity", 0);
+        list.add(red);
+
         return list;
     }
 

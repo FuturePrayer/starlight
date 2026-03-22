@@ -6,11 +6,12 @@ import cn.suhoan.startlight.entity.UserAccount;
 import cn.suhoan.startlight.service.NoteService;
 import cn.suhoan.startlight.service.SessionAuthService;
 import cn.suhoan.startlight.service.ShareService;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,7 +36,7 @@ public class ShareController {
 
     @GetMapping("/api/notes/{id}/shares")
     public ApiResponse<List<Map<String, Object>>> listShares(@PathVariable String id,
-                                                             jakarta.servlet.http.HttpServletRequest request) {
+                                                             HttpServletRequest request) {
         UserAccount userAccount = sessionAuthService.requireUser();
         noteService.getOwnedNote(userAccount.getId(), id);
         return ApiResponse.ok(shareService.listShares(id, userAccount.getId(), getBaseUrl(request)));
@@ -44,7 +45,7 @@ public class ShareController {
     @PostMapping("/api/notes/{id}/shares")
     public ApiResponse<Map<String, Object>> createShare(@PathVariable String id,
                                                         @RequestBody ShareRequest shareRequest,
-                                                        jakarta.servlet.http.HttpServletRequest request) {
+                                                        HttpServletRequest request) {
         UserAccount userAccount = sessionAuthService.requireUser();
         Note note = noteService.getOwnedNote(userAccount.getId(), id);
         return ApiResponse.ok(shareService.createShare(
@@ -53,8 +54,18 @@ public class ShareController {
                 shareRequest.accessType(),
                 shareRequest.password(),
                 shareRequest.expiresAt(),
+                shareRequest.timezoneOffset(),
                 getBaseUrl(request)
         ));
+    }
+
+    @DeleteMapping("/api/notes/{id}/shares/{shareId}")
+    public ApiResponse<Void> deleteShare(@PathVariable String id,
+                                         @PathVariable String shareId) {
+        UserAccount userAccount = sessionAuthService.requireUser();
+        noteService.getOwnedNote(userAccount.getId(), id);
+        shareService.deleteShare(shareId, userAccount.getId());
+        return ApiResponse.ok(null);
     }
 
     @GetMapping("/api/shares/{token}")
@@ -63,13 +74,13 @@ public class ShareController {
         return ApiResponse.ok(shareService.openShare(token, password));
     }
 
-    private String getBaseUrl(jakarta.servlet.http.HttpServletRequest request) {
+    private String getBaseUrl(HttpServletRequest request) {
         return request.getScheme() + "://" + request.getServerName() +
                 ((request.getServerPort() == 80 || request.getServerPort() == 443) ? "" : ":" + request.getServerPort()) +
                 request.getContextPath();
     }
 
-    public record ShareRequest(String accessType, String password, LocalDateTime expiresAt) {
+    public record ShareRequest(String accessType, String password, LocalDateTime expiresAt, Integer timezoneOffset) {
     }
 }
 

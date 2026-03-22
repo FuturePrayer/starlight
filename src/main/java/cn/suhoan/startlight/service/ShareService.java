@@ -11,6 +11,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -44,6 +46,7 @@ public class ShareService {
                                            String accessType,
                                            String password,
                                            LocalDateTime expiresAt,
+                                           Integer timezoneOffset,
                                            String requestBaseUrl) {
         ShareAccessType type = "PASSWORD".equalsIgnoreCase(accessType) ? ShareAccessType.PASSWORD : ShareAccessType.PUBLIC;
         NoteShare share = new NoteShare();
@@ -57,7 +60,7 @@ public class ShareService {
             }
             share.setPasswordHash(passwordService.hash(password));
         }
-        share.setExpiresAt(expiresAt);
+        share.setExpiresAt(toServerLocalTime(expiresAt, timezoneOffset));
         noteShareRepository.save(share);
         return toShareItem(share, requestBaseUrl);
     }
@@ -68,6 +71,15 @@ public class ShareService {
                 .stream()
                 .map(share -> toShareItem(share, requestBaseUrl))
                 .toList();
+    }
+
+    public void deleteShare(String shareId, String ownerId) {
+        NoteShare share = noteShareRepository.findById(shareId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "分享链接不存在"));
+        if (!share.getOwner().getId().equals(ownerId)) {
+            throw new ResponseStatusException(FORBIDDEN, "无权删除该分享链接");
+        }
+        noteShareRepository.delete(share);
     }
 
     @Transactional(readOnly = true)
@@ -98,7 +110,7 @@ public class ShareService {
         Map<String, Object> shareMap = new HashMap<>();
         shareMap.put("token", share.getToken());
         shareMap.put("accessType", share.getAccessType().name());
-        shareMap.put("expiresAt", share.getExpiresAt());
+        shareMap.put("expiresAt", formatExpiresAt(share.getExpiresAt()));
         data.put("share", shareMap);
         return data;
     }
@@ -109,6 +121,30 @@ public class ShareService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
+    /**
+     * Convert user's local datetime to server's local datetime using the browser timezoneOffset.
+     * JS getTimezoneOffset() returns minutes: positive for west of UTC, negative for east.
+     * e.g. UTC+8 → -480
+     */
+    private LocalDateTime toServerLocalTime(LocalDateTime userLocal, Integer timezoneOffset) {
+        if (userLocal == null) return null;
+        if (timezoneOffset == null) return userLocal;
+        ZoneOffset userOffset = ZoneOffset.ofTotalSeconds(-timezoneOffset * 60);
+        return userLocal.atOffset(userOffset)
+                .atZoneSameInstant(ZoneId.systemDefault())
+                .toLocalDateTime();
+    }
+
+    /**
+     * Format server-local expiresAt with the server's timezone offset so the frontend
+     * can correctly convert to the user's local time via new Date("...+08:00").
+     */
+    private String formatExpiresAt(LocalDateTime expiresAt) {
+        if (expiresAt == null) return null;
+        ZoneOffset offset = ZoneId.systemDefault().getRules().getOffset(expiresAt);
+        return expiresAt.atOffset(offset).toString();
+    }
+
     private Map<String, Object> toShareItem(NoteShare share, String requestBaseUrl) {
         String baseUrl = settingsService.getShareBaseUrl();
         String prefix = baseUrl.isBlank() ? requestBaseUrl : baseUrl;
@@ -116,7 +152,7 @@ public class ShareService {
         map.put("id", share.getId());
         map.put("token", share.getToken());
         map.put("accessType", share.getAccessType().name());
-        map.put("expiresAt", share.getExpiresAt());
+        map.put("expiresAt", formatExpiresAt(share.getExpiresAt()));
         map.put("url", prefix + "/s/" + share.getToken());
         map.put("createdAt", share.getCreatedAt());
         return map;

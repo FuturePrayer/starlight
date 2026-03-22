@@ -55,7 +55,10 @@
           <div v-if="shares.length" class="share-list-section">
             <h4>已有分享</h4>
             <div v-for="s in shares" :key="s.id" class="share-item sl-card">
-              <div class="share-url" @click="copyUrl(s.url)">{{ s.url }}</div>
+              <div class="share-item-header">
+                <div class="share-url" @click="copyUrl(s.url)">{{ s.url }}</div>
+                <button class="sl-btn sl-btn--ghost sl-btn--sm share-delete-btn" @click="handleDelete(s.id)" title="删除分享">🗑</button>
+              </div>
               <div class="share-info">
                 <span class="sl-badge">{{ s.accessType === 'PASSWORD' ? '私密' : '公开' }}</span>
                 <span class="sl-badge">{{ formatTime(s.expiresAt) }}</span>
@@ -96,12 +99,17 @@ async function handleCreate() {
   try {
     let expiresAt = null
     if (expiryMode.value === 'custom') {
-      expiresAt = new Date(year.value, month.value - 1, day.value, hour.value, 0, 0).toISOString().slice(0, 19)
+      const y = year.value
+      const m = String(month.value).padStart(2, '0')
+      const d = String(day.value).padStart(2, '0')
+      const h = String(hour.value).padStart(2, '0')
+      expiresAt = `${y}-${m}-${d}T${h}:00:00`
     }
     await shareApi.create(props.noteId, {
       accessType: accessType.value,
       password: sharePassword.value,
-      expiresAt
+      expiresAt,
+      timezoneOffset: new Date().getTimezoneOffset()
     })
     shares.value = await shareApi.list(props.noteId)
     toast.success('分享链接已创建')
@@ -113,6 +121,17 @@ async function handleCreate() {
 function copyUrl(url) {
   navigator.clipboard?.writeText(url)
   toast.info('链接已复制')
+}
+
+async function handleDelete(shareId) {
+  if (!confirm('确定删除该分享链接？')) return
+  try {
+    await shareApi.delete(props.noteId, shareId)
+    shares.value = await shareApi.list(props.noteId)
+    toast.success('分享链接已删除')
+  } catch (err) {
+    toast.error(err.message)
+  }
 }
 </script>
 
@@ -160,6 +179,12 @@ function copyUrl(url) {
   padding: 10px 12px;
   margin-bottom: 8px;
 }
+.share-item-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
 .share-url {
   font-size: 12px;
   color: var(--sl-primary);
@@ -168,6 +193,14 @@ function copyUrl(url) {
   margin-bottom: 6px;
 }
 .share-url:hover { text-decoration: underline; }
+.share-delete-btn {
+  flex-shrink: 0;
+  color: var(--sl-danger);
+  font-size: 14px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+.share-delete-btn:hover { opacity: 1; }
 .share-info { display: flex; gap: 6px; }
 </style>
 
