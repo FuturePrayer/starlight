@@ -180,7 +180,7 @@ button, input, select, textarea {
   margin-top: 1.4em;
   margin-bottom: 0.5em;
   font-weight: 600;
-  line-height: 1.3;
+  line-height: 1.75;
   scroll-margin-top: 80px;
 }
 .markdown-body h1 { font-size: 1.75em; }
@@ -196,7 +196,7 @@ button, input, select, textarea {
   border: 1px solid var(--sl-border);
   margin: 12px 0;
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.75;
 }
 .markdown-body code {
   background: var(--sl-code-bg);
