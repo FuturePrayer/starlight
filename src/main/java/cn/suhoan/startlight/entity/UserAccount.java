@@ -23,6 +23,9 @@ public class UserAccount extends BaseEntity {
     @Column(nullable = false, length = 120)
     private String themeId = "win11-light";
 
+    @Column(length = 255)
+    private String totpSecret;
+
     public String getUsername() {
         return username;
     }
@@ -61,6 +64,14 @@ public class UserAccount extends BaseEntity {
 
     public void setThemeId(String themeId) {
         this.themeId = themeId;
+    }
+
+    public String getTotpSecret() {
+        return totpSecret;
+    }
+
+    public void setTotpSecret(String totpSecret) {
+        this.totpSecret = totpSecret;
     }
 }
 

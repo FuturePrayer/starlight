@@ -4,6 +4,7 @@ import cn.suhoan.startlight.dto.ApiResponse;
 import cn.suhoan.startlight.entity.Note;
 import cn.suhoan.startlight.entity.UserAccount;
 import cn.suhoan.startlight.service.NoteService;
+import cn.suhoan.startlight.service.QrCodeService;
 import cn.suhoan.startlight.service.SessionAuthService;
 import cn.suhoan.startlight.service.ShareService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,13 +26,16 @@ public class ShareController {
     private final SessionAuthService sessionAuthService;
     private final NoteService noteService;
     private final ShareService shareService;
+    private final QrCodeService qrCodeService;
 
     public ShareController(SessionAuthService sessionAuthService,
                            NoteService noteService,
-                           ShareService shareService) {
+                           ShareService shareService,
+                           QrCodeService qrCodeService) {
         this.sessionAuthService = sessionAuthService;
         this.noteService = noteService;
         this.shareService = shareService;
+        this.qrCodeService = qrCodeService;
     }
 
     @GetMapping("/api/notes/{id}/shares")
@@ -72,6 +76,14 @@ public class ShareController {
     public ApiResponse<Map<String, Object>> openShare(@PathVariable String token,
                                                       @RequestParam(required = false) String password) {
         return ApiResponse.ok(shareService.openShare(token, password));
+    }
+
+    @GetMapping("/api/shares/{token}/qrcode")
+    public ApiResponse<Map<String, Object>> shareQrCode(@PathVariable String token,
+                                                         HttpServletRequest request) {
+        String url = shareService.getShareUrl(token, getBaseUrl(request));
+        String qrDataUrl = qrCodeService.generateDataUrl(url, 280);
+        return ApiResponse.ok(Map.of("qrDataUrl", qrDataUrl, "url", url));
     }
 
     private String getBaseUrl(HttpServletRequest request) {

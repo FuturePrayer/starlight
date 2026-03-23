@@ -2,8 +2,11 @@ package cn.suhoan.startlight.service;
 
 import cn.suhoan.startlight.entity.AppSetting;
 import cn.suhoan.startlight.repository.AppSettingRepository;
+import cn.suhoan.startlight.repository.UserCredentialRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.net.URI;
 
 @Service
 @Transactional
@@ -11,11 +14,16 @@ public class SettingsService {
 
     public static final String REGISTRATION_ENABLED_KEY = "registration.enabled";
     public static final String SHARE_BASE_URL_KEY = "share.base-url";
+    public static final String TOTP_ENABLED_KEY = "totp.enabled";
+    public static final String PASSKEY_ENABLED_KEY = "passkey.enabled";
 
     private final AppSettingRepository appSettingRepository;
+    private final UserCredentialRepository userCredentialRepository;
 
-    public SettingsService(AppSettingRepository appSettingRepository) {
+    public SettingsService(AppSettingRepository appSettingRepository,
+                           UserCredentialRepository userCredentialRepository) {
         this.appSettingRepository = appSettingRepository;
+        this.userCredentialRepository = userCredentialRepository;
     }
 
     @Transactional(readOnly = true)
@@ -33,7 +41,51 @@ public class SettingsService {
     }
 
     public void setShareBaseUrl(String value) {
-        saveValue(SHARE_BASE_URL_KEY, value == null ? "" : value.trim());
+        String newUrl = value == null ? "" : value.trim();
+        String oldUrl = getShareBaseUrl();
+        saveValue(SHARE_BASE_URL_KEY, newUrl);
+
+        // If new URL is not HTTPS, auto-disable passkey
+        if (!isHttps(newUrl)) {
+            saveValue(PASSKEY_ENABLED_KEY, "false");
+        }
+
+        // If domain changed, invalidate all existing passkeys
+        String oldDomain = extractDomain(oldUrl);
+        String newDomain = extractDomain(newUrl);
+        if (!oldDomain.isEmpty() && !oldDomain.equals(newDomain)) {
+            userCredentialRepository.deleteAll();
+            saveValue(PASSKEY_ENABLED_KEY, "false");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isTotpEnabled() {
+        return Boolean.parseBoolean(getValue(TOTP_ENABLED_KEY, "false"));
+    }
+
+    public void setTotpEnabled(boolean enabled) {
+        saveValue(TOTP_ENABLED_KEY, Boolean.toString(enabled));
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isPasskeyEnabled() {
+        return Boolean.parseBoolean(getValue(PASSKEY_ENABLED_KEY, "false"));
+    }
+
+    public void setPasskeyEnabled(boolean enabled) {
+        if (enabled) {
+            String baseUrl = getShareBaseUrl();
+            if (!isHttps(baseUrl)) {
+                throw new IllegalArgumentException("通行密钥仅在站点 URL 为 HTTPS 协议时可开启");
+            }
+        }
+        saveValue(PASSKEY_ENABLED_KEY, Boolean.toString(enabled));
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isSiteUrlHttps() {
+        return isHttps(getShareBaseUrl());
     }
 
     @Transactional(readOnly = true)
@@ -49,5 +101,17 @@ public class SettingsService {
         appSetting.setSettingValue(value);
         appSettingRepository.save(appSetting);
     }
-}
 
+    private boolean isHttps(String url) {
+        return url != null && url.toLowerCase().startsWith("https://");
+    }
+
+    private String extractDomain(String url) {
+        if (url == null || url.isBlank()) return "";
+        try {
+            return URI.create(url).getHost();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+}

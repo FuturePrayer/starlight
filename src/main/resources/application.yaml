@@ -21,7 +21,7 @@ starlight:
   theme-dir: ${STARLIGHT_THEME_DIR:themes}
 
 sa-token: 
-  token-name: satoken
+  token-name: starlight-token
   timeout: 2592000
   active-timeout: -1
   is-concurrent: true

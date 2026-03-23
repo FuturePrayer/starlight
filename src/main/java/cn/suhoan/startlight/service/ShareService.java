@@ -83,6 +83,15 @@ public class ShareService {
     }
 
     @Transactional(readOnly = true)
+    public String getShareUrl(String token, String requestBaseUrl) {
+        noteShareRepository.findByToken(token)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "分享链接不存在"));
+        String baseUrl = settingsService.getShareBaseUrl();
+        String prefix = baseUrl.isBlank() ? requestBaseUrl : baseUrl;
+        return prefix + "/s/" + token;
+    }
+
+    @Transactional(readOnly = true)
     public Map<String, Object> openShare(String token, String password) {
         NoteShare share = noteShareRepository.findByToken(token)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "分享链接不存在"));

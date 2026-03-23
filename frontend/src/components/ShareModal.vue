@@ -52,12 +52,25 @@
             创建分享
           </button>
 
+          <!-- QR Code display -->
+          <div v-if="qrData" class="qr-section sl-card">
+            <h4>分享二维码</h4>
+            <div class="qr-container">
+              <img :src="qrData.qrDataUrl" alt="分享二维码" class="qr-img" />
+            </div>
+            <div class="qr-url" @click="copyUrl(qrData.url)">{{ qrData.url }}</div>
+            <p class="qr-hint">点击链接可复制，扫描二维码可直接访问。</p>
+          </div>
+
           <div v-if="shares.length" class="share-list-section">
             <h4>已有分享</h4>
             <div v-for="s in shares" :key="s.id" class="share-item sl-card">
               <div class="share-item-header">
                 <div class="share-url" @click="copyUrl(s.url)">{{ s.url }}</div>
-                <button class="sl-btn sl-btn--ghost sl-btn--sm share-delete-btn" @click="handleDelete(s.id)" title="删除分享">🗑</button>
+                <div class="share-item-actions">
+                  <button class="sl-btn sl-btn--ghost sl-btn--sm" @click="handleShowQr(s.token)" title="显示二维码">📱</button>
+                  <button class="sl-btn sl-btn--ghost sl-btn--sm share-delete-btn" @click="handleDelete(s.id)" title="删除分享">🗑</button>
+                </div>
               </div>
               <div class="share-info">
                 <span class="sl-badge">{{ s.accessType === 'PASSWORD' ? '私密' : '公开' }}</span>
@@ -90,6 +103,7 @@ const month = ref(now.getMonth() + 1)
 const day = ref(now.getDate())
 const hour = ref(23)
 const shares = ref([])
+const qrData = ref(null)
 
 onMounted(async () => {
   try { shares.value = await shareApi.list(props.noteId) } catch {}
@@ -112,7 +126,19 @@ async function handleCreate() {
       timezoneOffset: new Date().getTimezoneOffset()
     })
     shares.value = await shareApi.list(props.noteId)
+    // Show QR for the latest share
+    if (shares.value.length) {
+      await handleShowQr(shares.value[0].token)
+    }
     toast.success('分享链接已创建')
+  } catch (err) {
+    toast.error(err.message)
+  }
+}
+
+async function handleShowQr(token) {
+  try {
+    qrData.value = await shareApi.qrCode(token)
   } catch (err) {
     toast.error(err.message)
   }
@@ -128,6 +154,7 @@ async function handleDelete(shareId) {
   try {
     await shareApi.delete(props.noteId, shareId)
     shares.value = await shareApi.list(props.noteId)
+    qrData.value = null
     toast.success('分享链接已删除')
   } catch (err) {
     toast.error(err.message)
@@ -173,6 +200,23 @@ async function handleDelete(shareId) {
   gap: 10px;
   margin-top: 12px;
 }
+.qr-section {
+  margin-top: 16px;
+  padding: 16px;
+  text-align: center;
+}
+.qr-section h4 { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+.qr-container { padding: 8px 0; }
+.qr-img { width: 200px; height: 200px; border-radius: var(--sl-radius); border: 1px solid var(--sl-border); }
+.qr-url {
+  font-size: 12px;
+  color: var(--sl-primary);
+  word-break: break-all;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.qr-url:hover { text-decoration: underline; }
+.qr-hint { font-size: 11px; color: var(--sl-text-tertiary); margin-top: 4px; }
 .share-list-section { margin-top: 20px; }
 .share-list-section h4 { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
 .share-item {
@@ -185,6 +229,7 @@ async function handleDelete(shareId) {
   justify-content: space-between;
   gap: 8px;
 }
+.share-item-actions { display: flex; gap: 2px; flex-shrink: 0; }
 .share-url {
   font-size: 12px;
   color: var(--sl-primary);
@@ -194,7 +239,6 @@ async function handleDelete(shareId) {
 }
 .share-url:hover { text-decoration: underline; }
 .share-delete-btn {
-  flex-shrink: 0;
   color: var(--sl-danger);
   font-size: 14px;
   opacity: 0.6;

@@ -46,4 +46,9 @@ public class SessionAuthService {
         }
         return userAccount;
     }
+
+    public UserAccount findUserById(String userId) {
+        return userAccountRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(UNAUTHORIZED, "用户不存在"));
+    }
 }

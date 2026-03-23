@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -26,23 +27,37 @@ public class AdminController {
     @GetMapping("/settings")
     public ApiResponse<Map<String, Object>> getSettings() {
         sessionAuthService.requireAdmin();
-        return ApiResponse.ok(Map.of(
-                "registrationEnabled", settingsService.isRegistrationEnabled(),
-                "shareBaseUrl", settingsService.getShareBaseUrl()
-        ));
+        Map<String, Object> data = new HashMap<>();
+        data.put("registrationEnabled", settingsService.isRegistrationEnabled());
+        data.put("shareBaseUrl", settingsService.getShareBaseUrl());
+        data.put("totpEnabled", settingsService.isTotpEnabled());
+        data.put("passkeyEnabled", settingsService.isPasskeyEnabled());
+        data.put("siteUrlHttps", settingsService.isSiteUrlHttps());
+        return ApiResponse.ok(data);
     }
 
     @PostMapping("/settings")
     public ApiResponse<Map<String, Object>> saveSettings(@RequestBody AdminSettingsRequest request) {
         sessionAuthService.requireAdmin();
         settingsService.setRegistrationEnabled(request.registrationEnabled());
+        // Set share base URL first (may auto-disable passkey)
         settingsService.setShareBaseUrl(request.shareBaseUrl());
-        return ApiResponse.ok(Map.of(
-                "registrationEnabled", settingsService.isRegistrationEnabled(),
-                "shareBaseUrl", settingsService.getShareBaseUrl()
-        ));
+        settingsService.setTotpEnabled(request.totpEnabled());
+        // Passkey can only be enabled if HTTPS
+        if (request.passkeyEnabled()) {
+            settingsService.setPasskeyEnabled(true);
+        } else {
+            settingsService.setPasskeyEnabled(false);
+        }
+        Map<String, Object> data = new HashMap<>();
+        data.put("registrationEnabled", settingsService.isRegistrationEnabled());
+        data.put("shareBaseUrl", settingsService.getShareBaseUrl());
+        data.put("totpEnabled", settingsService.isTotpEnabled());
+        data.put("passkeyEnabled", settingsService.isPasskeyEnabled());
+        data.put("siteUrlHttps", settingsService.isSiteUrlHttps());
+        return ApiResponse.ok(data);
     }
 
-    public record AdminSettingsRequest(boolean registrationEnabled, String shareBaseUrl) {
-    }
+    public record AdminSettingsRequest(boolean registrationEnabled, String shareBaseUrl,
+                                       boolean totpEnabled, boolean passkeyEnabled) {}
 }

@@ -129,6 +129,8 @@ mvn spring-boot:run
 
 适合作为 PostgreSQL / H2 / MySQL 8+ 的建表参考脚本。
 
+Spring data jpa会自动创建和更新表结构，无需手动执行。
+
 ---
 
 ## GitHub 自动发布

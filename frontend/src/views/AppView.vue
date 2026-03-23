@@ -10,16 +10,21 @@
       <div class="sidebar-inner">
         <!-- Profile section -->
         <div class="sidebar-profile">
-          <div class="profile-info">
+          <div class="profile-info" style="cursor:pointer" @click="showProfileModal = true" title="修改个人资料">
             <div class="profile-avatar">{{ authStore.username?.charAt(0)?.toUpperCase() || '?' }}</div>
             <div>
               <div class="profile-name">{{ authStore.username }}</div>
               <div class="profile-role">{{ authStore.isAdmin ? '管理员' : '用户' }}</div>
             </div>
           </div>
-          <button class="sl-btn sl-btn--ghost sl-btn--sm" @click="handleLogout" title="退出登录">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          </button>
+          <div class="profile-actions">
+            <button class="sl-btn sl-btn--ghost sl-btn--sm" @click="showSecurityModal = true" title="安全设置">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            </button>
+            <button class="sl-btn sl-btn--ghost sl-btn--sm" @click="handleLogout" title="退出登录">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
+          </div>
         </div>
 
         <!-- Theme selector -->
@@ -175,6 +180,14 @@
       v-if="showAdminModal"
       @close="showAdminModal = false"
     />
+    <ProfileModal
+      v-if="showProfileModal"
+      @close="showProfileModal = false"
+    />
+    <SecurityModal
+      v-if="showSecurityModal"
+      @close="showSecurityModal = false"
+    />
   </div>
 </template>
 
@@ -191,6 +204,8 @@ import OutlineList from '@/components/OutlineList.vue'
 import ShareModal from '@/components/ShareModal.vue'
 import CategoryModal from '@/components/CategoryModal.vue'
 import AdminModal from '@/components/AdminModal.vue'
+import ProfileModal from '@/components/ProfileModal.vue'
+import SecurityModal from '@/components/SecurityModal.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -207,6 +222,8 @@ const allThemes = ref([])
 const showShareModal = ref(false)
 const showCategoryModal = ref(false)
 const showAdminModal = ref(false)
+const showProfileModal = ref(false)
+const showSecurityModal = ref(false)
 
 const editorTitle = ref('')
 const editorContent = ref('')
@@ -430,6 +447,7 @@ onUnmounted(() => {
 }
 .profile-name { font-size: 13px; font-weight: 600; }
 .profile-role { font-size: 11px; color: var(--sl-text-tertiary); }
+.profile-actions { display: flex; gap: 2px; }
 
 .sidebar-section { display: flex; flex-direction: column; }
 .sidebar-actions { display: flex; gap: 6px; }
