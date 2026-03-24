@@ -157,8 +157,8 @@ async function handlePasskeyRegister() {
   registeringPasskey.value = true
   try {
     // 1. Get options from server
-    const { handle, optionsJson } = await authApi.passkeyRegisterStart()
-    const options = JSON.parse(optionsJson)
+    const { handle, optionsJson } = await authApi.passkeyRegisterStart();
+    const options = JSON.parse(optionsJson).publicKey;
 
     // 2. Convert base64url fields to ArrayBuffer for browser API
     const publicKey = {

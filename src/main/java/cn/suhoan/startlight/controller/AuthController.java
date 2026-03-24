@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
 import java.util.List;
@@ -185,7 +186,7 @@ public class AuthController {
         // If credential is a Map (from JSON parsing), re-serialize it
         if (body.get("credential") instanceof Map) {
             try {
-                credentialJson = new tools.jackson.databind.ObjectMapper().writeValueAsString(body.get("credential"));
+                credentialJson = new ObjectMapper().writeValueAsString(body.get("credential"));
             } catch (Exception e) {
                 throw new IllegalArgumentException("请求格式错误");
             }
@@ -217,7 +218,7 @@ public class AuthController {
         String credentialJson = body.get("credential").toString();
         if (body.get("credential") instanceof Map) {
             try {
-                credentialJson = new tools.jackson.databind.ObjectMapper().writeValueAsString(body.get("credential"));
+                credentialJson = new ObjectMapper().writeValueAsString(body.get("credential"));
             } catch (Exception e) {
                 throw new IllegalArgumentException("请求格式错误");
             }

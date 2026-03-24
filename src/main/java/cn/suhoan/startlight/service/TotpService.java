@@ -16,7 +16,7 @@ public class TotpService {
      * Generate the otpauth:// URI used by authenticator apps.
      */
     public String generateOtpAuthUri(String account, String secretKey) {
-        return SaTotpUtil.generateGoogleSecretKey(account, secretKey);
+        return SaTotpUtil.generateGoogleSecretKey(account, "Starlight", secretKey);
     }
 
     public boolean validate(String secretKey, String code) {
