@@ -63,8 +63,10 @@
               :key="item.id"
               :item="item"
               :selected-id="noteStore.currentNote?.id"
+              :expanded-ids="noteStore.expandedCategoryIds"
               @select-note="handleOpenNote"
               @select-category="selectedCategoryId = $event"
+              @toggle-category="handleToggleCategory"
             />
             <div v-if="!noteStore.tree.items?.length" class="empty-hint">还没有笔记，点击上方按钮创建</div>
           </div>
@@ -80,21 +82,24 @@
       <!-- Top bar -->
       <div class="topbar">
         <div class="topbar-left">
-          <h1 class="topbar-title">{{ noteStore.currentNote?.title || 'Starlight' }}</h1>
+          <h1 class="topbar-title">{{ topbarTitle }}</h1>
           <div class="topbar-meta" v-if="noteStore.currentNote">
             <span class="sl-badge">{{ noteStore.editMode ? '编辑中' : '查看' }}</span>
-            <span class="sl-badge" v-if="noteStore.currentNote.updatedAt">{{ formatTime(noteStore.currentNote.updatedAt) }}</span>
+            <span class="sl-badge" v-if="noteStore.editMode">{{ noteStore.autosaveEnabled ? '自动保存开启' : '自动保存暂停' }}</span>
+            <span class="sl-badge" v-if="noteStore.currentNote.updatedAt && !noteStore.editMode">{{ formatTime(noteStore.currentNote.updatedAt) }}</span>
           </div>
         </div>
         <div class="topbar-actions" v-if="!isMobile">
           <template v-if="noteStore.editMode">
             <button class="sl-btn" @click="togglePreview">{{ previewVisible ? '关闭预览' : '打开预览' }}</button>
+            <button class="sl-btn" @click="toggleAutosave">{{ noteStore.autosaveEnabled ? '暂停自动保存' : '恢复自动保存' }}</button>
             <button class="sl-btn sl-btn--primary" @click="handleSave">保存</button>
+            <button class="sl-btn" @click="handleDiscardExit">不保存退出</button>
             <button class="sl-btn" @click="handleFinish">完成</button>
           </template>
           <template v-else-if="noteStore.currentNote">
             <button class="sl-btn" @click="handleShare" v-if="noteStore.currentNote.id">分享</button>
-            <button class="sl-btn sl-btn--primary" @click="noteStore.setEditMode(true)">编辑</button>
+            <button class="sl-btn sl-btn--primary" @click="handleEnterEditMode">编辑</button>
             <button class="sl-btn sl-btn--danger" @click="handleDelete" v-if="noteStore.currentNote.id" title="删除笔记">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
             </button>
@@ -110,7 +115,9 @@
           </button>
           <template v-if="mobileActionsOpen">
             <button class="sl-btn" @click="togglePreview">{{ previewVisible ? '恢复输入' : '预览' }}</button>
+            <button class="sl-btn" @click="toggleAutosave">{{ noteStore.autosaveEnabled ? '暂停自动保存' : '恢复自动保存' }}</button>
             <button class="sl-btn sl-btn--primary" @click="handleSave">保存</button>
+            <button class="sl-btn" @click="handleDiscardExit">不保存退出</button>
             <button class="sl-btn" @click="handleFinish">完成</button>
           </template>
         </div>
@@ -118,7 +125,7 @@
       <div v-if="isMobile && !noteStore.editMode && noteStore.currentNote" class="mobile-fab">
         <div class="fab-menu expanded">
           <button class="sl-btn" @click="handleShare" v-if="noteStore.currentNote.id">分享</button>
-          <button class="sl-btn sl-btn--primary" @click="noteStore.setEditMode(true)">编辑</button>
+          <button class="sl-btn sl-btn--primary" @click="handleEnterEditMode">编辑</button>
         </div>
       </div>
 
@@ -135,6 +142,15 @@
       <!-- Edit mode -->
       <div v-else class="editor-area" :class="{ 'with-preview': previewVisible && !isMobile }">
         <div class="editor-pane" :class="{ hidden: isMobile && previewVisible }">
+          <div class="editor-statusbar">
+            <div class="editor-status-group">
+              <span class="editor-status-text">{{ autosaveStatusText }}</span>
+              <span class="editor-status-text">{{ lastSavedText }}</span>
+            </div>
+            <div class="editor-status-group editor-status-group--right">
+              <span :class="['editor-status-pill', { dirty: noteStore.dirty }]">{{ saveStateText }}</span>
+            </div>
+          </div>
           <div class="editor-fields">
             <div class="field-row">
               <div class="field-col" style="flex:2">
@@ -228,9 +244,35 @@ const showSecurityModal = ref(false)
 const editorTitle = ref('')
 const editorContent = ref('')
 const editorCategory = ref('')
+const nowTick = ref(Date.now())
+const saveInProgress = ref(false)
 
 const isMobile = ref(window.innerWidth <= 768)
 let autosaveTimer = null
+let clockTimer = null
+
+const topbarTitle = computed(() => {
+  if (noteStore.editMode) {
+    return editorTitle.value.trim() || (noteStore.currentNote?.id ? '未命名笔记' : '新建笔记')
+  }
+  return noteStore.currentNote?.title || 'Starlight'
+})
+
+const autosaveStatusText = computed(() => noteStore.autosaveEnabled
+  ? '自动保存：已开启（每 30 秒检查一次）'
+  : '自动保存：已暂停')
+
+const lastSavedText = computed(() => {
+  if (!noteStore.lastSavedAt) return '最近保存：尚未保存'
+  return `最近保存：${formatAbsoluteTime(noteStore.lastSavedAt)}（${formatRelativeTime(noteStore.lastSavedAt, nowTick.value)}）`
+})
+
+const saveStateText = computed(() => {
+  if (saveInProgress.value) return '保存中…'
+  if (noteStore.dirty) return '有未保存更改'
+  if (noteStore.lastSavedAt) return '内容已保存'
+  return '等待首次保存'
+})
 
 const renderedHtml = computed(() => {
   if (!noteStore.currentNote) return ''
@@ -264,7 +306,11 @@ watch(() => noteStore.currentNote, (note) => {
     editorTitle.value = note.title || ''
     editorContent.value = note.markdownContent || ''
     editorCategory.value = note.categoryId || ''
+    return
   }
+  editorTitle.value = ''
+  editorContent.value = ''
+  editorCategory.value = ''
 }, { immediate: true })
 
 watch(() => noteStore.editMode, (mode) => {
@@ -280,31 +326,64 @@ function handleEditorInput() { noteStore.dirty = true }
 
 function togglePreview() { previewVisible.value = !previewVisible.value }
 
-async function handleSave() {
-  try {
-    await noteStore.saveNote({
-      title: editorTitle.value,
-      markdownContent: editorContent.value,
-      categoryId: editorCategory.value || null
-    })
-    toast.success('已保存')
-  } catch (err) {
-    toast.error(err.message)
+function formatAbsoluteTime(value) {
+  return new Date(value).toLocaleString('zh-CN', {
+    hour12: false
+  })
+}
+
+function formatRelativeTime(value, currentTime) {
+  const diff = Math.max(0, Math.floor((currentTime - value) / 1000))
+  if (diff < 5) return '刚刚'
+  if (diff < 60) return `${diff} 秒前`
+
+  const minutes = Math.floor(diff / 60)
+  if (minutes < 60) return `${minutes} 分钟前`
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} 小时前`
+
+  const days = Math.floor(hours / 24)
+  return `${days} 天前`
+}
+
+function buildNotePayload() {
+  return {
+    title: editorTitle.value,
+    markdownContent: editorContent.value,
+    categoryId: editorCategory.value || null
   }
 }
 
-async function handleFinish() {
+async function persistNote({ successMessage = '已保存', exitAfterSave = false, source = 'manual' } = {}) {
+  if (saveInProgress.value) return false
+
+  saveInProgress.value = true
   try {
-    await noteStore.saveNote({
-      title: editorTitle.value,
-      markdownContent: editorContent.value,
-      categoryId: editorCategory.value || null
-    })
-    noteStore.setEditMode(false)
-    toast.success('已保存')
+    await noteStore.saveNote(buildNotePayload())
+    if (exitAfterSave) {
+      noteStore.finishEditing()
+    }
+    if (source === 'auto') {
+      toast.info(successMessage)
+    } else {
+      toast.success(successMessage)
+    }
+    return true
   } catch (err) {
     toast.error(err.message)
+    return false
+  } finally {
+    saveInProgress.value = false
   }
+}
+
+async function handleSave() {
+  await persistNote()
+}
+
+async function handleFinish() {
+  await persistNote({ exitAfterSave: true })
 }
 
 async function handleOpenNote(id) {
@@ -316,6 +395,25 @@ async function handleOpenNote(id) {
   }
 }
 
+
+function handleEnterEditMode() {
+  noteStore.enterEditMode()
+}
+
+function handleToggleCategory(id) {
+  noteStore.toggleCategoryExpanded(id)
+}
+
+function toggleAutosave() {
+  noteStore.setAutosaveEnabled(!noteStore.autosaveEnabled)
+  toast.info(noteStore.autosaveEnabled ? '自动保存已开启' : '自动保存已暂停')
+}
+
+function handleDiscardExit() {
+  if (!confirm('确定不保存退出吗？未保存的更改将会丢失。')) return
+  noteStore.discardEdit()
+  toast.info('已退出编辑，未保存内容已放弃')
+}
 function handleNewNote() {
   noteStore.startNewNote(selectedCategoryId.value)
   editorTitle.value = ''
@@ -371,23 +469,15 @@ onMounted(async () => {
     await authStore.fetchMe()
     allThemes.value = await themeStore.loadThemes()
     await noteStore.refreshTree()
-    // Open first note if available
-    if (noteStore.allNotes.length) {
-      await noteStore.openNote(noteStore.allNotes[0].id)
-    }
     // Autosave every 30s
     autosaveTimer = setInterval(async () => {
-      if (noteStore.editMode && noteStore.dirty) {
-        try {
-          await noteStore.saveNote({
-            title: editorTitle.value,
-            markdownContent: editorContent.value,
-            categoryId: editorCategory.value || null
-          })
-          toast.info('自动保存完成')
-        } catch {}
+      if (noteStore.editMode && noteStore.autosaveEnabled && noteStore.dirty && !saveInProgress.value) {
+        await persistNote({ successMessage: '自动保存完成', source: 'auto' })
       }
     }, 30000)
+    clockTimer = setInterval(() => {
+      nowTick.value = Date.now()
+    }, 1000)
   } catch {
     router.replace('/login')
   }
@@ -396,6 +486,7 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   clearInterval(autosaveTimer)
+  clearInterval(clockTimer)
 })
 </script>
 
@@ -514,6 +605,10 @@ onUnmounted(() => {
   white-space: nowrap;
   max-width: 500px;
 }
+.topbar-left {
+  min-width: 0;
+  flex: 1;
+}
 .topbar-meta { display: flex; gap: 8px; margin-top: 4px; }
 .topbar-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
@@ -542,6 +637,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 .editor-area.with-preview {
   flex-direction: row;
@@ -553,6 +649,39 @@ onUnmounted(() => {
   overflow: hidden;
 }
 .editor-pane.hidden { display: none; }
+.editor-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px 0;
+  color: var(--sl-text-secondary);
+  font-size: 12px;
+}
+.editor-status-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.editor-status-group--right {
+  justify-content: flex-end;
+}
+.editor-status-text {
+  color: var(--sl-text-secondary);
+}
+.editor-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--sl-hover-bg);
+  color: var(--sl-success);
+}
+.editor-status-pill.dirty {
+  background: var(--sl-primary-light);
+  color: var(--sl-primary);
+}
 .editor-fields { padding: 16px 20px 8px; }
 .field-row { display: flex; gap: 12px; }
 .field-col { display: flex; flex-direction: column; }
@@ -580,7 +709,6 @@ onUnmounted(() => {
   border-left: none;
   position: absolute;
   inset: 0;
-  top: 60px;
   z-index: 10;
   background: var(--sl-bg-secondary);
 }
@@ -640,8 +768,45 @@ onUnmounted(() => {
     height: 100%;
     box-shadow: var(--sl-shadow-flyout);
   }
-  .topbar { padding: 16px 16px 16px 56px; }
+  .topbar {
+    padding: 16px 16px 16px 56px;
+    min-height: auto;
+    align-items: flex-start;
+  }
+  .topbar-left {
+    width: 100%;
+  }
+  .topbar-title {
+    max-width: none;
+  }
+  .topbar-meta {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
   .viewer-area { padding: 16px; }
+  .mobile-fab {
+    left: 16px;
+    right: 16px;
+  }
+  .fab-menu {
+    flex-direction: column;
+    align-items: stretch;
+    width: min(240px, calc(100vw - 32px));
+    max-width: 100%;
+    margin-left: auto;
+  }
+  .fab-menu .sl-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .editor-statusbar {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px 16px 0;
+  }
+  .editor-status-group--right {
+    justify-content: flex-start;
+  }
   .editor-fields { padding: 12px 16px 8px; }
   .field-row { flex-direction: column; gap: 8px; }
   .editor-textarea { padding: 12px 16px; }

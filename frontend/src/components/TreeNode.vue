@@ -13,7 +13,7 @@
         </template>
       </span>
       <span class="tree-label">{{ item.name }}</span>
-      <button v-if="isCategory" class="tree-expand sl-btn sl-btn--ghost sl-btn--sm" @click.stop="expanded = !expanded">
+      <button v-if="isCategory" class="tree-expand sl-btn sl-btn--ghost sl-btn--sm" @click.stop="emit('toggle-category', item.id)">
         <svg :class="['chevron', { open: expanded }]" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
     </div>
@@ -23,30 +23,33 @@
         :key="child.id"
         :item="child"
         :selected-id="selectedId"
+        :expanded-ids="expandedIds"
         @select-note="$emit('select-note', $event)"
         @select-category="$emit('select-category', $event)"
+        @toggle-category="$emit('toggle-category', $event)"
       />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 
 const props = defineProps({
   item: { type: Object, required: true },
-  selectedId: { type: String, default: null }
+  selectedId: { type: String, default: null },
+  expandedIds: { type: Array, default: () => [] }
 })
-const emit = defineEmits(['select-note', 'select-category'])
+const emit = defineEmits(['select-note', 'select-category', 'toggle-category'])
 
-const expanded = ref(true)
 const isCategory = computed(() => props.item.type === 'category')
 const isSelected = computed(() => props.item.id === props.selectedId)
+const expanded = computed(() => props.expandedIds.includes(props.item.id))
 
 function handleClick() {
   if (isCategory.value) {
     emit('select-category', props.item.id)
-    expanded.value = !expanded.value
+    emit('toggle-category', props.item.id)
   } else {
     emit('select-note', props.item.id)
   }

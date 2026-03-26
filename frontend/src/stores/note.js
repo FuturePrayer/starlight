@@ -7,16 +7,66 @@ export const useNoteStore = defineStore('note', () => {
   const currentNote = ref(null)
   const editMode = ref(false)
   const dirty = ref(false)
+  const autosaveEnabled = ref(true)
+  const lastSavedAt = ref(null)
+  const expandedCategoryIds = ref([])
+  const editSnapshot = ref(null)
+
+  function cloneNote(note) {
+    return note ? JSON.parse(JSON.stringify(note)) : null
+  }
+
+  function resetEditSession() {
+    editMode.value = false
+    dirty.value = false
+    autosaveEnabled.value = true
+    lastSavedAt.value = null
+    editSnapshot.value = null
+  }
+
+  function sortTreeItems(items = []) {
+    return [...items]
+      .map(item => ({
+        ...item,
+        children: item.children?.length ? sortTreeItems(item.children) : (item.children || [])
+      }))
+      .sort((left, right) => {
+        const typeOrder = Number(left.type !== 'category') - Number(right.type !== 'category')
+        if (typeOrder !== 0) return typeOrder
+        return String(left.name || '').localeCompare(String(right.name || ''), 'zh-CN', {
+          numeric: true,
+          sensitivity: 'base'
+        })
+      })
+  }
+
+  function hasExpandedCategory(id) {
+    return expandedCategoryIds.value.includes(id)
+  }
+
+  function setCategoryExpanded(id, expanded) {
+    if (!id) return
+    const next = expandedCategoryIds.value.filter(itemId => itemId !== id)
+    if (expanded) next.push(id)
+    expandedCategoryIds.value = next
+  }
+
+  function toggleCategoryExpanded(id) {
+    setCategoryExpanded(id, !hasExpandedCategory(id))
+  }
 
   async function refreshTree() {
-    tree.value = await noteApi.tree()
+    const nextTree = await noteApi.tree()
+    tree.value = {
+      ...nextTree,
+      items: sortTreeItems(nextTree?.items || [])
+    }
   }
 
   async function openNote(id) {
     const note = await noteApi.get(id)
     currentNote.value = note
-    editMode.value = false
-    dirty.value = false
+    resetEditSession()
     return note
   }
 
@@ -29,6 +79,8 @@ export const useNoteStore = defineStore('note', () => {
     }
     currentNote.value = note
     dirty.value = false
+    lastSavedAt.value = Date.now()
+    editSnapshot.value = cloneNote(note)
     await refreshTree()
     return note
   }
@@ -38,6 +90,7 @@ export const useNoteStore = defineStore('note', () => {
     if (currentNote.value?.id === id) {
       currentNote.value = null
     }
+    resetEditSession()
     await refreshTree()
   }
 
@@ -58,10 +111,39 @@ export const useNoteStore = defineStore('note', () => {
     }
     editMode.value = true
     dirty.value = false
+    autosaveEnabled.value = true
+    lastSavedAt.value = null
+    editSnapshot.value = null
+  }
+
+  function enterEditMode() {
+    if (!currentNote.value) return
+    editSnapshot.value = cloneNote(currentNote.value)
+    editMode.value = true
+    dirty.value = false
+    autosaveEnabled.value = true
+    lastSavedAt.value = null
+  }
+
+  function discardEdit() {
+    currentNote.value = cloneNote(editSnapshot.value)
+    resetEditSession()
+  }
+
+  function finishEditing() {
+    resetEditSession()
+  }
+
+  function setAutosaveEnabled(value) {
+    autosaveEnabled.value = Boolean(value)
   }
 
   function setEditMode(val) {
-    editMode.value = val
+    if (val) {
+      enterEditMode()
+      return
+    }
+    finishEditing()
   }
 
   function flatNotes(items, collector = []) {
@@ -72,12 +154,14 @@ export const useNoteStore = defineStore('note', () => {
     return collector
   }
 
-  const allNotes = computed(() => flatNotes(tree.value?.items))
+  const allNotes = computed(() => flatNotes(tree.value?.items, []))
 
   return {
-    tree, currentNote, editMode, dirty,
+    tree, currentNote, editMode, dirty, autosaveEnabled, lastSavedAt, expandedCategoryIds,
     refreshTree, openNote, saveNote, deleteNote,
-    createCategory, startNewNote, setEditMode, allNotes
+    createCategory, startNewNote, enterEditMode, discardEdit, finishEditing,
+    setEditMode, setAutosaveEnabled, hasExpandedCategory, setCategoryExpanded, toggleCategoryExpanded,
+    allNotes
   }
 })
 
