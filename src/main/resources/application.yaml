@@ -1,6 +1,6 @@
 spring:
   application:
-    name: startlight
+    name: starlight
   datasource:
     url: ${STARLIGHT_DATASOURCE_URL:jdbc:h2:file:./data/starlight;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE}
     username: ${STARLIGHT_DATASOURCE_USERNAME:sa}

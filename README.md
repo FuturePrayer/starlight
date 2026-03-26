@@ -29,7 +29,7 @@
 应用默认使用本地 H2 文件数据库，无需额外安装 PostgreSQL：
 
 ```powershell
-cd D:\devProjects\java\startlight
+cd D:\devProjects\java\starlight
 mvn spring-boot:run
 ```
 
@@ -38,7 +38,7 @@ mvn spring-boot:run
 ### 2）前端独立开发
 
 ```powershell
-cd D:\devProjects\java\startlight\frontend
+cd D:\devProjects\java\starlight\frontend
 npm ci
 npm run dev
 ```
@@ -48,17 +48,17 @@ Vite 开发服务器会把 `/api` 与 `/theme-files` 代理到 `http://localhost
 ### 3）本地构建前后端合并包
 
 ```powershell
-cd D:\devProjects\java\startlight\frontend
+cd D:\devProjects\java\starlight\frontend
 npm ci
 npm run build:combined
 
-cd D:\devProjects\java\startlight
+cd D:\devProjects\java\starlight
 mvn clean package
 ```
 
 构建完成后会得到合并版 Jar：
 
-- `target/startlight-<version>.jar`
+- `target/starlight-<version>.jar`
 
 启动后访问：
 
@@ -68,7 +68,7 @@ mvn clean package
 ### 4）仅构建前端静态包
 
 ```powershell
-cd D:\devProjects\java\startlight\frontend
+cd D:\devProjects\java\starlight\frontend
 npm ci
 npm run build
 ```
@@ -84,7 +84,7 @@ npm run build
 可通过环境变量覆盖：
 
 ```powershell
-$env:STARLIGHT_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:5432/startlight"
+$env:STARLIGHT_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:5432/starlight"
 $env:STARLIGHT_DATASOURCE_USERNAME="postgres"
 $env:STARLIGHT_DATASOURCE_PASSWORD="postgres"
 mvn spring-boot:run
@@ -149,7 +149,7 @@ Tag 必须满足：
 例如当前版本若为 `0.0.1`，则应推送：
 
 ```powershell
-cd D:\devProjects\java\startlight
+cd D:\devProjects\java\starlight
 git checkout main
 git pull
 git tag v0.0.1
@@ -162,20 +162,20 @@ git push origin v0.0.1
 
 工作流会自动构建并发布三类产物到 GitHub Releases：
 
-1. 前端单独包：`startlight-frontend-<version>.tar.gz`
-2. 后端单独包：`startlight-backend-<version>.jar`
-3. 前后端合并包：`startlight-combined-<version>.jar`
+1. 前端单独包：`starlight-frontend-<version>.tar.gz`
+2. 后端单独包：`starlight-backend-<version>.jar`
+3. 前后端合并包：`starlight-combined-<version>.jar`
 4. 校验文件：`SHA256SUMS`
 
 同时会发布三个容器镜像到 `ghcr.io`：
 
-- `ghcr.io/futureprayer/startlight-frontend:<version>`
-- `ghcr.io/futureprayer/startlight-backend:<version>`
-- `ghcr.io/futureprayer/startlight:<version>`
+- `ghcr.io/futureprayer/starlight-frontend:<version>`
+- `ghcr.io/futureprayer/starlight-backend:<version>`
+- `ghcr.io/futureprayer/starlight:<version>`
 
 其中：
 
-- `ghcr.io/futureprayer/startlight:latest` **只会指向最新的前后端合并镜像**
+- `ghcr.io/futureprayer/starlight:latest` **只会指向最新的前后端合并镜像**
 - 不会给 frontend-only / backend-only 镜像打 `latest`
 
 ---
@@ -193,12 +193,12 @@ git push origin v0.0.1
 
 下载：
 
-- `startlight-combined-<version>.jar`
+- `starlight-combined-<version>.jar`
 
 启动：
 
 ```powershell
-java -jar startlight-combined-<version>.jar
+java -jar starlight-combined-<version>.jar
 ```
 
 默认访问：
@@ -211,24 +211,24 @@ java -jar startlight-combined-<version>.jar
 
 下载：
 
-- `startlight-backend-<version>.jar`
+- `starlight-backend-<version>.jar`
 
 启动：
 
 ```powershell
-java -jar startlight-backend-<version>.jar
+java -jar starlight-backend-<version>.jar
 ```
 
 说明：
 
 - 这个包只提供后端 API 与主题文件接口
-- 你需要额外部署前端静态站点，或使用 `ghcr.io/futureprayer/startlight-frontend:<version>`
+- 你需要额外部署前端静态站点，或使用 `ghcr.io/futureprayer/starlight-frontend:<version>`
 
 #### C. 使用前端单独包
 
 下载：
 
-- `startlight-frontend-<version>.tar.gz`
+- `starlight-frontend-<version>.tar.gz`
 
 解压后得到一个纯静态站点，可部署到 Nginx、Apache 或任意静态文件服务器。
 
@@ -256,22 +256,22 @@ java -jar startlight-backend-<version>.jar
 拉取并启动最新版：
 
 ```bash
-docker pull ghcr.io/futureprayer/startlight:latest
-docker run -d --name startlight -p 8080:8080 ghcr.io/futureprayer/startlight:latest
+docker pull ghcr.io/futureprayer/starlight:latest
+docker run -d --name starlight -p 8080:8080 ghcr.io/futureprayer/starlight:latest
 ```
 
 或者指定版本：
 
 ```bash
-docker pull ghcr.io/futureprayer/startlight:<version>
-docker run -d --name startlight -p 8080:8080 ghcr.io/futureprayer/startlight:<version>
+docker pull ghcr.io/futureprayer/starlight:<version>
+docker run -d --name starlight -p 8080:8080 ghcr.io/futureprayer/starlight:<version>
 ```
 
 #### B. 单独部署后端镜像
 
 ```bash
-docker pull ghcr.io/futureprayer/startlight-backend:<version>
-docker run -d --name startlight-backend -p 8080:8080 ghcr.io/futureprayer/startlight-backend:<version>
+docker pull ghcr.io/futureprayer/starlight-backend:<version>
+docker run -d --name starlight-backend -p 8080:8080 ghcr.io/futureprayer/starlight-backend:<version>
 ```
 
 #### C. 单独部署前端镜像
@@ -279,8 +279,8 @@ docker run -d --name startlight-backend -p 8080:8080 ghcr.io/futureprayer/startl
 前端镜像基于 Nginx，并支持通过环境变量 `BACKEND_UPSTREAM` 反向代理后端：
 
 ```bash
-docker pull ghcr.io/futureprayer/startlight-frontend:<version>
-docker run -d --name startlight-frontend -p 8081:80 -e BACKEND_UPSTREAM=http://host.docker.internal:8080 ghcr.io/futureprayer/startlight-frontend:<version>
+docker pull ghcr.io/futureprayer/starlight-frontend:<version>
+docker run -d --name starlight-frontend -p 8081:80 -e BACKEND_UPSTREAM=http://host.docker.internal:8080 ghcr.io/futureprayer/starlight-frontend:<version>
 ```
 
 说明：
@@ -292,10 +292,10 @@ docker run -d --name startlight-frontend -p 8081:80 -e BACKEND_UPSTREAM=http://h
 #### D. 前后端分开部署到同一个 Docker 网络
 
 ```bash
-docker network create startlight-net
+docker network create starlight-net
 
-docker run -d --name startlight-backend --network startlight-net ghcr.io/futureprayer/startlight-backend:<version>
-docker run -d --name startlight-frontend --network startlight-net -p 8080:80 -e BACKEND_UPSTREAM=http://startlight-backend:8080 ghcr.io/futureprayer/startlight-frontend:<version>
+docker run -d --name starlight-backend --network starlight-net ghcr.io/futureprayer/starlight-backend:<version>
+docker run -d --name starlight-frontend --network starlight-net -p 8080:80 -e BACKEND_UPSTREAM=http://starlight-backend:8080 ghcr.io/futureprayer/starlight-frontend:<version>
 ```
 
 此时访问：
@@ -307,7 +307,7 @@ docker run -d --name startlight-frontend --network startlight-net -p 8080:80 -e 
 ## 测试
 
 ```powershell
-cd D:\devProjects\java\startlight
+cd D:\devProjects\java\starlight
 mvn test
 ```
 

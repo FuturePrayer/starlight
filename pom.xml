@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>cn.suhoan</groupId>
-    <artifactId>startlight</artifactId>
-    <version>0.0.7</version>
-    <name>startlight</name>
-    <description>startlight</description>
+    <artifactId>starlight</artifactId>
+    <version>0.1.0</version>
+    <name>starlight</name>
+    <description>starlight</description>
     <url/>
     <licenses>
         <license/>
