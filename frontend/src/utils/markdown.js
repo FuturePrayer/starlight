@@ -1,3 +1,4 @@
+import hljs from 'highlight.js/lib/common'
 import MarkdownIt from 'markdown-it'
 
 const md = new MarkdownIt({
@@ -7,15 +8,87 @@ const md = new MarkdownIt({
   breaks: true
 })
 
+function normalizeLanguage(lang) {
+  return String(lang || '').trim().split(/\s+/)[0].toLowerCase()
+}
+
+function isOpeningTag(token) {
+  return /^<([a-zA-Z][^\s/>]*)\b[^>]*>$/.test(token) && !token.startsWith('</') && !token.endsWith('/>')
+}
+
+function getTagName(token) {
+  const match = token.match(/^<\/?([a-zA-Z][^\s/>]*)/)
+  return match ? match[1].toLowerCase() : ''
+}
+
+function splitHighlightedLines(html) {
+  const tokens = String(html || '').split(/(<[^>]+>|\n)/g).filter(Boolean)
+  const lines = ['']
+  const openTags = []
+
+  tokens.forEach(token => {
+    const currentIndex = lines.length - 1
+
+    if (token === '\n') {
+      if (openTags.length) {
+        lines[currentIndex] += openTags.slice().reverse().map(tag => `</${tag.name}>`).join('')
+      }
+      lines.push(openTags.map(tag => tag.token).join(''))
+      return
+    }
+
+    lines[currentIndex] += token
+
+    if (token.startsWith('</')) {
+      const closingTagName = getTagName(token)
+      const openIndex = [...openTags].reverse().findIndex(tag => tag.name === closingTagName)
+      if (openIndex >= 0) {
+        openTags.splice(openTags.length - 1 - openIndex, 1)
+      }
+      return
+    }
+
+    if (isOpeningTag(token)) {
+      openTags.push({ name: getTagName(token), token })
+    }
+  })
+
+  return lines
+}
+
+function highlightCode(content, lang) {
+  const normalizedLang = normalizeLanguage(lang)
+
+  if (normalizedLang && hljs.getLanguage(normalizedLang)) {
+    const result = hljs.highlight(content, {
+      language: normalizedLang,
+      ignoreIllegals: true
+    })
+    return {
+      html: result.value,
+      language: result.language || normalizedLang,
+      highlighted: true
+    }
+  }
+
+  return {
+    html: md.utils.escapeHtml(content),
+    language: normalizedLang,
+    highlighted: false
+  }
+}
+
 function renderCodeBlock(content, { lang = '', showLineNumbers = false } = {}) {
   const normalizedCode = String(content || '').replace(/\n$/, '')
-  const lines = normalizedCode.split('\n')
+  const { html: highlightedHtml, highlighted } = highlightCode(normalizedCode, lang)
+  const lines = splitHighlightedLines(highlightedHtml)
   const lineCount = Math.max(lines.length, 1)
   const gutterWidth = String(lineCount).length
-  const langLabel = lang ? `<span class="sl-code-lang">${md.utils.escapeHtml(lang)}</span>` : ''
+  const normalizedLang = normalizeLanguage(lang)
+  const langLabel = normalizedLang ? `<span class="sl-code-lang">${md.utils.escapeHtml(normalizedLang)}</span>` : ''
 
   const lineHtml = lines.map((line, index) => {
-    const contentHtml = `<span class="sl-code-content">${md.utils.escapeHtml(line)}</span>`
+    const contentHtml = `<span class="sl-code-content">${line}</span>`
 
     if (!showLineNumbers) {
       return `<span class="sl-code-line sl-code-line--plain">${contentHtml}</span>`
@@ -25,7 +98,10 @@ function renderCodeBlock(content, { lang = '', showLineNumbers = false } = {}) {
     return `<span class="sl-code-line"><span class="sl-code-ln">${lineNumber}</span>${contentHtml}</span>`
   }).join('')
 
-  return `<div class="sl-code-block">${langLabel}<pre><code>${lineHtml}</code></pre></div>`
+  const languageClass = normalizedLang ? ` language-${md.utils.escapeHtml(normalizedLang)}` : ''
+  const highlightedClass = highlighted ? ' hljs' : ''
+
+  return `<div class="sl-code-block">${langLabel}<pre><code class="sl-code${highlightedClass}${languageClass}">${lineHtml}</code></pre></div>`
 }
 
 // ── Code blocks: fenced blocks with line numbers, indented blocks with same spacing ──

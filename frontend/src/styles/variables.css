@@ -31,6 +31,18 @@
   --sl-scrollbar: rgba(0,0,0,0.2);
   --sl-scrollbar-hover: rgba(0,0,0,0.35);
   --sl-code-bg: #f6f6f6;
+  --sl-code-border: rgba(31, 35, 40, 0.12);
+  --sl-code-text: #1f2328;
+  --sl-code-line-hover: rgba(15, 23, 42, 0.04);
+  --sl-code-ln: #8c959f;
+  --sl-code-comment: #6e7781;
+  --sl-code-keyword: #8250df;
+  --sl-code-title: #0550ae;
+  --sl-code-string: #0a7f42;
+  --sl-code-number: #b35900;
+  --sl-code-attr: #953800;
+  --sl-code-variable: #953800;
+  --sl-code-meta: #5a32a3;
   --sl-backdrop: rgba(0,0,0,0.3);
 
   --sl-font: 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;

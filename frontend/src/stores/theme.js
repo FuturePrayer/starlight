@@ -2,6 +2,36 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { themeApi } from '@/api'
 
+const LIGHT_CODE_VARS = {
+  '--sl-code-border': 'rgba(31, 35, 40, 0.12)',
+  '--sl-code-text': '#1f2328',
+  '--sl-code-line-hover': 'rgba(15, 23, 42, 0.04)',
+  '--sl-code-ln': '#8c959f',
+  '--sl-code-comment': '#6e7781',
+  '--sl-code-keyword': '#8250df',
+  '--sl-code-title': '#0550ae',
+  '--sl-code-string': '#0a7f42',
+  '--sl-code-number': '#b35900',
+  '--sl-code-attr': '#953800',
+  '--sl-code-variable': '#953800',
+  '--sl-code-meta': '#5a32a3',
+}
+
+const DARK_CODE_VARS = {
+  '--sl-code-border': 'rgba(240, 246, 252, 0.10)',
+  '--sl-code-text': '#e6edf3',
+  '--sl-code-line-hover': 'rgba(255, 255, 255, 0.05)',
+  '--sl-code-ln': '#7d8590',
+  '--sl-code-comment': '#8b949e',
+  '--sl-code-keyword': '#ff7b72',
+  '--sl-code-title': '#79c0ff',
+  '--sl-code-string': '#a5d6ff',
+  '--sl-code-number': '#79c0ff',
+  '--sl-code-attr': '#d2a8ff',
+  '--sl-code-variable': '#ffa657',
+  '--sl-code-meta': '#d2a8ff',
+}
+
 const BUILTIN_THEMES = [
   {
     id: 'win11-light',
@@ -42,6 +72,7 @@ const BUILTIN_THEMES = [
       '--sl-scrollbar-hover': 'rgba(0, 0, 0, 0.35)',
       '--sl-code-bg': '#f6f6f6',
       '--sl-backdrop': 'rgba(0, 0, 0, 0.3)',
+      ...LIGHT_CODE_VARS,
     }
   },
   {
@@ -83,6 +114,7 @@ const BUILTIN_THEMES = [
       '--sl-scrollbar-hover': 'rgba(255, 255, 255, 0.3)',
       '--sl-code-bg': '#1e1e1e',
       '--sl-backdrop': 'rgba(0, 0, 0, 0.5)',
+      ...DARK_CODE_VARS,
     }
   },
   {
@@ -124,6 +156,7 @@ const BUILTIN_THEMES = [
       '--sl-scrollbar-hover': 'rgba(120, 90, 20, 0.32)',
       '--sl-code-bg': '#f5f0e0',
       '--sl-backdrop': 'rgba(60, 45, 10, 0.3)',
+      ...LIGHT_CODE_VARS,
     }
   },
   {
@@ -165,6 +198,7 @@ const BUILTIN_THEMES = [
       '--sl-scrollbar-hover': 'rgba(30, 80, 35, 0.32)',
       '--sl-code-bg': '#e8f5e9',
       '--sl-backdrop': 'rgba(10, 40, 12, 0.3)',
+      ...LIGHT_CODE_VARS,
     }
   },
   {
@@ -206,6 +240,7 @@ const BUILTIN_THEMES = [
       '--sl-scrollbar-hover': 'rgba(120, 20, 20, 0.32)',
       '--sl-code-bg': '#fce4ec',
       '--sl-backdrop': 'rgba(50, 10, 10, 0.3)',
+      ...LIGHT_CODE_VARS,
     }
   }
 ]
