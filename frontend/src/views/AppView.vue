@@ -204,6 +204,31 @@
       v-if="showSecurityModal"
       @close="showSecurityModal = false"
     />
+    <PopupLayer
+      v-if="showDiscardConfirm"
+      title="确认不保存退出？"
+      eyebrow="退出编辑"
+      tone="warning"
+      width="min(460px, calc(100vw - 32px))"
+      @close="showDiscardConfirm = false"
+    >
+      <div class="discard-confirm">
+        <div class="discard-confirm__icon">!</div>
+        <div class="discard-confirm__content">
+          <p class="discard-confirm__text">{{ discardConfirmDescription }}</p>
+          <div class="discard-confirm__meta">
+            <span class="sl-badge">{{ noteStore.dirty ? '有未保存更改' : '未检测到新修改' }}</span>
+            <span class="sl-badge">{{ discardConfirmNoteLabel }}</span>
+          </div>
+          <p class="discard-confirm__hint">你也可以先保存，再点击“完成”退出编辑。</p>
+        </div>
+      </div>
+
+      <template #footer>
+        <button class="sl-btn" @click="showDiscardConfirm = false">继续编辑</button>
+        <button class="sl-btn sl-btn--danger" @click="confirmDiscardExit">确认退出</button>
+      </template>
+    </PopupLayer>
   </div>
 </template>
 
@@ -217,6 +242,7 @@ import { useToastStore } from '@/stores/toast'
 import { renderMarkdown, formatTime } from '@/utils/markdown'
 import TreeNode from '@/components/TreeNode.vue'
 import OutlineList from '@/components/OutlineList.vue'
+import PopupLayer from '@/components/PopupLayer.vue'
 import ShareModal from '@/components/ShareModal.vue'
 import CategoryModal from '@/components/CategoryModal.vue'
 import AdminModal from '@/components/AdminModal.vue'
@@ -240,6 +266,7 @@ const showCategoryModal = ref(false)
 const showAdminModal = ref(false)
 const showProfileModal = ref(false)
 const showSecurityModal = ref(false)
+const showDiscardConfirm = ref(false)
 
 const editorTitle = ref('')
 const editorContent = ref('')
@@ -298,6 +325,15 @@ const categoryOptions = computed(() => {
   }
   walk(noteStore.tree.items)
   return result
+})
+
+const discardConfirmDescription = computed(() => (noteStore.dirty
+  ? '当前内容还有未保存更改，退出编辑后这些修改将无法恢复。'
+  : '当前没有新的未保存更改，确认后会直接退出编辑模式。'))
+
+const discardConfirmNoteLabel = computed(() => {
+  const value = editorTitle.value.trim() || noteStore.currentNote?.title || ''
+  return value || '未命名笔记'
 })
 
 // Sync editor fields when note changes
@@ -410,10 +446,15 @@ function toggleAutosave() {
 }
 
 function handleDiscardExit() {
-  if (!confirm('确定不保存退出吗？未保存的更改将会丢失。')) return
+  showDiscardConfirm.value = true
+}
+
+function confirmDiscardExit() {
+  showDiscardConfirm.value = false
   noteStore.discardEdit()
   toast.info('已退出编辑，未保存内容已放弃')
 }
+
 function handleNewNote() {
   noteStore.startNewNote(selectedCategoryId.value)
   editorTitle.value = ''
@@ -748,6 +789,46 @@ onUnmounted(() => {
 }
 .fab-toggle { border-radius: var(--sl-radius); }
 
+.discard-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.discard-confirm__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid var(--sl-border);
+  background: var(--sl-hover-bg);
+  color: var(--sl-warning);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--sl-primary-light);
+}
+.discard-confirm__content {
+  min-width: 0;
+  flex: 1;
+}
+.discard-confirm__text {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--sl-text-secondary);
+}
+.discard-confirm__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.discard-confirm__hint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--sl-text-tertiary);
+}
+
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
@@ -798,6 +879,10 @@ onUnmounted(() => {
   .fab-menu .sl-btn {
     width: 100%;
     justify-content: center;
+  }
+  .discard-confirm {
+    flex-direction: column;
+    gap: 12px;
   }
   .editor-statusbar {
     flex-direction: column;

@@ -15,6 +15,8 @@
   --sl-text-secondary: #616161;
   --sl-text-tertiary: #9e9e9e;
   --sl-danger: #c42b1c;
+  --sl-danger-hover: #a42618;
+  --sl-danger-active: #8f2115;
   --sl-success: #0f7b0f;
   --sl-warning: #9d5d00;
   --sl-shadow-card: 0 2px 8px rgba(0,0,0,0.04), 0 0 1px rgba(0,0,0,0.12);

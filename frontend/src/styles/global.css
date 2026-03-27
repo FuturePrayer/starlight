@@ -69,6 +69,15 @@ button, input, select, textarea {
 .sl-btn--primary:hover { background: var(--sl-primary-hover); border-color: var(--sl-primary-hover); }
 
 .sl-btn--danger { background: var(--sl-danger); border-color: var(--sl-danger); color: #fff; }
+.sl-btn--danger:hover {
+  background: var(--sl-danger-hover, var(--sl-danger));
+  border-color: var(--sl-danger-hover, var(--sl-danger));
+  color: #fff;
+}
+.sl-btn--danger:active {
+  background: var(--sl-danger-active, var(--sl-danger-hover, var(--sl-danger)));
+  border-color: var(--sl-danger-active, var(--sl-danger-hover, var(--sl-danger)));
+}
 
 .sl-btn--ghost { background: transparent; border-color: transparent; }
 .sl-btn--ghost:hover { background: var(--sl-hover-bg); border-color: transparent; }

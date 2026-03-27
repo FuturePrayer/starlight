@@ -58,6 +58,8 @@ public class AuthController {
         boolean passkeyLoginAvailable = settingsService.isPasskeyEnabled() && settingsService.isSiteUrlHttps();
         Map<String, Object> data = new HashMap<>();
         data.put("enabled", settingsService.isRegistrationEnabled());
+        data.put("available", settingsService.isRegistrationAvailable());
+        data.put("bootstrapAdminRequired", settingsService.isBootstrapAdminRegistrationRequired());
         data.put("passkeyEnabled", passkeyLoginAvailable);
         return ApiResponse.ok(data);
     }

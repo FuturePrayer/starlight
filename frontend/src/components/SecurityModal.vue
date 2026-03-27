@@ -1,83 +1,72 @@
 <template>
-  <Teleport to="body">
-    <div class="modal-backdrop" @click.self="$emit('close')">
-      <div class="modal sl-card">
-        <div class="modal-header">
-          <h3>安全设置</h3>
-          <button class="sl-btn sl-btn--ghost sl-btn--sm" @click="$emit('close')">✕</button>
-        </div>
-        <div class="modal-body">
+  <PopupLayer title="安全设置" width="min(480px, calc(100vw - 32px))" @close="$emit('close')">
 
-          <!-- ──── TOTP Section ──── -->
-          <div class="section">
-            <h4>🔐 两步验证（TOTP）</h4>
-            <p class="hint" v-if="!totpGlobalEnabled">管理员尚未开启两步验证功能。</p>
-            <template v-else>
-              <!-- User has TOTP bound -->
-              <template v-if="authStore.totpBound && !totpSetupData">
-                <p class="status-ok">✓ 已开启两步验证</p>
-                <button class="sl-btn sl-btn--danger sl-btn--sm" @click="handleTotpRevoke">解除绑定</button>
-              </template>
-              <!-- Setup flow -->
-              <template v-else-if="totpSetupData">
-                <p class="hint">使用认证器应用扫描二维码，然后输入 6 位验证码完成绑定。</p>
-                <div class="qr-container">
-                  <img :src="totpSetupData.qrDataUrl" alt="TOTP QR Code" class="qr-img" />
-                </div>
-                <div class="form-field" style="margin-top:8px">
-                  <label class="sl-label">密钥（手动输入）</label>
-                  <input :value="totpSetupData.secret" class="sl-input" readonly @click="copyText(totpSetupData.secret)" style="cursor:pointer;font-family:var(--sl-font-mono);font-size:12px" />
-                </div>
-                <div class="form-field" style="margin-top:10px">
-                  <label class="sl-label">验证码</label>
-                  <input v-model="totpCode" class="sl-input" placeholder="输入 6 位验证码" maxlength="6" @keyup.enter="handleTotpConfirm" />
-                </div>
-                <div class="btn-row" style="margin-top:10px">
-                  <button class="sl-btn sl-btn--primary" @click="handleTotpConfirm" :disabled="!totpCode">确认绑定</button>
-                  <button class="sl-btn" @click="totpSetupData = null">取消</button>
-                </div>
-              </template>
-              <!-- Not yet bound -->
-              <template v-else>
-                <p class="hint">绑定两步验证后，登录时需要额外输入验证码。</p>
-                <button class="sl-btn sl-btn--primary sl-btn--sm" @click="handleTotpSetup">开始设置</button>
-              </template>
-            </template>
+    <!-- ──── TOTP Section ──── -->
+    <div class="section">
+      <h4>🔐 两步验证（TOTP）</h4>
+      <p class="hint" v-if="!totpGlobalEnabled">管理员尚未开启两步验证功能。</p>
+      <template v-else>
+        <!-- User has TOTP bound -->
+        <template v-if="authStore.totpBound && !totpSetupData">
+          <p class="status-ok">✓ 已开启两步验证</p>
+          <button class="sl-btn sl-btn--danger sl-btn--sm" @click="handleTotpRevoke">解除绑定</button>
+        </template>
+        <!-- Setup flow -->
+        <template v-else-if="totpSetupData">
+          <p class="hint">使用认证器应用扫描二维码，然后输入 6 位验证码完成绑定。</p>
+          <div class="qr-container">
+            <img :src="totpSetupData.qrDataUrl" alt="TOTP QR Code" class="qr-img" />
           </div>
-
-          <hr class="divider" />
-
-          <!-- ──── Passkey Section ──── -->
-          <div class="section">
-            <h4>🔑 通行密钥</h4>
-            <p class="hint" v-if="!passkeyGlobalEnabled">
-              管理员尚未开启通行密钥功能。
-              <template v-if="authStore.isAdmin && !siteUrlHttps">
-                <br /><strong class="warn">⚠ 通行密钥要求站点 URL 为 HTTPS 协议。请先在管理员设置中配置 HTTPS 站点 URL。</strong>
-              </template>
-            </p>
-            <template v-else>
-              <p class="hint">通行密钥可代替密码登录，并自动跳过两步验证。</p>
-              <!-- Existing passkeys -->
-              <div v-if="passkeys.length" class="passkey-list">
-                <div v-for="pk in passkeys" :key="pk.id" class="passkey-item">
-                  <div>
-                    <span class="passkey-name">{{ pk.nickname }}</span>
-                    <span class="passkey-date">{{ formatTime(pk.createdAt) }}</span>
-                  </div>
-                  <button class="sl-btn sl-btn--ghost sl-btn--sm" style="color:var(--sl-danger)" @click="handlePasskeyDelete(pk.id)">删除</button>
-                </div>
-              </div>
-              <button class="sl-btn sl-btn--primary sl-btn--sm" style="margin-top:10px" @click="handlePasskeyRegister" :disabled="registeringPasskey">
-                {{ registeringPasskey ? '注册中...' : '注册新通行密钥' }}
-              </button>
-            </template>
+          <div class="form-field security-form-field security-form-field--compact">
+            <label class="sl-label">密钥（手动输入）</label>
+            <input :value="totpSetupData.secret" class="sl-input security-secret-input" readonly @click="copyText(totpSetupData.secret)" />
           </div>
-
-        </div>
-      </div>
+          <div class="form-field security-form-field">
+            <label class="sl-label">验证码</label>
+            <input v-model="totpCode" class="sl-input" placeholder="输入 6 位验证码" maxlength="6" @keyup.enter="handleTotpConfirm" />
+          </div>
+          <div class="btn-row security-btn-row">
+            <button class="sl-btn sl-btn--primary" @click="handleTotpConfirm" :disabled="!totpCode">确认绑定</button>
+            <button class="sl-btn" @click="totpSetupData = null">取消</button>
+          </div>
+        </template>
+        <!-- Not yet bound -->
+        <template v-else>
+          <p class="hint">绑定两步验证后，登录时需要额外输入验证码。</p>
+          <button class="sl-btn sl-btn--primary sl-btn--sm" @click="handleTotpSetup">开始设置</button>
+        </template>
+      </template>
     </div>
-  </Teleport>
+
+    <hr class="divider" />
+
+    <!-- ──── Passkey Section ──── -->
+    <div class="section">
+      <h4>🔑 通行密钥</h4>
+      <p class="hint" v-if="!passkeyGlobalEnabled">
+        管理员尚未开启通行密钥功能。
+        <template v-if="authStore.isAdmin && !siteUrlHttps">
+          <br /><strong class="warn">⚠ 通行密钥要求站点 URL 为 HTTPS 协议。请先在管理员设置中配置 HTTPS 站点 URL。</strong>
+        </template>
+      </p>
+      <template v-else>
+        <p class="hint">通行密钥可代替密码登录，并自动跳过两步验证。</p>
+        <!-- Existing passkeys -->
+        <div v-if="passkeys.length" class="passkey-list">
+          <div v-for="pk in passkeys" :key="pk.id" class="passkey-item">
+            <div>
+              <span class="passkey-name">{{ pk.nickname }}</span>
+              <span class="passkey-date">{{ formatTime(pk.createdAt) }}</span>
+            </div>
+            <button class="sl-btn sl-btn--ghost sl-btn--sm passkey-delete-btn" @click="handlePasskeyDelete(pk.id)">删除</button>
+          </div>
+        </div>
+        <button class="sl-btn sl-btn--primary sl-btn--sm security-passkey-btn" @click="handlePasskeyRegister" :disabled="registeringPasskey">
+          {{ registeringPasskey ? '注册中...' : '注册新通行密钥' }}
+        </button>
+      </template>
+    </div>
+  </PopupLayer>
 </template>
 
 <script setup>
@@ -86,6 +75,7 @@ import { authApi, adminApi, base64urlToBuffer, bufferToBase64url } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { formatTime } from '@/utils/markdown'
+import PopupLayer from '@/components/PopupLayer.vue'
 
 const emit = defineEmits(['close'])
 const authStore = useAuthStore()
@@ -227,39 +217,26 @@ function copyText(text) {
 </script>
 
 <style scoped>
-.modal-backdrop {
-  position: fixed; inset: 0;
-  background: var(--sl-backdrop);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 200; padding: 20px;
-  animation: sl-fade-in 0.15s ease;
-}
-.modal {
-  width: min(480px, 100%);
-  padding: 24px;
-  max-height: 85vh;
-  overflow-y: auto;
-  animation: sl-scale-in 0.2s ease;
-}
-.modal-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 20px;
-}
-.modal-header h3 { font-size: 16px; font-weight: 600; margin: 0; }
 .section h4 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
 .hint { font-size: 12px; color: var(--sl-text-tertiary); margin: 0 0 10px; line-height: 1.5; }
 .warn { color: var(--sl-warning); }
 .status-ok { font-size: 13px; color: var(--sl-success); font-weight: 500; margin: 0 0 8px; }
 .divider { border: none; border-top: 1px solid var(--sl-border); margin: 18px 0; }
 .btn-row { display: flex; gap: 8px; }
+.security-btn-row { margin-top: 10px; }
+.security-form-field { margin-top: 10px; }
+.security-form-field--compact { margin-top: 8px; }
 .qr-container { text-align: center; padding: 8px 0; }
 .qr-img { width: 200px; height: 200px; border-radius: var(--sl-radius); border: 1px solid var(--sl-border); }
+.security-secret-input { cursor: pointer; font-family: var(--sl-font-mono); font-size: 12px; }
 .passkey-list { display: flex; flex-direction: column; gap: 6px; }
 .passkey-item {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 10px; border-radius: var(--sl-radius);
   border: 1px solid var(--sl-border); font-size: 13px;
 }
+.passkey-delete-btn { color: var(--sl-danger); }
+.security-passkey-btn { margin-top: 10px; }
 .passkey-name { font-weight: 500; }
 .passkey-date { font-size: 11px; color: var(--sl-text-tertiary); margin-left: 8px; }
 </style>

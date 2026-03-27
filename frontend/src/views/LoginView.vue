@@ -4,7 +4,23 @@
       <div class="login-header">
         <div class="login-logo">✨</div>
         <h1>{{ loginTitle }}</h1>
-        <p class="login-subtitle">支持用户名/邮箱登录，第一个注册账户自动成为管理员。</p>
+        <p class="login-subtitle">{{ loginSubtitle }}</p>
+      </div>
+
+      <div v-if="showBootstrapGuide" class="bootstrap-guide sl-card">
+        <div class="bootstrap-guide__badge">首次启动</div>
+        <h2 class="bootstrap-guide__title">先创建管理员账户，完成系统初始化</h2>
+        <p class="bootstrap-guide__text">
+          当前系统还没有管理员。首次注册的账户会自动获得管理员权限，并可在进入系统后决定是否开放普通用户注册。
+        </p>
+        <ul class="bootstrap-guide__list">
+          <li>首个账户会自动成为管理员</li>
+          <li>注册完成后将直接进入系统</li>
+          <li>邮箱注册后不可修改，请确认后再提交</li>
+        </ul>
+        <router-link to="/register" class="sl-btn sl-btn--primary sl-btn--lg bootstrap-guide__cta">
+          创建管理员账户
+        </router-link>
       </div>
 
       <!-- ──── TOTP verification step ──── -->
@@ -50,8 +66,10 @@
       </form>
 
       <div class="login-footer">
-        <template v-if="registrationEnabled">
-          <span v-if="isRegister">已有账户？<router-link to="/login">返回登录</router-link></span>
+        <template v-if="registrationAvailable">
+          <span v-if="isRegister && bootstrapAdminRequired">创建完管理员账户后，可直接返回 <router-link to="/login">登录页</router-link></span>
+          <span v-else-if="isRegister">已有账户？<router-link to="/login">返回登录</router-link></span>
+          <span v-else-if="bootstrapAdminRequired" class="muted">首次初始化完成后，管理员可在系统设置中决定是否开放注册。</span>
           <span v-else>还没有账户？<router-link to="/register">立即注册</router-link></span>
         </template>
         <template v-else>
@@ -80,7 +98,8 @@ const principal = ref('')
 const email = ref('')
 const password = ref('')
 const loading = ref(false)
-const registrationEnabled = ref(false)
+const registrationAvailable = ref(false)
+const bootstrapAdminRequired = ref(false)
 const totpStep = ref(false)
 const totpCode = ref('')
 const passkeyAvailable = ref(false)
@@ -92,11 +111,30 @@ const loginTitle = computed(() => {
   return isRegister.value ? '注册 Starlight' : '登录 Starlight'
 })
 
+const loginSubtitle = computed(() => {
+  if (bootstrapAdminRequired.value) {
+    return '系统首次启动，请先创建管理员账户。第一个注册账户会自动成为管理员。'
+  }
+  return '支持用户名/邮箱登录，第一个注册账户自动成为管理员。'
+})
+
+const showBootstrapGuide = computed(() => (
+  !totpStep.value
+  && !isRegister.value
+  && bootstrapAdminRequired.value
+  && registrationAvailable.value
+))
+
 onMounted(async () => {
   themeStore.loadCached()
   try {
     const status = await authApi.registrationStatus()
-    registrationEnabled.value = status.enabled
+    registrationAvailable.value = status.available
+    bootstrapAdminRequired.value = status.bootstrapAdminRequired
+    if (isRegister.value && !status.available) {
+      router.replace('/login')
+      toast.info('当前仅管理员可开启注册。')
+    }
     if (status.passkeyEnabled) {
       // Check if browser supports WebAuthn
       if (window.PublicKeyCredential) {
@@ -230,6 +268,57 @@ async function handlePasskeyLogin() {
   color: var(--sl-text-secondary);
   line-height: 1.5;
 }
+.bootstrap-guide {
+  margin-bottom: 24px;
+  padding: 20px;
+  background:
+    linear-gradient(180deg, var(--sl-primary-light) 0, transparent 120px),
+    var(--sl-card);
+  border-color: color-mix(in srgb, var(--sl-primary) 18%, var(--sl-border));
+}
+.bootstrap-guide__badge {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--sl-hover-bg);
+  color: var(--sl-primary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.bootstrap-guide__title {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+.bootstrap-guide__text {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--sl-text-secondary);
+}
+.bootstrap-guide__list {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--sl-text-secondary);
+  font-size: 12px;
+}
+.bootstrap-guide__list li::marker {
+  color: var(--sl-primary);
+}
+.bootstrap-guide__cta {
+  width: 100%;
+  margin-top: 16px;
+  text-decoration: none;
+}
+.bootstrap-guide__cta:hover {
+  text-decoration: none;
+}
 .login-form {
   display: flex;
   flex-direction: column;
@@ -284,4 +373,13 @@ async function handlePasskeyLogin() {
   border: 1px solid var(--sl-border-strong);
 }
 .passkey-btn:hover { background: var(--sl-card-hover); }
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 28px 20px;
+  }
+  .bootstrap-guide {
+    padding: 16px;
+  }
+}
 </style>

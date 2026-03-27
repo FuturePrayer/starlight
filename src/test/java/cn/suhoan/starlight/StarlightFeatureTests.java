@@ -1,5 +1,7 @@
 package cn.suhoan.starlight;
 
+import cn.suhoan.starlight.controller.AuthController;
+import cn.suhoan.starlight.dto.ApiResponse;
 import cn.suhoan.starlight.entity.Note;
 import cn.suhoan.starlight.entity.UserAccount;
 import cn.suhoan.starlight.service.AuthService;
@@ -32,6 +34,9 @@ class StarlightFeatureTests {
     private SettingsService settingsService;
 
     @Autowired
+    private AuthController authController;
+
+    @Autowired
     private NoteService noteService;
 
     @Autowired
@@ -40,10 +45,24 @@ class StarlightFeatureTests {
     @Test
     void firstUserBecomesAdminAndRegistrationDefaultsToDisabled() {
         assertFalse(settingsService.isRegistrationEnabled());
+        assertTrue(settingsService.isBootstrapAdminRegistrationRequired());
+        assertTrue(settingsService.isRegistrationAvailable());
+
+        ApiResponse<Map<String, Object>> initialStatus = authController.registrationStatus();
+        assertTrue((Boolean) initialStatus.data().get("available"));
+        assertTrue((Boolean) initialStatus.data().get("bootstrapAdminRequired"));
+        assertFalse((Boolean) initialStatus.data().get("enabled"));
 
         UserAccount admin = authService.register("admin@example.com", "123456");
         assertTrue(admin.isAdminFlag());
         assertEquals("admin", admin.getUsername());
+        assertFalse(settingsService.isBootstrapAdminRegistrationRequired());
+        assertFalse(settingsService.isRegistrationAvailable());
+
+        ApiResponse<Map<String, Object>> postBootstrapStatus = authController.registrationStatus();
+        assertFalse((Boolean) postBootstrapStatus.data().get("available"));
+        assertFalse((Boolean) postBootstrapStatus.data().get("bootstrapAdminRequired"));
+        assertFalse((Boolean) postBootstrapStatus.data().get("enabled"));
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
@@ -52,6 +71,7 @@ class StarlightFeatureTests {
         assertTrue(exception.getMessage().contains("注册功能已关闭"));
 
         settingsService.setRegistrationEnabled(true);
+        assertTrue(settingsService.isRegistrationAvailable());
         UserAccount user = authService.register("user2@example.com", "123456");
         assertFalse(user.isAdminFlag());
         assertEquals("user2", user.getUsername());

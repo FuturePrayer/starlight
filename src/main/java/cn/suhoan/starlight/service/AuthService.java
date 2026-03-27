@@ -37,7 +37,7 @@ public class AuthService {
 
     public UserAccount register(String email, String password) {
         String normalizedEmail = normalizeEmail(email);
-        if (!userAccountRepository.findAll().isEmpty() && !settingsService.isRegistrationEnabled()) {
+        if (!settingsService.isRegistrationAvailable()) {
             throw new IllegalArgumentException("注册功能已关闭");
         }
         if (userAccountRepository.findByEmail(normalizedEmail).isPresent()) {
@@ -47,7 +47,7 @@ public class AuthService {
         userAccount.setEmail(normalizedEmail);
         userAccount.setUsername(UsernameGenerator.fromEmail(normalizedEmail, userAccountRepository::existsByUsername));
         userAccount.setPasswordHash(passwordService.hash(password));
-        userAccount.setAdminFlag(userAccountRepository.count() == 0 && userAccountRepository.countByAdminFlagTrue() == 0);
+        userAccount.setAdminFlag(settingsService.isBootstrapAdminRegistrationRequired());
         userAccount.setThemeId("win11-light");
         return userAccountRepository.save(userAccount);
     }

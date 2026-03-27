@@ -2,6 +2,7 @@ package cn.suhoan.starlight.service;
 
 import cn.suhoan.starlight.entity.AppSetting;
 import cn.suhoan.starlight.repository.AppSettingRepository;
+import cn.suhoan.starlight.repository.UserAccountRepository;
 import cn.suhoan.starlight.repository.UserCredentialRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,17 +19,30 @@ public class SettingsService {
     public static final String PASSKEY_ENABLED_KEY = "passkey.enabled";
 
     private final AppSettingRepository appSettingRepository;
+    private final UserAccountRepository userAccountRepository;
     private final UserCredentialRepository userCredentialRepository;
 
     public SettingsService(AppSettingRepository appSettingRepository,
+                           UserAccountRepository userAccountRepository,
                            UserCredentialRepository userCredentialRepository) {
         this.appSettingRepository = appSettingRepository;
+        this.userAccountRepository = userAccountRepository;
         this.userCredentialRepository = userCredentialRepository;
     }
 
     @Transactional(readOnly = true)
     public boolean isRegistrationEnabled() {
         return Boolean.parseBoolean(getValue(REGISTRATION_ENABLED_KEY, "false"));
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isBootstrapAdminRegistrationRequired() {
+        return userAccountRepository.countByAdminFlagTrue() == 0;
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isRegistrationAvailable() {
+        return isRegistrationEnabled() || isBootstrapAdminRegistrationRequired();
     }
 
     public void setRegistrationEnabled(boolean enabled) {
