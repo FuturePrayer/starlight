@@ -99,6 +99,50 @@ public class MarkdownService {
         return objectMapper.writeValueAsString(items);
     }
 
+    /**
+     * 将 Markdown 内容转为纯文本（去除语法符号），用于全文搜索索引。
+     */
+    public String stripToPlainText(String markdown) {
+        if (markdown == null || markdown.isBlank()) {
+            return "";
+        }
+        StringBuilder plain = new StringBuilder();
+        boolean inCode = false;
+        for (String line : markdown.split("\\R", -1)) {
+            if (line.startsWith("```")) {
+                inCode = !inCode;
+                continue;
+            }
+            if (inCode) {
+                plain.append(line).append(' ');
+                continue;
+            }
+            // Strip heading markers
+            String stripped = line.replaceAll("^#{1,6}\\s+", "");
+            // Strip bold/italic markers
+            stripped = stripped.replaceAll("\\*{1,3}([^*]+)\\*{1,3}", "$1");
+            // Strip inline code backticks
+            stripped = stripped.replaceAll("`([^`]+)`", "$1");
+            // Strip link syntax [text](url) → text
+            stripped = stripped.replaceAll("\\[([^\\]]+)]\\([^)]+\\)", "$1");
+            // Strip image syntax ![alt](url) → alt
+            stripped = stripped.replaceAll("!\\[([^\\]]*)]\\([^)]+\\)", "$1");
+            // Strip list markers
+            stripped = stripped.replaceAll("^\\s*[-*+]\\s+", "");
+            stripped = stripped.replaceAll("^\\s*\\d+\\.\\s+", "");
+            // Strip blockquote markers
+            stripped = stripped.replaceAll("^>+\\s*", "");
+            // Strip horizontal rules
+            if (stripped.matches("^[-*_]{3,}\\s*$")) {
+                continue;
+            }
+            if (!stripped.isBlank()) {
+                plain.append(stripped.strip()).append(' ');
+            }
+        }
+        return plain.toString().strip();
+    }
+
     private String applyInline(String value) {
         return value
                 .replaceAll("`([^`]+)`", "<code>$1</code>")

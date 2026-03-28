@@ -47,6 +47,10 @@
   --sl-code-meta: #5a32a3;
   --sl-backdrop: rgba(0,0,0,0.3);
 
+  --sl-mark-bg: rgba(255, 183, 0, 0.25);
+  --sl-mark-text: inherit;
+  --sl-mark-border: rgba(255, 183, 0, 0.5);
+
   --sl-font: 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --sl-font-mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace;
   --sl-background-image: none;

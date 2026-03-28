@@ -74,6 +74,9 @@ const BUILTIN_THEMES = [
       '--sl-scrollbar-hover': 'rgba(0, 0, 0, 0.35)',
       '--sl-code-bg': '#f6f6f6',
       '--sl-backdrop': 'rgba(0, 0, 0, 0.3)',
+      '--sl-mark-bg': 'rgba(255, 183, 0, 0.25)',
+      '--sl-mark-text': 'inherit',
+      '--sl-mark-border': 'rgba(255, 183, 0, 0.5)',
       ...LIGHT_CODE_VARS,
     }
   },
@@ -118,6 +121,9 @@ const BUILTIN_THEMES = [
       '--sl-scrollbar-hover': 'rgba(255, 255, 255, 0.3)',
       '--sl-code-bg': '#1e1e1e',
       '--sl-backdrop': 'rgba(0, 0, 0, 0.5)',
+      '--sl-mark-bg': 'rgba(255, 183, 0, 0.18)',
+      '--sl-mark-text': '#ffd54f',
+      '--sl-mark-border': 'rgba(255, 183, 0, 0.45)',
       ...DARK_CODE_VARS,
     }
   },
@@ -162,6 +168,9 @@ const BUILTIN_THEMES = [
       '--sl-scrollbar-hover': 'rgba(120, 90, 20, 0.32)',
       '--sl-code-bg': '#f5f0e0',
       '--sl-backdrop': 'rgba(60, 45, 10, 0.3)',
+      '--sl-mark-bg': 'rgba(184, 134, 11, 0.18)',
+      '--sl-mark-text': 'inherit',
+      '--sl-mark-border': 'rgba(184, 134, 11, 0.45)',
       ...LIGHT_CODE_VARS,
     }
   },
@@ -206,6 +215,9 @@ const BUILTIN_THEMES = [
       '--sl-scrollbar-hover': 'rgba(30, 80, 35, 0.32)',
       '--sl-code-bg': '#e8f5e9',
       '--sl-backdrop': 'rgba(10, 40, 12, 0.3)',
+      '--sl-mark-bg': 'rgba(46, 125, 50, 0.15)',
+      '--sl-mark-text': 'inherit',
+      '--sl-mark-border': 'rgba(46, 125, 50, 0.4)',
       ...LIGHT_CODE_VARS,
     }
   },
@@ -250,6 +262,9 @@ const BUILTIN_THEMES = [
       '--sl-scrollbar-hover': 'rgba(120, 20, 20, 0.32)',
       '--sl-code-bg': '#fce4ec',
       '--sl-backdrop': 'rgba(50, 10, 10, 0.3)',
+      '--sl-mark-bg': 'rgba(198, 40, 40, 0.12)',
+      '--sl-mark-text': 'inherit',
+      '--sl-mark-border': 'rgba(198, 40, 40, 0.35)',
       ...LIGHT_CODE_VARS,
     }
   }

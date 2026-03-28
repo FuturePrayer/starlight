@@ -15,16 +15,29 @@
     <description>starlight</description>
     <url/>
     <licenses>
-        <license/>
+        <license>
+            <name>Anti 996</name>
+            <url>https://github.com/996icu/996.ICU/blob/master/LICENSE</url>
+            <distribution>manual</distribution>
+        </license>
     </licenses>
     <developers>
-        <developer/>
+        <developer>
+            <id>1</id>
+            <name>Wang Zefeng</name>
+            <email>sihuangwlp@petalmail.com</email>
+            <url>https://suhoan.cn</url>
+            <roles>
+                <role>owner</role>
+            </roles>
+            <timezone>Asia/Shanghai</timezone>
+        </developer>
     </developers>
     <scm>
-        <connection/>
+        <connection>scm:git:https://github.com/FuturePrayer/starlight.git</connection>
         <developerConnection/>
         <tag/>
-        <url/>
+        <url>https://github.com/FuturePrayer/starlight</url>
     </scm>
     <properties>
         <java.version>25</java.version>

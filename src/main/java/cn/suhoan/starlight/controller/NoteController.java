@@ -6,6 +6,7 @@ import cn.suhoan.starlight.entity.Note;
 import cn.suhoan.starlight.entity.UserAccount;
 import cn.suhoan.starlight.service.NoteService;
 import cn.suhoan.starlight.service.SessionAuthService;
+import cn.suhoan.starlight.service.search.NoteSearchService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,9 +14,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -24,10 +27,14 @@ public class NoteController {
 
     private final SessionAuthService sessionAuthService;
     private final NoteService noteService;
+    private final NoteSearchService noteSearchService;
 
-    public NoteController(SessionAuthService sessionAuthService, NoteService noteService) {
+    public NoteController(SessionAuthService sessionAuthService,
+                          NoteService noteService,
+                          NoteSearchService noteSearchService) {
         this.sessionAuthService = sessionAuthService;
         this.noteService = noteService;
+        this.noteSearchService = noteSearchService;
     }
 
     @GetMapping("/tree")
@@ -79,6 +86,25 @@ public class NoteController {
         UserAccount userAccount = sessionAuthService.requireUser();
         noteService.deleteNote(userAccount.getId(), id);
         return ApiResponse.okMessage("已删除");
+    }
+
+    @GetMapping("/notes/search")
+    public ApiResponse<Map<String, Object>> searchNotes(
+            @RequestParam String q,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "20") int limit) {
+        if (q == null || q.isBlank()) {
+            return ApiResponse.ok(Map.of("items", List.of(), "hasMore", false));
+        }
+        int safeLimit = Math.min(Math.max(limit, 1), 50);
+        int safeOffset = Math.max(offset, 0);
+        UserAccount userAccount = sessionAuthService.requireUser();
+        // 多取一条用于判断是否有下一页
+        List<Map<String, Object>> results = noteSearchService.search(
+                userAccount.getId(), q.trim(), safeOffset, safeLimit + 1);
+        boolean hasMore = results.size() > safeLimit;
+        List<Map<String, Object>> page = hasMore ? results.subList(0, safeLimit) : results;
+        return ApiResponse.ok(Map.of("items", page, "hasMore", hasMore));
     }
 
     public record CategoryRequest(String name, String parentId) {

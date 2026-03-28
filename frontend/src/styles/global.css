@@ -177,6 +177,15 @@ button, input, select, textarea {
 @keyframes sl-slide-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes sl-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
 
+/* Search highlight — uses theme variables so it works across light/dark themes */
+mark, .sl-mark {
+  background: var(--sl-mark-bg);
+  color: var(--sl-mark-text);
+  border-bottom: 1.5px solid var(--sl-mark-border);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
 /* Markdown rendering */
 .markdown-body {
   font-size: 15px;

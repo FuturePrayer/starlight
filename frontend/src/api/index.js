@@ -43,7 +43,8 @@ export const noteApi = {
   get: (id) => request(`/api/notes/${id}`),
   create: (data) => request('/api/notes', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/api/notes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  delete: (id) => request(`/api/notes/${id}`, { method: 'DELETE' })
+  delete: (id) => request(`/api/notes/${id}`, { method: 'DELETE' }),
+  search: (q, offset = 0, limit = 20) => request(`/api/notes/search?q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}`)
 }
 
 export const categoryApi = {

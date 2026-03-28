@@ -35,6 +35,10 @@ public class Note extends BaseEntity {
     @Column(nullable = false)
     private String outlineJson;
 
+    @Lob
+    @Column(nullable = false, columnDefinition = "TEXT NOT NULL DEFAULT ''")
+    private String plainText = "";
+
     public UserAccount getOwner() {
         return owner;
     }
@@ -81,6 +85,14 @@ public class Note extends BaseEntity {
 
     public void setOutlineJson(String outlineJson) {
         this.outlineJson = outlineJson;
+    }
+
+    public String getPlainText() {
+        return plainText;
+    }
+
+    public void setPlainText(String plainText) {
+        this.plainText = plainText;
     }
 }
 

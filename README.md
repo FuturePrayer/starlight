@@ -10,7 +10,7 @@
 - 文档大纲（识别 `##` ~ `######`）
 - 公开 / 私密 / 可过期分享
 - 用户级主题切换与外部主题目录加载
-- 两套内置 Windows 11 风格主题（浅色 / 深色）
+- 两套内置 Windows 11 风格主题（浅色 / 深色）以及数套其他颜色的主题
 
 ---
 
@@ -81,13 +81,12 @@ npm run build
 
 ## 切换数据库
 
-可通过环境变量覆盖：
+可通过环境变量覆盖，支持PostgreSQL和MySQL：
 
 ```powershell
 $env:STARLIGHT_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:5432/starlight"
 $env:STARLIGHT_DATASOURCE_USERNAME="postgres"
 $env:STARLIGHT_DATASOURCE_PASSWORD="postgres"
-mvn spring-boot:run
 ```
 
 ---

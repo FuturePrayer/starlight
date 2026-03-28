@@ -40,6 +40,7 @@ public class NoteService {
         note.setMarkdownContent(markdownContent == null ? "" : markdownContent);
         note.setRenderedHtml(markdownService.renderToHtml(note.getMarkdownContent()));
         note.setOutlineJson(markdownService.buildOutlineJson(note.getMarkdownContent()));
+        note.setPlainText(markdownService.stripToPlainText(note.getMarkdownContent()));
         note.setCategory(resolveCategory(owner.getId(), categoryId));
         return noteRepository.save(note);
     }
@@ -50,6 +51,7 @@ public class NoteService {
         note.setMarkdownContent(markdownContent == null ? "" : markdownContent);
         note.setRenderedHtml(markdownService.renderToHtml(note.getMarkdownContent()));
         note.setOutlineJson(markdownService.buildOutlineJson(note.getMarkdownContent()));
+        note.setPlainText(markdownService.stripToPlainText(note.getMarkdownContent()));
         note.setCategory(resolveCategory(owner.getId(), categoryId));
         return noteRepository.save(note);
     }
