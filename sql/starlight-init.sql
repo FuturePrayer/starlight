@@ -49,7 +49,7 @@ CREATE TABLE sl_note (
     markdown_content TEXT NOT NULL,
     rendered_html TEXT NOT NULL,
     outline_json TEXT NOT NULL,
-    plain_text TEXT NOT NULL DEFAULT '',
+    plain_text TEXT,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_sl_note_owner FOREIGN KEY (owner_id) REFERENCES sl_user(id),

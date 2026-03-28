@@ -36,7 +36,7 @@ public class Note extends BaseEntity {
     private String outlineJson;
 
     @Lob
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String plainText = "";
 
     public UserAccount getOwner() {
