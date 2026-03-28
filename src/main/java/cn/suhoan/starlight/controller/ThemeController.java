@@ -16,6 +16,8 @@ import java.util.Map;
 /**
  * 主题管理控制器。
  * <p>提供主题列表查询和用户主题切换功能。</p>
+ *
+ * @author suhoan
  */
 @RestController
 @RequestMapping("/api/themes")

@@ -14,6 +14,8 @@ import java.util.Map;
  * MySQL 全文搜索实现。
  * 使用 FULLTEXT 索引 + ngram parser（MySQL 5.7+ 内置，原生支持中文分词）。
  * 当关键词太短（少于 ngram_token_size，默认为 2）时自动回退 LIKE。
+ *
+ * @author suhoan
  */
 public class MysqlNoteSearchService implements NoteSearchService {
 

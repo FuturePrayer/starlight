@@ -1,9 +1,13 @@
 const BASE = ''
 
 async function request(url, options = {}) {
+  const headers = new Headers(options.headers || {})
+  if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
   const res = await fetch(BASE + url, {
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers,
     ...options
   })
   const payload = await res.json().catch(() => ({ success: false, message: '响应解析失败' }))
@@ -14,6 +18,41 @@ async function request(url, options = {}) {
     throw err
   }
   return payload.data
+}
+
+function parseContentDispositionFileName(contentDisposition) {
+  if (!contentDisposition) return ''
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1])
+    } catch {
+      return utf8Match[1]
+    }
+  }
+  const plainMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
+  return plainMatch?.[1] || ''
+}
+
+async function download(url, options = {}) {
+  const res = await fetch(BASE + url, {
+    credentials: 'same-origin',
+    headers: new Headers(options.headers || {}),
+    ...options
+  })
+
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({ message: '请求失败' }))
+    const err = new Error(payload.message || '请求失败')
+    err.status = res.status
+    err.data = payload.data
+    throw err
+  }
+
+  return {
+    blob: await res.blob(),
+    fileName: parseContentDispositionFileName(res.headers.get('content-disposition'))
+  }
 }
 
 export const authApi = {
@@ -44,7 +83,13 @@ export const noteApi = {
   create: (data) => request('/api/notes', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/api/notes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/api/notes/${id}`, { method: 'DELETE' }),
-  search: (q, offset = 0, limit = 20) => request(`/api/notes/search?q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}`)
+  search: (q, offset = 0, limit = 20) => request(`/api/notes/search?q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}`),
+  exportArchive: () => download('/api/notes/export'),
+  importArchive: (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return request('/api/notes/import', { method: 'POST', body: formData })
+  }
 }
 
 export const categoryApi = {

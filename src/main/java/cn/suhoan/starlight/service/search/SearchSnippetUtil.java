@@ -7,6 +7,8 @@ import java.util.regex.Pattern;
 
 /**
  * 搜索摘要与高亮工具。
+ *
+ * @author suhoan
  */
 final class SearchSnippetUtil {
 

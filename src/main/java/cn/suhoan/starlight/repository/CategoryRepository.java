@@ -9,6 +9,8 @@ import java.util.Optional;
 /**
  * 分类数据访问层。
  * <p>提供笔记分类的持久化操作。</p>
+ *
+ * @author suhoan
  */
 public interface CategoryRepository extends JpaRepository<Category, String> {
 

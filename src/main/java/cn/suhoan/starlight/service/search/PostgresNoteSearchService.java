@@ -14,6 +14,8 @@ import java.util.Map;
  * PostgreSQL 全文搜索实现。
  * 使用 ILIKE 进行模糊匹配（天然支持中文）。
  * 可选启用 pg_trgm 扩展 + GIN 索引以加速 ILIKE 查询。
+ *
+ * @author suhoan
  */
 public class PostgresNoteSearchService implements NoteSearchService {
 

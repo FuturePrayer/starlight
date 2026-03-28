@@ -17,6 +17,8 @@ import java.util.Map;
 /**
  * 二维码生成服务。
  * <p>使用 ZXing 库将文本内容生成为 Base64 编码的 PNG 图片 Data URL。</p>
+ *
+ * @author suhoan
  */
 @Service
 public class QrCodeService {

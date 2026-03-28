@@ -7,6 +7,8 @@ import java.util.function.Predicate;
  * 用户名生成器。
  * <p>根据邮箱地址自动生成唯一的用户名。从邮箱的本地部分提取基础名称，
  * 如遇冲突则自动追加数字后缀（如 user-2, user-3）。</p>
+ *
+ * @author suhoan
  */
 public final class UsernameGenerator {
 

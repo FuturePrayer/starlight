@@ -100,6 +100,16 @@ export const useNoteStore = defineStore('note', () => {
     return cat
   }
 
+  async function exportArchive() {
+    return noteApi.exportArchive()
+  }
+
+  async function importArchive(file) {
+    const result = await noteApi.importArchive(file)
+    await refreshTree()
+    return result
+  }
+
   function startNewNote(categoryId = null) {
     currentNote.value = {
       id: null,
@@ -159,7 +169,8 @@ export const useNoteStore = defineStore('note', () => {
   return {
     tree, currentNote, editMode, dirty, autosaveEnabled, lastSavedAt, expandedCategoryIds,
     refreshTree, openNote, saveNote, deleteNote,
-    createCategory, startNewNote, enterEditMode, discardEdit, finishEditing,
+    createCategory, exportArchive, importArchive,
+    startNewNote, enterEditMode, discardEdit, finishEditing,
     setEditMode, setAutosaveEnabled, hasExpandedCategory, setCategoryExpanded, toggleCategoryExpanded,
     allNotes
   }

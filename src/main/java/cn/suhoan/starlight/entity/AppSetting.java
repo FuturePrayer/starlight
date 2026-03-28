@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 /**
  * 应用配置实体。
  * <p>以键值对形式存储系统级配置项，如注册开关、分享基础 URL、TOTP 开关等。</p>
+ *
+ * @author suhoan
  */
 @Entity
 @Table(name = "sl_app_setting")

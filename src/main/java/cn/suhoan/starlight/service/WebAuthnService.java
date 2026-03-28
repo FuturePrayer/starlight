@@ -40,6 +40,11 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+/**
+ * 通行密钥登录服务
+ *
+ * @author suhoan
+ */
 @Service
 @Transactional
 public class WebAuthnService implements CredentialRepository {

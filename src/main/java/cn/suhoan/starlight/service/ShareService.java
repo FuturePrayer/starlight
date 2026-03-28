@@ -26,6 +26,8 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 /**
  * 笔记分享服务。
  * <p>处理笔记的分享创建、列表查询、删除和公开访问等业务逻辑。</p>
+ *
+ * @author suhoan
  */
 @Service
 @Transactional

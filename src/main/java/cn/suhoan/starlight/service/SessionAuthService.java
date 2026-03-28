@@ -14,6 +14,8 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 /**
  * 会话认证服务。
  * <p>基于 Sa-Token 实现的用户会话管理，提供登录、登出、权限校验等功能。</p>
+ *
+ * @author suhoan
  */
 @Service
 public class SessionAuthService {

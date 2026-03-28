@@ -29,6 +29,8 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 认证控制器。
  * <p>处理用户注册、登录、登出、个人资料管理、TOTP 两步验证和通行密钥（WebAuthn）相关接口。</p>
+ *
+ * @author suhoan
  */
 @RestController
 @RequestMapping("/api/auth")

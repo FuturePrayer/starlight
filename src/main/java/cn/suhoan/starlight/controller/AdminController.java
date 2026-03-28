@@ -17,6 +17,8 @@ import java.util.Map;
 /**
  * 管理员控制器。
  * <p>提供系统级设置的管理接口，仅管理员可访问。</p>
+ *
+ * @author suhoan
  */
 @RestController
 @RequestMapping("/api/admin")

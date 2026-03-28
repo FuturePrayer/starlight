@@ -10,6 +10,8 @@ import java.util.List;
  * Markdown 渲染服务。
  * <p>提供 Markdown 转 HTML、大纲提取和纯文本提取功能。
  * 使用自实现的轻量级 Markdown 解析器，支持标题、列表、代码块和行内格式。</p>
+ *
+ * @author suhoan
  */
 @Service
 public class MarkdownService {

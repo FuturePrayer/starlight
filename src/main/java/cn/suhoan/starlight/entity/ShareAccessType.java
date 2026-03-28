@@ -2,6 +2,8 @@ package cn.suhoan.starlight.entity;
 
 /**
  * 笔记分享的访问方式枚举。
+ *
+ * @author suhoan
  */
 public enum ShareAccessType {
     /** 公开访问，任何人都可通过链接查看 */

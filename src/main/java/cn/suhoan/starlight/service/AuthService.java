@@ -16,6 +16,8 @@ import java.util.regex.Pattern;
 /**
  * 认证服务。
  * <p>处理用户注册、登录、个人信息更新和 TOTP 密钥管理等认证相关业务逻辑。</p>
+ *
+ * @author suhoan
  */
 @Service
 @Transactional

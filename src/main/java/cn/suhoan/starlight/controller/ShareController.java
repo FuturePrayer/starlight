@@ -26,6 +26,8 @@ import java.util.Map;
 /**
  * 笔记分享控制器。
  * <p>提供笔记分享链接的创建、查询、删除和公开访问接口。</p>
+ *
+ * @author suhoan
  */
 @RestController
 public class ShareController {

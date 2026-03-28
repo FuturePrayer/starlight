@@ -22,6 +22,8 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 /**
  * 笔记服务。
  * <p>处理笔记和分类的 CRUD 操作，以及笔记树形结构的构建。</p>
+ *
+ * @author suhoan
  */
 @Service
 @Transactional

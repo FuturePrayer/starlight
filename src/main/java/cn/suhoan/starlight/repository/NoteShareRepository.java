@@ -9,6 +9,8 @@ import java.util.Optional;
 /**
  * 笔记分享数据访问层。
  * <p>提供分享链接的持久化操作，包括按 token、笔记 ID 和所有者查询。</p>
+ *
+ * @author suhoan
  */
 public interface NoteShareRepository extends JpaRepository<NoteShare, String> {
 

@@ -5,8 +5,13 @@ import cn.suhoan.starlight.entity.Category;
 import cn.suhoan.starlight.entity.Note;
 import cn.suhoan.starlight.entity.UserAccount;
 import cn.suhoan.starlight.service.NoteService;
+import cn.suhoan.starlight.service.NoteTransferService;
 import cn.suhoan.starlight.service.SessionAuthService;
 import cn.suhoan.starlight.service.search.NoteSearchService;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,7 +24,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +34,8 @@ import java.util.Map;
 /**
  * 笔记管理控制器。
  * <p>提供笔记和分类的 CRUD 接口、笔记树形结构查询和全文搜索功能。</p>
+ *
+ * @author suhoan
  */
 @RestController
 @RequestMapping("/api")
@@ -36,13 +45,16 @@ public class NoteController {
 
     private final SessionAuthService sessionAuthService;
     private final NoteService noteService;
+    private final NoteTransferService noteTransferService;
     private final NoteSearchService noteSearchService;
 
     public NoteController(SessionAuthService sessionAuthService,
                           NoteService noteService,
+                          NoteTransferService noteTransferService,
                           NoteSearchService noteSearchService) {
         this.sessionAuthService = sessionAuthService;
         this.noteService = noteService;
+        this.noteTransferService = noteTransferService;
         this.noteSearchService = noteSearchService;
     }
 
@@ -105,6 +117,37 @@ public class NoteController {
         UserAccount userAccount = sessionAuthService.requireUser();
         noteService.deleteNote(userAccount.getId(), id);
         return ApiResponse.okMessage("已删除");
+    }
+
+    /**
+     * 导出当前用户的全部笔记。
+     * <p>导出结果为 ZIP 文件，内部结构为「分类目录 + Markdown 文件」。</p>
+     */
+    @GetMapping("/notes/export")
+    public ResponseEntity<byte[]> exportNotes() {
+        UserAccount userAccount = sessionAuthService.requireUser();
+        log.info("导出笔记请求: userId={}", userAccount.getId());
+        NoteTransferService.ArchivePayload payload = noteTransferService.exportArchive(userAccount.getId());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(payload.fileName(), StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .contentLength(payload.content().length)
+                .body(payload.content());
+    }
+
+    /**
+     * 导入 ZIP 形式的 Markdown 笔记包。
+     * <p>会根据 ZIP 内部目录结构创建分类，并将 Markdown 文件导入为笔记。</p>
+     */
+    @PostMapping(value = "/notes/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<Map<String, Object>> importNotes(@RequestParam("file") MultipartFile file) {
+        UserAccount userAccount = sessionAuthService.requireUser();
+        log.info("导入笔记请求: userId={}, fileName={}, size={}",
+                userAccount.getId(), file == null ? null : file.getOriginalFilename(), file == null ? 0 : file.getSize());
+        return ApiResponse.ok(noteTransferService.importArchive(userAccount, file));
     }
 
     /**

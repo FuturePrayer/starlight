@@ -7,6 +7,8 @@ import jakarta.persistence.Table;
 /**
  * WebAuthn 通行密钥凭证实体。
  * <p>存储用户注册的通行密钥（Passkey）信息，用于无密码登录认证。</p>
+ *
+ * @author suhoan
  */
 @Entity
 @Table(name = "sl_user_credential")

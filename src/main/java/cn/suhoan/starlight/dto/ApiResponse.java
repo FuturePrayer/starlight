@@ -5,6 +5,7 @@ package cn.suhoan.starlight.dto;
  * <p>所有接口返回值均使用此格式，包含 success 标志、data 数据和 message 消息。</p>
  *
  * @param <T> 响应数据类型
+ * @author suhoan
  */
 public record ApiResponse<T>(boolean success, T data, String message) {
 

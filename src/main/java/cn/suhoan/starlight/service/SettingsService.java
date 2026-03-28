@@ -14,6 +14,8 @@ import java.net.URI;
 /**
  * 系统设置服务。
  * <p>管理应用级别的配置项，包括注册开关、分享 URL、TOTP 和通行密钥开关等。</p>
+ *
+ * @author suhoan
  */
 @Service
 @Transactional

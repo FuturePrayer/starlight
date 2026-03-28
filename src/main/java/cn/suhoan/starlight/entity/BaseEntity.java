@@ -13,6 +13,8 @@ import java.util.UUID;
  * 所有实体的公共基类。
  * <p>提供 UUID 主键、创建时间和更新时间的自动填充功能。
  * 子类只需关注自身的业务字段即可。</p>
+ *
+ * @author suhoan
  */
 @MappedSuperclass
 public abstract class BaseEntity {

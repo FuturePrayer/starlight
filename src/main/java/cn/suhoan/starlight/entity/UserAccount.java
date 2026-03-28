@@ -7,6 +7,8 @@ import jakarta.persistence.Table;
 /**
  * 用户账户实体。
  * <p>存储用户的基本信息，包括登录凭证、权限标识和个人偏好设置。</p>
+ *
+ * @author suhoan
  */
 @Entity
 @Table(name = "sl_user")

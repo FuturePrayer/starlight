@@ -9,6 +9,8 @@ import java.util.Optional;
 /**
  * 用户通行密钥凭据数据访问层。
  * <p>提供 WebAuthn 通行密钥的持久化操作。</p>
+ *
+ * @author suhoan
  */
 public interface UserCredentialRepository extends JpaRepository<UserCredential, String> {
 

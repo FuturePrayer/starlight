@@ -6,6 +6,8 @@ import java.util.Map;
 /**
  * 笔记全文搜索服务抽象。
  * 根据用户配置的数据库类型自动选择对应实现。
+ *
+ * @author suhoan
  */
 public interface NoteSearchService {
 

@@ -14,6 +14,8 @@ import java.time.LocalDateTime;
 /**
  * 笔记分享实体。
  * <p>记录笔记的分享信息，包括分享 token、访问方式（公开/密码保护）和过期时间。</p>
+ *
+ * @author suhoan
  */
 @Entity
 @Table(name = "sl_note_share")

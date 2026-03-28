@@ -19,6 +19,8 @@ import java.sql.DatabaseMetaData;
 /**
  * 根据数据库类型自动选择全文搜索实现。
  * 通过 JDBC DatabaseMetaData 检测数据库产品名称，无需用户手动配置 Profile。
+ *
+ * @author suhoan
  */
 @Configuration
 public class SearchConfig {

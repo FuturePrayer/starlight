@@ -16,6 +16,8 @@ import java.util.List;
 /**
  * 应用启动时回填已有笔记的 plainText 字段。
  * 仅处理 plainText 为空的笔记，执行一次后不再重复处理。
+ *
+ * @author suhoan
  */
 @Component
 public class PlainTextMigrationRunner implements ApplicationRunner {

@@ -11,6 +11,8 @@ import java.util.UUID;
 /**
  * 密码服务。
  * <p>提供密码哈希、验证和强度校验功能。使用 SHA-256 + 随机盐的方式存储密码。</p>
+ *
+ * @author suhoan
  */
 @Service
 public class PasswordService {

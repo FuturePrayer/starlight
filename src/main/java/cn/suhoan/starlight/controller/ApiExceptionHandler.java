@@ -7,6 +7,11 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * 全局异常处理
+ *
+ * @author suhoan
+ */
 @RestControllerAdvice
 public class ApiExceptionHandler {
 

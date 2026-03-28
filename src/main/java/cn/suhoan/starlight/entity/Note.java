@@ -11,6 +11,8 @@ import jakarta.persistence.Table;
 /**
  * 笔记实体。
  * <p>存储用户笔记的核心数据，包括 Markdown 原文、渲染后的 HTML、大纲 JSON 和纯文本索引。</p>
+ *
+ * @author suhoan
  */
 @Entity
 @Table(name = "sl_note")

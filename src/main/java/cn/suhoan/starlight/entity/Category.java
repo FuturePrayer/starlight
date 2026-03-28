@@ -10,6 +10,8 @@ import jakarta.persistence.Table;
 /**
  * 笔记分类实体。
  * <p>支持树形结构，通过 parent 字段实现父子分类关系。</p>
+ *
+ * @author suhoan
  */
 @Entity
 @Table(name = "sl_category")

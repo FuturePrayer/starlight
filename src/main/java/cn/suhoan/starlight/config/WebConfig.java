@@ -11,6 +11,8 @@ import java.nio.file.Path;
 /**
  * Web MVC 配置类。
  * <p>主要配置静态资源映射，将外部主题目录映射为可通过 HTTP 访问的资源路径。</p>
+ *
+ * @author suhoan
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {

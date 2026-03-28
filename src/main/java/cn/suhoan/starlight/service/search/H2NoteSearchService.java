@@ -11,6 +11,8 @@ import java.util.Map;
 /**
  * H2 数据库全文搜索实现（LIKE 兜底方案，也作为未知数据库的默认实现）。
  * 使用原生 SQL + CAST 绕过 H2 的 LOWER(CLOB) 不兼容问题。
+ *
+ * @author suhoan
  */
 public class H2NoteSearchService implements NoteSearchService {
 
