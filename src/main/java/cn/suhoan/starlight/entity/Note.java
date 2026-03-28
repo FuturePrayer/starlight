@@ -24,19 +24,19 @@ public class Note extends BaseEntity {
     private String title;
 
     @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, length = 65535)
     private String markdownContent;
 
     @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, length = 65535)
     private String renderedHtml;
 
     @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, length = 65535)
     private String outlineJson;
 
     @Lob
-    @Column(nullable = false, columnDefinition = "TEXT NOT NULL DEFAULT ''")
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String plainText = "";
 
     public UserAccount getOwner() {
