@@ -7,21 +7,29 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+/**
+ * 笔记分类实体。
+ * <p>支持树形结构，通过 parent 字段实现父子分类关系。</p>
+ */
 @Entity
 @Table(name = "sl_category")
 public class Category extends BaseEntity {
 
+    /** 分类所属用户，懒加载 */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "owner_id", nullable = false)
     private UserAccount owner;
 
+    /** 父分类，为 null 表示顶级分类，懒加载 */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private Category parent;
 
+    /** 分类名称 */
     @Column(nullable = false, length = 200)
     private String name;
 
+    /** 排序序号，值越小越靠前 */
     @Column(nullable = false)
     private int sortOrder = 0;
 

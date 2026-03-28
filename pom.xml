@@ -10,7 +10,7 @@
     </parent>
     <groupId>cn.suhoan</groupId>
     <artifactId>starlight</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
     <name>starlight</name>
     <description>starlight</description>
     <url/>

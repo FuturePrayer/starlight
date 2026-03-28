@@ -6,8 +6,15 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Markdown 渲染服务。
+ * <p>提供 Markdown 转 HTML、大纲提取和纯文本提取功能。
+ * 使用自实现的轻量级 Markdown 解析器，支持标题、列表、代码块和行内格式。</p>
+ */
 @Service
 public class MarkdownService {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MarkdownService.class);
 
     private final ObjectMapper objectMapper;
 
@@ -15,6 +22,14 @@ public class MarkdownService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 将 Markdown 文本渲染为 HTML。
+     * <p>支持的功能包括：标题（h1-h6）、无序列表、代码块、行内代码、粗体、斜体和链接。
+     * 所有内容在渲染前会进行 HTML 转义以防止 XSS 攻击。</p>
+     *
+     * @param markdown Markdown 原始文本
+     * @return 渲染后的 HTML 字符串
+     */
     public String renderToHtml(String markdown) {
         String safe = escape(markdown == null ? "" : markdown);
         String[] lines = safe.split("\\R", -1);
@@ -83,6 +98,13 @@ public class MarkdownService {
         return html.toString();
     }
 
+    /**
+     * 从 Markdown 内容中提取标题大纲结构，返回 JSON 格式。
+     * <p>仅提取 h2-h6 级别的标题，用于前端目录导航。</p>
+     *
+     * @param markdown Markdown 原始文本
+     * @return 大纲 JSON 字符串
+     */
     public String buildOutlineJson(String markdown) {
         List<OutlineItem> items = new ArrayList<>();
         String content = markdown == null ? "" : markdown;
@@ -143,6 +165,7 @@ public class MarkdownService {
         return plain.toString().strip();
     }
 
+    /** 处理行内 Markdown 语法：行内代码、粗体、斜体和链接 */
     private String applyInline(String value) {
         return value
                 .replaceAll("`([^`]+)`", "<code>$1</code>")
@@ -151,6 +174,7 @@ public class MarkdownService {
                 .replaceAll("\\[([^\\]]+)]\\(([^)]+)\\)", "<a href=\"$2\" target=\"_blank\" rel=\"noreferrer\">$1</a>");
     }
 
+    /** 将标题转换为 URL 锚点 ID（slug 格式） */
     private String slugify(String title) {
         String slug = title.toLowerCase()
                 .replaceAll("[^\\p{L}\\p{Nd}]+", "-")
@@ -158,6 +182,7 @@ public class MarkdownService {
         return slug.isBlank() ? "section" : slug;
     }
 
+    /** HTML 转义，防止 XSS */
     private String escape(String value) {
         return value
                 .replace("&", "&amp;")
@@ -166,6 +191,7 @@ public class MarkdownService {
                 .replace("\"", "&quot;");
     }
 
+    /** 大纲条目内部记录 */
     private record OutlineItem(int level, String title, String anchor) {
     }
 }

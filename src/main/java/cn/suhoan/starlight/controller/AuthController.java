@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
@@ -24,10 +26,17 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 认证控制器。
+ * <p>处理用户注册、登录、登出、个人资料管理、TOTP 两步验证和通行密钥（WebAuthn）相关接口。</p>
+ */
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
+
+    /** 等待 TOTP 验证的登录请求，key 为 pendingToken */
     private record PendingTotp(String userId, long expiresAt) {}
 
     private final ConcurrentHashMap<String, PendingTotp> pendingTotpLogins = new ConcurrentHashMap<>();
@@ -53,6 +62,7 @@ public class AuthController {
         this.webAuthnService = webAuthnService;
     }
 
+    /** 获取注册状态信息（是否允许注册、是否需要引导管理员等） */
     @GetMapping("/registration-status")
     public ApiResponse<Map<String, Object>> registrationStatus() {
         boolean passkeyLoginAvailable = settingsService.isPasskeyEnabled() && settingsService.isSiteUrlHttps();
@@ -64,15 +74,22 @@ public class AuthController {
         return ApiResponse.ok(data);
     }
 
+    /** 注册新用户并自动登录 */
     @PostMapping("/register")
     public ApiResponse<Map<String, Object>> register(@RequestBody RegisterRequest request) {
+        log.info("用户注册请求: email={}", request.email());
         UserAccount userAccount = authService.register(request.email(), request.password());
         sessionAuthService.login(userAccount.getId());
         return ApiResponse.ok(authService.toProfile(userAccount));
     }
 
+    /**
+     * 用户登录。
+     * <p>如果用户启用了 TOTP 两步验证，不会立即创建会话，而是返回一个 pendingToken 要求二次验证。</p>
+     */
     @PostMapping("/login")
     public ApiResponse<Map<String, Object>> login(@RequestBody LoginRequest request) {
+        log.info("用户登录请求: username={}", request.username());
         UserAccount userAccount = authService.login(request.username(), request.password());
         // Check if TOTP is required
         boolean totpGlobalEnabled = settingsService.isTotpEnabled();
@@ -91,6 +108,7 @@ public class AuthController {
         return ApiResponse.ok(authService.toProfile(userAccount));
     }
 
+    /** 验证 TOTP 两步验证码，验证通过后完成登录 */
     @PostMapping("/totp/verify-login")
     public ApiResponse<Map<String, Object>> verifyTotpLogin(@RequestBody TotpLoginRequest request) {
         PendingTotp pending = pendingTotpLogins.remove(request.pendingToken());
@@ -107,18 +125,21 @@ public class AuthController {
         return ApiResponse.ok(authService.toProfile(userAccount));
     }
 
+    /** 退出登录 */
     @PostMapping("/logout")
     public ApiResponse<Void> logout() {
         sessionAuthService.logout();
         return ApiResponse.okMessage("已退出登录");
     }
 
+    /** 获取当前登录用户的个人资料 */
     @GetMapping("/me")
     public ApiResponse<Map<String, Object>> me() {
         UserAccount userAccount = sessionAuthService.requireUser();
         return ApiResponse.ok(authService.toProfile(userAccount));
     }
 
+    /** 更新用户个人资料（用户名和/或密码） */
     @PutMapping("/profile")
     public ApiResponse<Map<String, Object>> updateProfile(@RequestBody UpdateProfileRequest request) {
         UserAccount userAccount = sessionAuthService.requireUser();
@@ -126,8 +147,9 @@ public class AuthController {
         return ApiResponse.ok(authService.toProfile(updated));
     }
 
-    // ──── TOTP management (requires login) ────
+    // ──── TOTP 两步验证管理（需要登录） ────
 
+    /** 发起 TOTP 设置，生成密钥和二维码 */
     @PostMapping("/totp/setup")
     public ApiResponse<Map<String, Object>> totpSetup() {
         UserAccount user = sessionAuthService.requireUser();
@@ -143,6 +165,7 @@ public class AuthController {
         return ApiResponse.ok(data);
     }
 
+    /** 确认绑定 TOTP，验证码校验通过后保存密钥 */
     @PostMapping("/totp/confirm")
     public ApiResponse<Void> totpConfirm(@RequestBody TotpConfirmRequest request) {
         UserAccount user = sessionAuthService.requireUser();
@@ -154,6 +177,7 @@ public class AuthController {
         return ApiResponse.okMessage("两步验证已开启");
     }
 
+    /** 解除 TOTP 两步验证 */
     @DeleteMapping("/totp")
     public ApiResponse<Void> totpRevoke() {
         UserAccount user = sessionAuthService.requireUser();
@@ -162,14 +186,16 @@ public class AuthController {
         return ApiResponse.okMessage("两步验证已关闭");
     }
 
-    // ──── Passkey management (requires login) ────
+    // ──── 通行密钥管理（需要登录） ────
 
+    /** 获取当前用户的通行密钥列表 */
     @GetMapping("/passkey/credentials")
     public ApiResponse<List<Map<String, Object>>> passkeyList() {
         UserAccount user = sessionAuthService.requireUser();
         return ApiResponse.ok(webAuthnService.listCredentials(user.getId()));
     }
 
+    /** 发起通行密钥注册流程 */
     @PostMapping("/passkey/register/start")
     public ApiResponse<Map<String, Object>> passkeyRegisterStart() {
         UserAccount user = sessionAuthService.requireUser();
@@ -179,6 +205,7 @@ public class AuthController {
         return ApiResponse.ok(webAuthnService.startRegistration(user));
     }
 
+    /** 完成通行密钥注册 */
     @PostMapping("/passkey/register/finish")
     public ApiResponse<Void> passkeyRegisterFinish(@RequestBody Map<String, Object> body) {
         UserAccount user = sessionAuthService.requireUser();
@@ -197,6 +224,7 @@ public class AuthController {
         return ApiResponse.okMessage("通行密钥已注册");
     }
 
+    /** 删除指定通行密钥 */
     @DeleteMapping("/passkey/credentials/{id}")
     public ApiResponse<Void> passkeyDelete(@PathVariable String id) {
         UserAccount user = sessionAuthService.requireUser();
@@ -204,8 +232,9 @@ public class AuthController {
         return ApiResponse.okMessage("通行密钥已删除");
     }
 
-    // ──── Passkey login (no auth needed) ────
+    // ──── 通行密钥登录（无需登录） ────
 
+    /** 发起通行密钥登录认证 */
     @PostMapping("/passkey/login/start")
     public ApiResponse<Map<String, Object>> passkeyLoginStart() {
         if (!settingsService.isPasskeyEnabled()) {
@@ -214,6 +243,7 @@ public class AuthController {
         return ApiResponse.ok(webAuthnService.startAssertion());
     }
 
+    /** 完成通行密钥登录认证 */
     @PostMapping("/passkey/login/finish")
     public ApiResponse<Map<String, Object>> passkeyLoginFinish(@RequestBody Map<String, Object> body) {
         String handle = (String) body.get("handle");
@@ -230,14 +260,20 @@ public class AuthController {
         return ApiResponse.ok(authService.toProfile(userAccount));
     }
 
+    /** 清理已过期的 TOTP 待验证记录 */
     private void cleanExpiredPending() {
         long now = System.currentTimeMillis();
         pendingTotpLogins.entrySet().removeIf(e -> e.getValue().expiresAt() < now);
     }
 
+    /** 注册请求体 */
     public record RegisterRequest(String email, String password) {}
+    /** 登录请求体 */
     public record LoginRequest(String username, String password) {}
+    /** 更新个人资料请求体 */
     public record UpdateProfileRequest(String username, String currentPassword, String newPassword) {}
+    /** TOTP 登录验证请求体 */
     public record TotpLoginRequest(String pendingToken, String code) {}
+    /** TOTP 绑定确认请求体 */
     public record TotpConfirmRequest(String secret, String code) {}
 }

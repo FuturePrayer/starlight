@@ -17,13 +17,22 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 笔记管理控制器。
+ * <p>提供笔记和分类的 CRUD 接口、笔记树形结构查询和全文搜索功能。</p>
+ */
 @RestController
 @RequestMapping("/api")
 public class NoteController {
+
+    private static final Logger log = LoggerFactory.getLogger(NoteController.class);
 
     private final SessionAuthService sessionAuthService;
     private final NoteService noteService;
@@ -37,18 +46,21 @@ public class NoteController {
         this.noteSearchService = noteSearchService;
     }
 
+    /** 获取笔记树形结构（分类 + 笔记） */
     @GetMapping("/tree")
     public ApiResponse<Map<String, Object>> tree() {
         UserAccount userAccount = sessionAuthService.requireUser();
         return ApiResponse.ok(noteService.buildTree(userAccount.getId()));
     }
 
+    /** 获取当前用户的所有笔记摘要列表 */
     @GetMapping("/notes")
     public ApiResponse<Object> notes() {
         UserAccount userAccount = sessionAuthService.requireUser();
         return ApiResponse.ok(noteService.listUserNotes(userAccount.getId()));
     }
 
+    /** 创建分类 */
     @PostMapping("/categories")
     public ApiResponse<Map<String, Object>> createCategory(@RequestBody CategoryRequest request) {
         UserAccount userAccount = sessionAuthService.requireUser();
@@ -60,34 +72,49 @@ public class NoteController {
         return ApiResponse.ok(result);
     }
 
+    /** 创建新笔记 */
     @PostMapping("/notes")
     public ApiResponse<Map<String, Object>> createNote(@RequestBody NoteRequest request) {
+        log.info("创建笔记请求: userId={}", sessionAuthService.getCurrentUserId());
         UserAccount userAccount = sessionAuthService.requireUser();
         Note note = noteService.createNote(userAccount, request.title(), request.markdownContent(), request.categoryId());
         return ApiResponse.ok(noteService.toDetail(note));
     }
 
+    /** 获取笔记详情 */
     @GetMapping("/notes/{id}")
     public ApiResponse<Map<String, Object>> getNote(@PathVariable String id) {
         UserAccount userAccount = sessionAuthService.requireUser();
         return ApiResponse.ok(noteService.getNoteDetail(userAccount.getId(), id));
     }
 
+    /** 更新笔记内容 */
     @PutMapping("/notes/{id}")
     public ApiResponse<Map<String, Object>> updateNote(@PathVariable String id,
                                                        @RequestBody NoteRequest request) {
+        log.info("更新笔记请求: noteId={}, userId={}", id, sessionAuthService.getCurrentUserId());
         UserAccount userAccount = sessionAuthService.requireUser();
         Note note = noteService.updateNote(userAccount, id, request.title(), request.markdownContent(), request.categoryId());
         return ApiResponse.ok(noteService.toDetail(note));
     }
 
+    /** 删除笔记 */
     @DeleteMapping("/notes/{id}")
     public ApiResponse<Void> deleteNote(@PathVariable String id) {
+        log.info("删除笔记请求: noteId={}, userId={}", id, sessionAuthService.getCurrentUserId());
         UserAccount userAccount = sessionAuthService.requireUser();
         noteService.deleteNote(userAccount.getId(), id);
         return ApiResponse.okMessage("已删除");
     }
 
+    /**
+     * 全文搜索笔记。
+     * <p>支持分页查询，多取一条用于判断是否有下一页。</p>
+     *
+     * @param q      搜索关键词
+     * @param offset 偏移量
+     * @param limit  每页数量（最大50）
+     */
     @GetMapping("/notes/search")
     public ApiResponse<Map<String, Object>> searchNotes(
             @RequestParam String q,
@@ -107,9 +134,11 @@ public class NoteController {
         return ApiResponse.ok(Map.of("items", page, "hasMore", hasMore));
     }
 
+    /** 创建分类请求体 */
     public record CategoryRequest(String name, String parentId) {
     }
 
+    /** 创建/更新笔记请求体 */
     public record NoteRequest(String title, String markdownContent, String categoryId) {
     }
 }

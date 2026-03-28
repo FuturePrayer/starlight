@@ -14,9 +14,21 @@ import java.io.IOException;
 import java.util.Base64;
 import java.util.Map;
 
+/**
+ * 二维码生成服务。
+ * <p>使用 ZXing 库将文本内容生成为 Base64 编码的 PNG 图片 Data URL。</p>
+ */
 @Service
 public class QrCodeService {
 
+    /**
+     * 生成二维码图片的 Data URL。
+     *
+     * @param content 二维码内容（如 TOTP 的 otpauth:// URI）
+     * @param size    图片尺寸（正方形，单位像素）
+     * @return Base64 编码的 PNG Data URL
+     * @throws IllegalStateException 当二维码生成失败时
+     */
     public String generateDataUrl(String content, int size) {
         try {
             QRCodeWriter writer = new QRCodeWriter();
