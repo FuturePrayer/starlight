@@ -123,6 +123,23 @@ export const adminApi = {
   saveSettings: (data) => request('/api/admin/settings', { method: 'POST', body: JSON.stringify(data) })
 }
 
+export const siteApi = {
+  /** 获取分类的星迹书阁信息（需登录） */
+  getInfo: (categoryId) => request(`/api/categories/${categoryId}/site`),
+  /** 开启星迹书阁（需登录），mergeSubSites=true 表示确认合并子分类 */
+  enable: (categoryId, siteTitle, mergeSubSites = false) => request(`/api/categories/${categoryId}/site`, { method: 'POST', body: JSON.stringify({ siteTitle, mergeSubSites }) }),
+  /** 关闭星迹书阁（需登录） */
+  disable: (categoryId) => request(`/api/categories/${categoryId}/site`, { method: 'DELETE' }),
+  /** 更新星迹书阁标题（需登录） */
+  updateTitle: (categoryId, siteTitle) => request(`/api/categories/${categoryId}/site`, { method: 'PUT', body: JSON.stringify({ siteTitle }) }),
+  /** 公开访问：获取站点首页 */
+  getIndex: (token) => request(`/api/site/${token}`),
+  /** 公开访问：获取站点文章详情 */
+  getNote: (token, noteId) => request(`/api/site/${token}/notes/${noteId}`),
+  /** 获取站点二维码 */
+  qrCode: (token) => request(`/api/site/${token}/qrcode`)
+}
+
 // ──── WebAuthn helpers ────
 
 export function base64urlToBuffer(base64url) {

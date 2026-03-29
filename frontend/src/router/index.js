@@ -24,6 +24,16 @@ const routes = [
     path: '/s/:token',
     name: 'Share',
     component: () => import('@/views/ShareView.vue')
+  },
+  {
+    path: '/site/:token',
+    name: 'Site',
+    component: () => import('@/views/SiteView.vue')
+  },
+  {
+    path: '/site/:token/:noteId',
+    name: 'SiteNote',
+    component: () => import('@/views/SiteView.vue')
   }
 ]
 

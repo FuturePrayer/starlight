@@ -13,39 +13,24 @@
         </template>
       </span>
       <span class="tree-label">{{ item.name }}</span>
-      <span v-if="isCategory && item.siteToken" class="tree-flags">
-        <span class="tree-flag tree-flag--site" title="星迹书阁已开启">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-        </span>
-      </span>
-      <span v-else-if="isCategory && item.inheritedSiteToken" class="tree-flags">
-        <span class="tree-flag tree-flag--site-inherited" title="继承自父级星迹书阁">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-        </span>
-      </span>
       <span v-if="!isCategory && item.pinnedFlag" class="tree-flags">
         <span class="tree-flag" title="已置顶">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5"/><path d="M5 6V3h14v3l-4 4v3l2 2v1H7v-1l2-2v-3z"/></svg>
         </span>
       </span>
-      <button v-if="isCategory" class="tree-site-btn sl-btn sl-btn--ghost sl-btn--sm" @click.stop="emit('open-site', item.id)" title="星迹书阁设置">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-      </button>
       <button v-if="isCategory" class="tree-expand sl-btn sl-btn--ghost sl-btn--sm" @click.stop="emit('toggle-category', item.id)">
         <svg :class="['chevron', { open: expanded }]" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
     </div>
     <div v-if="isCategory && expanded && item.children?.length" class="tree-children">
-      <TreeNode
+      <SiteTreeNode
         v-for="child in item.children"
         :key="child.id"
         :item="child"
         :selected-id="selectedId"
         :expanded-ids="expandedIds"
         @select-note="$emit('select-note', $event)"
-        @select-category="$emit('select-category', $event)"
         @toggle-category="$emit('toggle-category', $event)"
-        @open-site="$emit('open-site', $event)"
       />
     </div>
   </div>
@@ -59,7 +44,7 @@ const props = defineProps({
   selectedId: { type: String, default: null },
   expandedIds: { type: Array, default: () => [] }
 })
-const emit = defineEmits(['select-note', 'select-category', 'toggle-category', 'open-site'])
+const emit = defineEmits(['select-note', 'toggle-category'])
 
 const isCategory = computed(() => props.item.type === 'category')
 const isSelected = computed(() => props.item.id === props.selectedId)
@@ -67,7 +52,6 @@ const expanded = computed(() => props.expandedIds.includes(props.item.id))
 
 function handleClick() {
   if (isCategory.value) {
-    emit('select-category', props.item.id)
     emit('toggle-category', props.item.id)
   } else {
     emit('select-note', props.item.id)
@@ -103,21 +87,7 @@ function handleClick() {
   background: var(--sl-hover-bg);
   color: var(--sl-primary);
 }
-.tree-flag--site {
-  color: var(--sl-success, var(--sl-primary));
-}
-.tree-flag--site-inherited {
-  color: var(--sl-success, var(--sl-primary));
-  opacity: 0.4;
-}
 .tree-expand { padding: 0 4px; }
-.tree-site-btn {
-  padding: 0 4px;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.tree-row:hover .tree-site-btn { opacity: 0.6; }
-.tree-site-btn:hover { opacity: 1 !important; }
 .chevron { transition: transform 0.15s; }
 .chevron.open { transform: rotate(90deg); }
 .tree-children { margin-left: 14px; padding-left: 10px; border-left: 1px solid var(--sl-border); }

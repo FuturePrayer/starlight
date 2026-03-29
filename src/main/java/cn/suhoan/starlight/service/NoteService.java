@@ -288,13 +288,43 @@ public class NoteService {
         Map<String, Map<String, Object>> categoryMap = new HashMap<>();
         List<Map<String, Object>> roots = new ArrayList<>();
 
+        // 构建分类的父子关系映射，用于继承 siteToken 标记
+        Map<String, String> parentIdMap = new HashMap<>();
+        Map<String, String> siteTokenMap = new HashMap<>();
+
         for (Category category : categories) {
             Map<String, Object> node = new HashMap<>();
             node.put("id", category.getId());
             node.put("name", category.getName());
             node.put("type", "category");
+            node.put("siteToken", category.getSiteToken());
             node.put("children", new ArrayList<Map<String, Object>>());
             categoryMap.put(category.getId(), node);
+
+            // 记录父子关系和 siteToken 信息
+            if (category.getParent() != null) {
+                parentIdMap.put(category.getId(), category.getParent().getId());
+            }
+            if (category.getSiteToken() != null) {
+                siteTokenMap.put(category.getId(), category.getSiteToken());
+            }
+        }
+
+        // 为每个分类计算 inheritedSiteToken（从祖先继承的站点标识）
+        for (Category category : categories) {
+            Map<String, Object> node = categoryMap.get(category.getId());
+            if (category.getSiteToken() == null) {
+                // 沿父链向上查找，看是否有祖先开启了星迹书阁
+                String pid = parentIdMap.get(category.getId());
+                while (pid != null) {
+                    if (siteTokenMap.containsKey(pid)) {
+                        node.put("inheritedSiteToken", siteTokenMap.get(pid));
+                        node.put("inheritedFromId", pid);
+                        break;
+                    }
+                    pid = parentIdMap.get(pid);
+                }
+            }
         }
 
         for (Category category : categories) {

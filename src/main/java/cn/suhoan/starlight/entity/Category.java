@@ -35,6 +35,14 @@ public class Category extends BaseEntity {
     @Column(nullable = false)
     private int sortOrder = 0;
 
+    /** 公开站点（星迹书阁）访问令牌，非空表示该分类已开启星迹书阁 */
+    @Column(length = 64, unique = true)
+    private String siteToken;
+
+    /** 站点自定义标题，为空时使用分类名称 */
+    @Column(length = 200)
+    private String siteTitle;
+
     public UserAccount getOwner() {
         return owner;
     }
@@ -65,6 +73,22 @@ public class Category extends BaseEntity {
 
     public void setSortOrder(int sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    public String getSiteToken() {
+        return siteToken;
+    }
+
+    public void setSiteToken(String siteToken) {
+        this.siteToken = siteToken;
+    }
+
+    public String getSiteTitle() {
+        return siteTitle;
+    }
+
+    public void setSiteTitle(String siteTitle) {
+        this.siteTitle = siteTitle;
     }
 }
 

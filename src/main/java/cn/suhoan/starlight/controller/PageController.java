@@ -26,5 +26,15 @@ public class PageController {
     public String share(@PathVariable String token) {
         return "forward:/index.html";
     }
+
+    @GetMapping("/site/{token}")
+    public String publicSite(@PathVariable String token) {
+        return "forward:/index.html";
+    }
+
+    @GetMapping("/site/{token}/{noteId}")
+    public String publicSiteNote(@PathVariable String token, @PathVariable String noteId) {
+        return "forward:/index.html";
+    }
 }
 

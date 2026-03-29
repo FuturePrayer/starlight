@@ -94,6 +94,7 @@
               @select-note="handleOpenNote"
               @select-category="selectedCategoryId = $event"
               @toggle-category="handleToggleCategory"
+              @open-site="handleOpenSiteModal"
             />
             <div
               v-if="!noteStore.tree.items?.length && !noteStore.tree.pinnedItems?.length"
@@ -337,6 +338,13 @@
       v-if="showImportExportModal"
       @close="showImportExportModal = false"
     />
+    <SiteModal
+      v-if="showSiteModal"
+      :category-id="selectedCategoryId"
+      :category-name="selectedCategoryName"
+      @close="showSiteModal = false"
+      @updated="handleSiteUpdated"
+    />
     <PopupLayer
       v-if="showDiscardConfirm"
       title="确认不保存退出？"
@@ -408,6 +416,7 @@ import CategoryModal from '@/components/CategoryModal.vue'
 import AdminModal from '@/components/AdminModal.vue'
 import ProfileModal from '@/components/ProfileModal.vue'
 import SecurityModal from '@/components/SecurityModal.vue'
+import SiteModal from '@/components/SiteModal.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -427,6 +436,8 @@ const showAdminModal = ref(false)
 const showProfileModal = ref(false)
 const showSecurityModal = ref(false)
 const showImportExportModal = ref(false)
+const showSiteModal = ref(false)
+const selectedCategoryName = ref('')
 const showDiscardConfirm = ref(false)
 const showDeleteConfirm = ref(false)
 const deleteConfirmMode = ref('trash')
@@ -749,6 +760,32 @@ async function handleTogglePinned() {
 function handleCategoryCreated() {
   showCategoryModal.value = false
   toast.success('分类已创建')
+}
+
+function handleOpenSiteModal(categoryId) {
+  selectedCategoryId.value = categoryId
+  // 从树结构中找到分类名称
+  function findName(items) {
+    for (const item of items || []) {
+      if (item.id === categoryId) return item.name
+      if (item.children?.length) {
+        const found = findName(item.children)
+        if (found) return found
+      }
+    }
+    return ''
+  }
+  selectedCategoryName.value = findName(noteStore.tree.items)
+  showSiteModal.value = true
+}
+
+async function handleSiteUpdated() {
+  // 刷新树结构以更新站点状态标识
+  try {
+    await noteStore.refreshTree()
+  } catch (err) {
+    // 忽略刷新失败
+  }
 }
 
 async function handleThemeChange(id) {
