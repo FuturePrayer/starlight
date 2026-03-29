@@ -60,6 +60,7 @@ public class MysqlNoteSearchService implements NoteSearchService {
                        MATCH(title, plain_text) AGAINST(:keyword IN BOOLEAN MODE) AS score
                 FROM sl_note
                 WHERE owner_id = :ownerId
+                  AND deleted_at IS NULL
                   AND MATCH(title, plain_text) AGAINST(:keyword IN BOOLEAN MODE)
                 ORDER BY score DESC, updated_at DESC
                 LIMIT :limit OFFSET :offset
@@ -85,6 +86,7 @@ public class MysqlNoteSearchService implements NoteSearchService {
                 SELECT id, title, plain_text, updated_at
                 FROM sl_note
                 WHERE owner_id = :ownerId
+                  AND deleted_at IS NULL
                   AND (LOWER(title) LIKE LOWER(:pattern)
                        OR LOWER(plain_text) LIKE LOWER(:pattern))
                 ORDER BY

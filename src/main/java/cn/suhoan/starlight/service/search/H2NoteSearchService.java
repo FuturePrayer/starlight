@@ -30,6 +30,7 @@ public class H2NoteSearchService implements NoteSearchService {
                 SELECT id, title, CAST(plain_text AS VARCHAR) AS plain_text, updated_at
                 FROM sl_note
                 WHERE owner_id = :ownerId
+                  AND deleted_at IS NULL
                   AND (LOWER(title) LIKE :pattern
                        OR LOWER(CAST(plain_text AS VARCHAR)) LIKE :pattern)
                 ORDER BY

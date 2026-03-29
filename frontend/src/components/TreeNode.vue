@@ -13,6 +13,11 @@
         </template>
       </span>
       <span class="tree-label">{{ item.name }}</span>
+      <span v-if="!isCategory && item.pinnedFlag" class="tree-flags">
+        <span class="tree-flag" title="已置顶">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5"/><path d="M5 6V3h14v3l-4 4v3l2 2v1H7v-1l2-2v-3z"/></svg>
+        </span>
+      </span>
       <button v-if="isCategory" class="tree-expand sl-btn sl-btn--ghost sl-btn--sm" @click.stop="emit('toggle-category', item.id)">
         <svg :class="['chevron', { open: expanded }]" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
@@ -73,6 +78,17 @@ function handleClick() {
 .tree-row.active { background: var(--sl-selection); color: var(--sl-primary); font-weight: 500; }
 .tree-icon { display: flex; flex-shrink: 0; }
 .tree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-flags { display: inline-flex; align-items: center; gap: 4px; color: var(--sl-text-tertiary); }
+.tree-flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--sl-hover-bg);
+  color: var(--sl-primary);
+}
 .tree-expand { padding: 0 4px; }
 .chevron { transition: transform 0.15s; }
 .chevron.open { transform: rotate(90deg); }

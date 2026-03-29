@@ -3,6 +3,7 @@ package cn.suhoan.starlight.repository;
 import cn.suhoan.starlight.entity.Note;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,8 +15,18 @@ import java.util.Optional;
  */
 public interface NoteRepository extends JpaRepository<Note, String> {
 
-    List<Note> findByOwnerIdOrderByUpdatedAtDesc(String ownerId);
+    List<Note> findByOwnerIdAndDeletedAtIsNullOrderByUpdatedAtDesc(String ownerId);
+
+    List<Note> findByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDesc(String ownerId);
 
     Optional<Note> findByIdAndOwnerId(String id, String ownerId);
+
+    Optional<Note> findByIdAndOwnerIdAndDeletedAtIsNull(String id, String ownerId);
+
+    Optional<Note> findByIdAndOwnerIdAndDeletedAtIsNotNull(String id, String ownerId);
+
+    long countByOwnerIdAndDeletedAtIsNotNull(String ownerId);
+
+    List<Note> findByDeletedAtBefore(LocalDateTime cutoff);
 }
 

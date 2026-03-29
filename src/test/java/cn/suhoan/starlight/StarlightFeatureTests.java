@@ -5,11 +5,14 @@ import cn.suhoan.starlight.dto.ApiResponse;
 import cn.suhoan.starlight.entity.Category;
 import cn.suhoan.starlight.entity.Note;
 import cn.suhoan.starlight.entity.UserAccount;
+import cn.suhoan.starlight.repository.NoteRepository;
+import cn.suhoan.starlight.repository.NoteShareRepository;
 import cn.suhoan.starlight.service.AuthService;
 import cn.suhoan.starlight.service.NoteService;
 import cn.suhoan.starlight.service.NoteTransferService;
 import cn.suhoan.starlight.service.SettingsService;
 import cn.suhoan.starlight.service.ShareService;
+import cn.suhoan.starlight.service.search.NoteSearchService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipInputStream;
@@ -55,6 +59,15 @@ class StarlightFeatureTests {
 
     @Autowired
     private NoteTransferService noteTransferService;
+
+    @Autowired
+    private NoteSearchService noteSearchService;
+
+    @Autowired
+    private NoteRepository noteRepository;
+
+    @Autowired
+    private NoteShareRepository noteShareRepository;
 
     @Test
     void firstUserBecomesAdminAndRegistrationDefaultsToDisabled() {
@@ -190,6 +203,87 @@ class StarlightFeatureTests {
         assertThrows(IllegalArgumentException.class, () -> noteTransferService.importArchive(importer, zipFile));
     }
 
+    @Test
+    void recycleBinQuickAccessAndTrashFilteringWork() throws Exception {
+        UserAccount author = authService.register("trash-owner@example.com", "123456");
+        Note pinnedNote = noteService.createNote(author, "周会待办", "# 周会待办\n- 跟进发布", null);
+        noteService.createNote(author, "客户回访", "# 客户回访\n- 跟进需求", null);
+        Note trashedNote = noteService.createNote(author, "回收站专用词", "# 回收站专用词\n误删测试", null);
+
+        noteService.setPinned(author.getId(), pinnedNote.getId(), true);
+
+        Map<String, Object> trashedShare = shareService.createShare(
+                author,
+                trashedNote,
+                "PUBLIC",
+                null,
+                null,
+                null,
+                "http://localhost:8080"
+        );
+        noteService.deleteNote(author.getId(), trashedNote.getId());
+
+        Map<String, Object> tree = noteService.buildTree(author.getId());
+        assertEquals(1, ((List<?>) tree.get("pinnedItems")).size());
+        assertEquals(1L, ((Number) tree.get("trashCount")).longValue());
+
+        List<Map<String, Object>> trashNotes = noteService.listTrashNotes(author.getId());
+        assertEquals(1, trashNotes.size());
+        assertEquals("回收站专用词", trashNotes.getFirst().get("title"));
+        assertThrows(RuntimeException.class, () -> noteService.getNoteDetail(author.getId(), trashedNote.getId()));
+        assertNotNull(noteService.getTrashNoteDetail(author.getId(), trashedNote.getId()).get("deletedAt"));
+        assertThrows(RuntimeException.class, () -> shareService.openShare(trashedShare.get("token").toString(), null));
+
+        List<Map<String, Object>> searchResults = noteSearchService.search(author.getId(), "回收站专用词", 0, 10);
+        assertTrue(searchResults.isEmpty());
+
+        NoteTransferService.ArchivePayload payload = noteTransferService.exportArchive(author.getId());
+        Set<String> entryNames = new HashSet<>();
+        try (ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(payload.content()))) {
+            var entry = zipInputStream.getNextEntry();
+            while (entry != null) {
+                entryNames.add(entry.getName());
+                entry = zipInputStream.getNextEntry();
+            }
+        }
+        assertTrue(entryNames.contains("客户回访.md"));
+        assertTrue(entryNames.contains("周会待办.md"));
+        assertFalse(entryNames.contains("回收站专用词.md"));
+    }
+
+    @Test
+    void trashedNotesCanBeRestoredAndExpiredEntriesAutoPurged() {
+        UserAccount author = authService.register("trash-cleanup@example.com", "123456");
+        Note note = noteService.createNote(author, "待清理笔记", "# 待清理笔记", null);
+        Map<String, Object> share = shareService.createShare(
+                author,
+                note,
+                "PUBLIC",
+                null,
+                null,
+                null,
+                "http://localhost:8080"
+        );
+
+        noteService.deleteNote(author.getId(), note.getId());
+        assertEquals(1, noteService.listTrashNotes(author.getId()).size());
+
+        Note restored = noteService.restoreNote(author.getId(), note.getId());
+        assertNotNull(restored);
+        assertEquals(0, noteService.listTrashNotes(author.getId()).size());
+        assertEquals(1, noteService.listUserNotes(author.getId()).size());
+
+        noteService.deleteNote(author.getId(), note.getId());
+        Note deletedAgain = noteRepository.findById(note.getId()).orElseThrow();
+        deletedAgain.setDeletedAt(LocalDateTime.now().minusDays(31));
+        noteRepository.save(deletedAgain);
+
+        int removed = noteService.cleanupExpiredTrash();
+        assertEquals(1, removed);
+        assertTrue(noteRepository.findById(note.getId()).isEmpty());
+        assertTrue(noteShareRepository.findByToken(share.get("token").toString()).isEmpty());
+    }
+
     private byte[] createZipWithEntry(String entryName, String content) throws IOException {
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
              ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream, StandardCharsets.UTF_8)) {
@@ -201,4 +295,3 @@ class StarlightFeatureTests {
         }
     }
 }
-

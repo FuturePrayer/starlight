@@ -17,5 +17,9 @@ public interface NoteShareRepository extends JpaRepository<NoteShare, String> {
     List<NoteShare> findByNoteIdAndOwnerIdOrderByCreatedAtDesc(String noteId, String ownerId);
 
     Optional<NoteShare> findByToken(String token);
+
+    long countByNoteId(String noteId);
+
+    void deleteByNoteId(String noteId);
 }
 

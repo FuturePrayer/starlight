@@ -59,6 +59,7 @@ public class PostgresNoteSearchService implements NoteSearchService {
                 SELECT id, title, plain_text, updated_at
                 FROM sl_note
                 WHERE owner_id = :ownerId
+                  AND deleted_at IS NULL
                   AND (title ILIKE :pattern OR plain_text ILIKE :pattern)
                 ORDER BY
                   CASE WHEN title ILIKE :pattern THEN 0 ELSE 1 END,

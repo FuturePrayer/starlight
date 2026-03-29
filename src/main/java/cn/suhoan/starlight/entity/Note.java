@@ -8,6 +8,8 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+import java.time.LocalDateTime;
+
 /**
  * 笔记实体。
  * <p>存储用户笔记的核心数据，包括 Markdown 原文、渲染后的 HTML、大纲 JSON 和纯文本索引。</p>
@@ -51,6 +53,16 @@ public class Note extends BaseEntity {
     @Lob
     @Column(columnDefinition = "TEXT")
     private String plainText = "";
+
+    /** 放入回收站的时间，非空表示已软删除 */
+    private LocalDateTime deletedAt;
+
+    /** 是否已置顶 */
+    @Column(nullable = false)
+    private boolean pinnedFlag;
+
+    /** 最近一次置顶时间 */
+    private LocalDateTime pinnedAt;
 
     public UserAccount getOwner() {
         return owner;
@@ -106,6 +118,30 @@ public class Note extends BaseEntity {
 
     public void setPlainText(String plainText) {
         this.plainText = plainText;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public boolean isPinnedFlag() {
+        return pinnedFlag;
+    }
+
+    public void setPinnedFlag(boolean pinnedFlag) {
+        this.pinnedFlag = pinnedFlag;
+    }
+
+    public LocalDateTime getPinnedAt() {
+        return pinnedAt;
+    }
+
+    public void setPinnedAt(LocalDateTime pinnedAt) {
+        this.pinnedAt = pinnedAt;
     }
 }
 

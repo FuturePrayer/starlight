@@ -136,6 +136,10 @@ public class ShareService {
     public Map<String, Object> openShare(String token, String password) {
         NoteShare share = noteShareRepository.findByToken(token)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "分享链接不存在"));
+        if (share.getNote().getDeletedAt() != null) {
+            log.warn("分享链接访问失败，笔记已进入回收站: shareId={}, noteId={}", share.getId(), share.getNote().getId());
+            throw new ResponseStatusException(FORBIDDEN, "该笔记已移入回收站，分享暂不可用");
+        }
         if (share.isExpired()) {
             throw new ResponseStatusException(FORBIDDEN, "分享链接已过期");
         }

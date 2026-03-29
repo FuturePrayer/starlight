@@ -59,12 +59,32 @@
         <div class="sidebar-tabs">
           <button :class="['tab-btn', { active: sidebarTab === 'tree' }]" @click="sidebarTab = 'tree'">目录</button>
           <button :class="['tab-btn', { active: sidebarTab === 'search' }]" @click="handleSearchTabClick">搜索</button>
+          <button :class="['tab-btn', { active: sidebarTab === 'trash' }]" @click="handleTrashTabClick">
+            回收站
+            <span v-if="noteStore.tree.trashCount" class="tab-count">{{ noteStore.tree.trashCount }}</span>
+          </button>
           <button :class="['tab-btn', { active: sidebarTab === 'outline' }]" @click="sidebarTab = 'outline'">大纲</button>
         </div>
 
         <!-- Tree / Search / Outline panels -->
         <div class="sidebar-scroll">
           <div v-show="sidebarTab === 'tree'" class="tree-panel">
+            <section v-if="noteStore.tree.pinnedItems?.length" class="quick-section">
+              <div class="quick-section__header">
+                <span class="quick-section__title">置顶</span>
+                <span class="quick-section__hint">目录最上方</span>
+              </div>
+              <div class="quick-section__list">
+                <TreeNode
+                  v-for="item in noteStore.tree.pinnedItems"
+                  :key="`pinned-${item.id}`"
+                  :item="item"
+                  :selected-id="noteStore.currentNote?.id"
+                  :expanded-ids="noteStore.expandedCategoryIds"
+                  @select-note="handleOpenNote"
+                />
+              </div>
+            </section>
             <TreeNode
               v-for="item in noteStore.tree.items"
               :key="item.id"
@@ -75,7 +95,12 @@
               @select-category="selectedCategoryId = $event"
               @toggle-category="handleToggleCategory"
             />
-            <div v-if="!noteStore.tree.items?.length" class="empty-hint">还没有笔记，点击上方按钮创建</div>
+            <div
+              v-if="!noteStore.tree.items?.length && !noteStore.tree.pinnedItems?.length"
+              class="empty-hint"
+            >
+              还没有笔记，点击上方按钮创建
+            </div>
           </div>
           <div v-show="sidebarTab === 'search'" class="search-panel">
             <div class="search-input-wrap">
@@ -115,6 +140,36 @@
               </button>
             </div>
           </div>
+          <div v-show="sidebarTab === 'trash'" class="trash-panel">
+            <div class="trash-panel__header">
+              <div>
+                <div class="quick-section__title">回收站</div>
+                <div class="quick-section__hint">删除后保留 30 天，可恢复或彻底删除</div>
+              </div>
+              <span class="sl-badge">{{ noteStore.trashNotes.length }} 篇</span>
+            </div>
+            <div v-if="!noteStore.trashNotes.length" class="empty-hint">回收站还是空的，误删的笔记会先来到这里</div>
+            <div v-else class="trash-list">
+              <div
+                v-for="item in noteStore.trashNotes"
+                :key="item.id"
+                :class="['trash-item', { active: noteStore.currentNote?.id === item.id }]"
+                @click="handleOpenTrashNote(item.id)"
+              >
+                <div class="trash-item__main">
+                  <div class="trash-item__title">{{ item.title }}</div>
+                  <div class="trash-item__meta">
+                    <span>删除于 {{ formatTime(item.deletedAt) }}</span>
+                    <span v-if="item.purgeAt">{{ formatTime(item.purgeAt) }} 自动清理</span>
+                  </div>
+                </div>
+                <div class="trash-item__actions">
+                  <button class="sl-btn sl-btn--ghost sl-btn--sm" @click.stop="handleRestore(item.id)">恢复</button>
+                  <button class="sl-btn sl-btn--danger sl-btn--sm" @click.stop="handlePurge(item.id)">彻底删除</button>
+                </div>
+              </div>
+            </div>
+          </div>
           <div v-show="sidebarTab === 'outline'" class="outline-panel">
             <OutlineList :markdown="outlineSource" />
           </div>
@@ -130,7 +185,10 @@
           <h1 class="topbar-title">{{ topbarTitle }}</h1>
           <div class="topbar-meta" v-if="noteStore.currentNote">
             <span class="sl-badge">{{ noteStore.editMode ? '编辑中' : '查看' }}</span>
+            <span class="sl-badge" v-if="isDeletedNote">回收站</span>
+            <span class="sl-badge" v-if="noteStore.currentNote.pinnedFlag">已置顶</span>
             <span class="sl-badge" v-if="noteStore.editMode">{{ noteStore.autosaveEnabled ? '自动保存开启' : '自动保存暂停' }}</span>
+            <span class="sl-badge" v-if="isDeletedNote && noteStore.currentNote.purgeAt">{{ formatTime(noteStore.currentNote.purgeAt) }} 自动清理</span>
             <span class="sl-badge" v-if="noteStore.currentNote.updatedAt && !noteStore.editMode">{{ formatTime(noteStore.currentNote.updatedAt) }}</span>
           </div>
         </div>
@@ -142,12 +200,17 @@
             <button class="sl-btn" @click="handleDiscardExit">不保存退出</button>
             <button class="sl-btn" @click="handleFinish">完成</button>
           </template>
-          <template v-else-if="noteStore.currentNote">
+          <template v-else-if="noteStore.currentNote && !isDeletedNote">
+            <button class="sl-btn" @click="handleTogglePinned">{{ noteStore.currentNote.pinnedFlag ? '取消置顶' : '置顶' }}</button>
             <button class="sl-btn" @click="handleShare" v-if="noteStore.currentNote.id">分享</button>
             <button class="sl-btn sl-btn--primary" @click="handleEnterEditMode">编辑</button>
             <button class="sl-btn sl-btn--danger" @click="handleDelete" v-if="noteStore.currentNote.id" title="删除笔记">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
             </button>
+          </template>
+          <template v-else-if="noteStore.currentNote && isDeletedNote">
+            <button class="sl-btn sl-btn--primary" @click="handleRestore(noteStore.currentNote.id)">恢复</button>
+            <button class="sl-btn sl-btn--danger" @click="handlePurge(noteStore.currentNote.id)">彻底删除</button>
           </template>
           <button class="sl-btn" @click="showImportExportModal = true">导入 / 导出</button>
         </div>
@@ -169,15 +232,35 @@
         </div>
       </div>
       <div v-if="isMobile && !noteStore.editMode && noteStore.currentNote" class="mobile-fab">
-        <div class="fab-menu expanded">
-          <button class="sl-btn" @click="handleShare" v-if="noteStore.currentNote.id">分享</button>
-          <button class="sl-btn sl-btn--primary" @click="handleEnterEditMode">编辑</button>
+        <div :class="['fab-menu', { expanded: mobileActionsOpen }]">
+          <button class="fab-toggle sl-btn sl-btn--primary" @click="mobileActionsOpen = !mobileActionsOpen">
+            {{ mobileActionsOpen ? '收起' : '操作' }}
+          </button>
+          <template v-if="mobileActionsOpen && !isDeletedNote">
+            <button class="sl-btn" @click="handleTogglePinned">{{ noteStore.currentNote.pinnedFlag ? '取消置顶' : '置顶' }}</button>
+            <button class="sl-btn" @click="handleShare" v-if="noteStore.currentNote.id">分享</button>
+            <button class="sl-btn sl-btn--primary" @click="handleEnterEditMode">编辑</button>
+            <button class="sl-btn sl-btn--danger" @click="handleDelete">移入回收站</button>
+          </template>
+          <template v-else-if="mobileActionsOpen && isDeletedNote">
+            <button class="sl-btn sl-btn--primary" @click="handleRestore(noteStore.currentNote.id)">恢复</button>
+            <button class="sl-btn sl-btn--danger" @click="handlePurge(noteStore.currentNote.id)">彻底删除</button>
+          </template>
         </div>
       </div>
 
       <!-- View mode -->
       <div v-if="!noteStore.editMode" class="viewer-area">
-        <div v-if="noteStore.currentNote" class="markdown-body" v-html="renderedHtml"></div>
+        <template v-if="noteStore.currentNote">
+          <div v-if="isDeletedNote" class="trash-banner">
+            <div class="trash-banner__title">这篇笔记当前位于回收站</div>
+            <div class="trash-banner__text">
+              <span v-if="noteStore.currentNote.purgeAt">将在 {{ formatTime(noteStore.currentNote.purgeAt) }} 自动清理。</span>
+              恢复后即可继续编辑、分享与置顶。
+            </div>
+          </div>
+          <div class="markdown-body" v-html="renderedHtml"></div>
+        </template>
         <div v-else class="empty-state">
           <div class="empty-icon">✨</div>
           <h2>欢迎使用 Starlight</h2>
@@ -279,6 +362,31 @@
         <button class="sl-btn sl-btn--danger" @click="confirmDiscardExit">确认退出</button>
       </template>
     </PopupLayer>
+    <PopupLayer
+      v-if="showDeleteConfirm"
+      :title="deleteConfirmTitle"
+      eyebrow="删除确认"
+      tone="danger"
+      width="min(460px, calc(100vw - 32px))"
+      @close="closeDeleteConfirm"
+    >
+      <div class="discard-confirm">
+        <div class="discard-confirm__icon discard-confirm__icon--danger">!</div>
+        <div class="discard-confirm__content">
+          <p class="discard-confirm__text">{{ deleteConfirmDescription }}</p>
+          <div class="discard-confirm__meta">
+            <span class="sl-badge">{{ deleteConfirmNoteLabel }}</span>
+            <span class="sl-badge">{{ deleteConfirmMode === 'purge' ? '不可恢复' : '30 天内可恢复' }}</span>
+          </div>
+          <p class="discard-confirm__hint">{{ deleteConfirmHint }}</p>
+        </div>
+      </div>
+
+      <template #footer>
+        <button class="sl-btn" @click="closeDeleteConfirm">取消</button>
+        <button class="sl-btn sl-btn--danger" @click="confirmDeleteAction">确认</button>
+      </template>
+    </PopupLayer>
   </div>
 </template>
 
@@ -320,6 +428,10 @@ const showProfileModal = ref(false)
 const showSecurityModal = ref(false)
 const showImportExportModal = ref(false)
 const showDiscardConfirm = ref(false)
+const showDeleteConfirm = ref(false)
+const deleteConfirmMode = ref('trash')
+const deleteTargetId = ref(null)
+const deleteTargetTitle = ref('')
 
 const editorTitle = ref('')
 const editorContent = ref('')
@@ -346,8 +458,13 @@ const topbarTitle = computed(() => {
   if (noteStore.editMode) {
     return editorTitle.value.trim() || (noteStore.currentNote?.id ? '未命名笔记' : '新建笔记')
   }
+  if (noteStore.currentNote?.deletedAt) {
+    return `回收站 · ${noteStore.currentNote.title || '未命名笔记'}`
+  }
   return noteStore.currentNote?.title || 'Starlight'
 })
+
+const isDeletedNote = computed(() => Boolean(noteStore.currentNote?.deletedAt))
 
 const autosaveStatusText = computed(() => noteStore.autosaveEnabled
   ? '自动保存：已开启（每 30 秒检查一次）'
@@ -397,6 +514,27 @@ const discardConfirmDescription = computed(() => (noteStore.dirty
 
 const discardConfirmNoteLabel = computed(() => {
   const value = editorTitle.value.trim() || noteStore.currentNote?.title || ''
+  return value || '未命名笔记'
+})
+
+const deleteConfirmTitle = computed(() => (deleteConfirmMode.value === 'purge' ? '确认彻底删除？' : '确认移入回收站？'))
+
+const deleteConfirmDescription = computed(() => {
+  if (deleteConfirmMode.value === 'purge') {
+    return '这篇笔记会被永久移除，相关分享记录也会一起失效，之后无法再恢复。'
+  }
+  return '这篇笔记会先移入回收站，并保留 30 天。你可以随时恢复，避免误删带来的损失。'
+})
+
+const deleteConfirmHint = computed(() => {
+  if (deleteConfirmMode.value === 'purge') {
+    return '请确认当前内容已经不再需要，再执行彻底删除。'
+  }
+  return '移入回收站后，目录中将暂时隐藏这篇笔记。'
+})
+
+const deleteConfirmNoteLabel = computed(() => {
+  const value = deleteTargetTitle.value || noteStore.currentNote?.title || ''
   return value || '未命名笔记'
 })
 
@@ -490,6 +628,7 @@ async function handleOpenNote(id) {
   try {
     await noteStore.openNote(id)
     sidebarOpen.value = false
+    mobileActionsOpen.value = false
   } catch (err) {
     toast.error(err.message)
   }
@@ -497,6 +636,10 @@ async function handleOpenNote(id) {
 
 
 function handleEnterEditMode() {
+  if (isDeletedNote.value) {
+    toast.info('请先恢复笔记，再继续编辑')
+    return
+  }
   noteStore.enterEditMode()
 }
 
@@ -525,6 +668,7 @@ function handleNewNote() {
   editorContent.value = ''
   editorCategory.value = selectedCategoryId.value || ''
   sidebarOpen.value = false
+  mobileActionsOpen.value = false
 }
 
 function handleShare() {
@@ -533,10 +677,70 @@ function handleShare() {
 
 async function handleDelete() {
   if (!noteStore.currentNote?.id) return
-  if (!confirm('确定删除这篇笔记吗？此操作不可撤销。')) return
+  openDeleteConfirm('trash', noteStore.currentNote.id, noteStore.currentNote.title)
+}
+
+async function handleRestore(id = noteStore.currentNote?.id) {
+  if (!id) return
   try {
-    await noteStore.deleteNote(noteStore.currentNote.id)
-    toast.success('已删除')
+    await noteStore.restoreNote(id)
+    toast.success('笔记已恢复')
+    sidebarTab.value = 'tree'
+    mobileActionsOpen.value = false
+  } catch (err) {
+    toast.error(err.message)
+  }
+}
+
+async function handlePurge(id = noteStore.currentNote?.id) {
+  if (!id) return
+  const title = id === noteStore.currentNote?.id
+    ? noteStore.currentNote?.title
+    : noteStore.trashNotes.find(item => item.id === id)?.title
+  openDeleteConfirm('purge', id, title)
+}
+
+function openDeleteConfirm(mode, id, title = '') {
+  deleteConfirmMode.value = mode
+  deleteTargetId.value = id
+  deleteTargetTitle.value = title || ''
+  showDeleteConfirm.value = true
+}
+
+function closeDeleteConfirm() {
+  showDeleteConfirm.value = false
+  deleteTargetId.value = null
+  deleteTargetTitle.value = ''
+  deleteConfirmMode.value = 'trash'
+}
+
+async function confirmDeleteAction() {
+  if (!deleteTargetId.value) return
+  const mode = deleteConfirmMode.value
+  const targetId = deleteTargetId.value
+  closeDeleteConfirm()
+  try {
+    if (mode === 'purge') {
+      await noteStore.purgeNote(targetId)
+      toast.success('已彻底删除')
+    } else {
+      await noteStore.deleteNote(targetId)
+      toast.success('已移入回收站')
+      sidebarTab.value = 'trash'
+    }
+    mobileActionsOpen.value = false
+  } catch (err) {
+    toast.error(err.message)
+  }
+}
+
+async function handleTogglePinned() {
+  if (!noteStore.currentNote?.id || isDeletedNote.value) return
+  try {
+    const nextValue = !noteStore.currentNote.pinnedFlag
+    await noteStore.setPinned(noteStore.currentNote.id, nextValue)
+    toast.success(nextValue ? '已置顶到目录上方' : '已取消置顶')
+    mobileActionsOpen.value = false
   } catch (err) {
     toast.error(err.message)
   }
@@ -564,6 +768,7 @@ async function handleLogout() {
 function handleResize() {
   isMobile.value = window.innerWidth <= 768
   if (!isMobile.value) previewVisible.value = true
+  if (!isMobile.value) mobileActionsOpen.value = false
 }
 
 // ── Search ──
@@ -624,10 +829,30 @@ function handleSearchTabClick() {
   nextTick(() => searchInputRef.value?.focus())
 }
 
+async function handleTrashTabClick() {
+  sidebarTab.value = 'trash'
+  try {
+    await noteStore.refreshTrash()
+  } catch (err) {
+    toast.error(err.message)
+  }
+}
+
 async function handleOpenSearchResult(id) {
   try {
     await noteStore.openNote(id)
     sidebarOpen.value = false
+    mobileActionsOpen.value = false
+  } catch (err) {
+    toast.error(err.message)
+  }
+}
+
+async function handleOpenTrashNote(id) {
+  try {
+    await noteStore.openTrashNote(id)
+    sidebarOpen.value = false
+    mobileActionsOpen.value = false
   } catch (err) {
     toast.error(err.message)
   }
@@ -641,6 +866,7 @@ onMounted(async () => {
     await authStore.fetchMe()
     allThemes.value = await themeStore.loadThemes()
     await noteStore.refreshTree()
+    await noteStore.refreshTrash()
     // Autosave every 30s
     autosaveTimer = setInterval(async () => {
       if (noteStore.editMode && noteStore.autosaveEnabled && noteStore.dirty && !saveInProgress.value) {
@@ -746,6 +972,19 @@ onUnmounted(() => {
   color: var(--sl-text);
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--sl-selection);
+  color: var(--sl-primary);
+  font-size: 11px;
+}
 .sidebar-scroll {
   flex: 1;
   overflow-y: auto;
@@ -756,6 +995,87 @@ onUnmounted(() => {
   text-align: center;
   font-size: 13px;
   color: var(--sl-text-tertiary);
+}
+.quick-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px dashed var(--sl-border);
+}
+.quick-section__header,
+.trash-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.quick-section__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sl-text);
+}
+.quick-section__hint {
+  font-size: 11px;
+  color: var(--sl-text-tertiary);
+}
+.quick-section__list,
+.trash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trash-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.trash-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--sl-border);
+  border-radius: var(--sl-radius);
+  background: var(--sl-card);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.trash-item:hover {
+  border-color: var(--sl-border-strong);
+  background: var(--sl-card-hover);
+}
+.trash-item.active {
+  border-color: var(--sl-primary);
+  background: var(--sl-selection);
+}
+.trash-item__main {
+  min-width: 0;
+  flex: 1;
+}
+.trash-item__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sl-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trash-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--sl-text-tertiary);
+}
+.trash-item__actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 /* --- Search Panel --- */
@@ -872,6 +1192,27 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 24px 32px;
+}
+.trash-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--sl-border);
+  border-radius: var(--sl-radius-lg);
+  background: linear-gradient(180deg, var(--sl-card) 0%, var(--sl-hover-bg) 100%);
+  box-shadow: var(--sl-shadow-card);
+}
+.trash-banner__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sl-text);
+}
+.trash-banner__text {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--sl-text-secondary);
 }
 .empty-state {
   display: flex;
@@ -1022,6 +1363,10 @@ onUnmounted(() => {
   font-weight: 700;
   box-shadow: inset 0 0 0 1px var(--sl-primary-light);
 }
+.discard-confirm__icon--danger {
+  color: var(--sl-danger);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sl-danger) 22%, transparent);
+}
 .discard-confirm__content {
   min-width: 0;
   flex: 1;
@@ -1079,6 +1424,16 @@ onUnmounted(() => {
     row-gap: 6px;
   }
   .viewer-area { padding: 16px; }
+  .trash-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .trash-item__actions {
+    width: 100%;
+  }
+  .trash-item__actions .sl-btn {
+    flex: 1;
+  }
   .mobile-fab {
     left: 16px;
     right: 16px;

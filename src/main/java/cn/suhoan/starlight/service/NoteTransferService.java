@@ -72,7 +72,7 @@ public class NoteTransferService {
     public ArchivePayload exportArchive(String ownerId) {
         log.info("开始导出笔记 ZIP: ownerId={}", ownerId);
         List<Category> categories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
-        List<Note> notes = noteRepository.findByOwnerIdOrderByUpdatedAtDesc(ownerId);
+        List<Note> notes = noteRepository.findByOwnerIdAndDeletedAtIsNullOrderByUpdatedAtDesc(ownerId);
 
         Map<String, List<Category>> childCategories = new HashMap<>();
         for (Category category : categories) {

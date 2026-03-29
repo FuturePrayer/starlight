@@ -72,6 +72,13 @@ public class NoteController {
         return ApiResponse.ok(noteService.listUserNotes(userAccount.getId()));
     }
 
+    /** 获取回收站笔记列表 */
+    @GetMapping("/trash")
+    public ApiResponse<List<Map<String, Object>>> trashNotes() {
+        UserAccount userAccount = sessionAuthService.requireUser();
+        return ApiResponse.ok(noteService.listTrashNotes(userAccount.getId()));
+    }
+
     /** 创建分类 */
     @PostMapping("/categories")
     public ApiResponse<Map<String, Object>> createCategory(@RequestBody CategoryRequest request) {
@@ -100,6 +107,13 @@ public class NoteController {
         return ApiResponse.ok(noteService.getNoteDetail(userAccount.getId(), id));
     }
 
+    /** 获取回收站笔记详情 */
+    @GetMapping("/trash/{id}")
+    public ApiResponse<Map<String, Object>> getTrashNote(@PathVariable String id) {
+        UserAccount userAccount = sessionAuthService.requireUser();
+        return ApiResponse.ok(noteService.getTrashNoteDetail(userAccount.getId(), id));
+    }
+
     /** 更新笔记内容 */
     @PutMapping("/notes/{id}")
     public ApiResponse<Map<String, Object>> updateNote(@PathVariable String id,
@@ -116,7 +130,36 @@ public class NoteController {
         log.info("删除笔记请求: noteId={}, userId={}", id, sessionAuthService.getCurrentUserId());
         UserAccount userAccount = sessionAuthService.requireUser();
         noteService.deleteNote(userAccount.getId(), id);
-        return ApiResponse.okMessage("已删除");
+        return ApiResponse.okMessage("已移入回收站");
+    }
+
+    /** 恢复回收站中的笔记 */
+    @PostMapping("/trash/{id}/restore")
+    public ApiResponse<Map<String, Object>> restoreNote(@PathVariable String id) {
+        log.info("恢复回收站笔记请求: noteId={}, userId={}", id, sessionAuthService.getCurrentUserId());
+        UserAccount userAccount = sessionAuthService.requireUser();
+        Note note = noteService.restoreNote(userAccount.getId(), id);
+        return ApiResponse.ok(noteService.toDetail(note));
+    }
+
+    /** 彻底删除回收站中的笔记 */
+    @DeleteMapping("/trash/{id}")
+    public ApiResponse<Void> purgeNote(@PathVariable String id) {
+        log.info("彻底删除回收站笔记请求: noteId={}, userId={}", id, sessionAuthService.getCurrentUserId());
+        UserAccount userAccount = sessionAuthService.requireUser();
+        noteService.purgeNote(userAccount.getId(), id);
+        return ApiResponse.okMessage("已彻底删除");
+    }
+
+
+    /** 更新笔记置顶状态 */
+    @PutMapping("/notes/{id}/pinned")
+    public ApiResponse<Map<String, Object>> updatePinned(@PathVariable String id,
+                                                         @RequestBody FlagRequest request) {
+        log.info("更新笔记置顶状态请求: noteId={}, userId={}, pinned={}", id, sessionAuthService.getCurrentUserId(), request.value());
+        UserAccount userAccount = sessionAuthService.requireUser();
+        Note note = noteService.setPinned(userAccount.getId(), id, request.value());
+        return ApiResponse.ok(noteService.toDetail(note));
     }
 
     /**
@@ -183,6 +226,10 @@ public class NoteController {
 
     /** 创建/更新笔记请求体 */
     public record NoteRequest(String title, String markdownContent, String categoryId) {
+    }
+
+    /** 布尔状态更新请求体 */
+    public record FlagRequest(boolean value) {
     }
 }
 

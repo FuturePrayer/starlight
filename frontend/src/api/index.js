@@ -79,10 +79,15 @@ export const authApi = {
 export const noteApi = {
   tree: () => request('/api/tree'),
   list: () => request('/api/notes'),
+  trash: () => request('/api/trash'),
   get: (id) => request(`/api/notes/${id}`),
+  getTrash: (id) => request(`/api/trash/${id}`),
   create: (data) => request('/api/notes', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/api/notes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/api/notes/${id}`, { method: 'DELETE' }),
+  restore: (id) => request(`/api/trash/${id}/restore`, { method: 'POST', body: '{}' }),
+  purge: (id) => request(`/api/trash/${id}`, { method: 'DELETE' }),
+  setPinned: (id, value) => request(`/api/notes/${id}/pinned`, { method: 'PUT', body: JSON.stringify({ value }) }),
   search: (q, offset = 0, limit = 20) => request(`/api/notes/search?q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}`),
   exportArchive: () => download('/api/notes/export'),
   importArchive: (file) => {

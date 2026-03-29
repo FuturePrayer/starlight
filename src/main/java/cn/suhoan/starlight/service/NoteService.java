@@ -1,19 +1,24 @@
 package cn.suhoan.starlight.service;
 
+import cn.suhoan.starlight.config.StarlightProperties;
 import cn.suhoan.starlight.entity.Category;
 import cn.suhoan.starlight.entity.Note;
 import cn.suhoan.starlight.entity.UserAccount;
 import cn.suhoan.starlight.repository.CategoryRepository;
 import cn.suhoan.starlight.repository.NoteRepository;
+import cn.suhoan.starlight.repository.NoteShareRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,17 +35,27 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 public class NoteService {
 
     private static final Logger log = LoggerFactory.getLogger(NoteService.class);
+    private static final Comparator<Note> PINNED_NOTE_COMPARATOR = Comparator
+            .comparing(Note::getPinnedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+            .thenComparing(Note::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+            .thenComparing(Note::getTitle, String.CASE_INSENSITIVE_ORDER);
 
     private final NoteRepository noteRepository;
     private final CategoryRepository categoryRepository;
+    private final NoteShareRepository noteShareRepository;
     private final MarkdownService markdownService;
+    private final StarlightProperties starlightProperties;
 
     public NoteService(NoteRepository noteRepository,
                        CategoryRepository categoryRepository,
-                       MarkdownService markdownService) {
+                       NoteShareRepository noteShareRepository,
+                       MarkdownService markdownService,
+                       StarlightProperties starlightProperties) {
         this.noteRepository = noteRepository;
         this.categoryRepository = categoryRepository;
+        this.noteShareRepository = noteShareRepository;
         this.markdownService = markdownService;
+        this.starlightProperties = starlightProperties;
     }
 
     /**
@@ -101,10 +116,42 @@ public class NoteService {
      */
     @Transactional(readOnly = true)
     public Note getOwnedNote(String ownerId, String noteId) {
-        return noteRepository.findByIdAndOwnerId(noteId, ownerId)
+        return noteRepository.findByIdAndOwnerIdAndDeletedAtIsNull(noteId, ownerId)
                 .orElseThrow(() -> {
                     log.warn("笔记未找到或不属于该用户: noteId={}, ownerId={}", noteId, ownerId);
                     return new ResponseStatusException(NOT_FOUND, "笔记不存在");
+                });
+    }
+
+    /**
+     * 获取指定用户拥有的笔记（包含回收站内容）。
+     *
+     * @param ownerId 用户 ID
+     * @param noteId  笔记 ID
+     * @return 笔记实体
+     */
+    @Transactional(readOnly = true)
+    public Note getOwnedNoteIncludingDeleted(String ownerId, String noteId) {
+        return noteRepository.findByIdAndOwnerId(noteId, ownerId)
+                .orElseThrow(() -> {
+                    log.warn("笔记未找到或不属于该用户（含回收站）: noteId={}, ownerId={}", noteId, ownerId);
+                    return new ResponseStatusException(NOT_FOUND, "笔记不存在");
+                });
+    }
+
+    /**
+     * 获取指定用户回收站中的笔记。
+     *
+     * @param ownerId 用户 ID
+     * @param noteId  笔记 ID
+     * @return 回收站中的笔记实体
+     */
+    @Transactional(readOnly = true)
+    public Note getOwnedTrashNote(String ownerId, String noteId) {
+        return noteRepository.findByIdAndOwnerIdAndDeletedAtIsNotNull(noteId, ownerId)
+                .orElseThrow(() -> {
+                    log.warn("回收站笔记未找到: noteId={}, ownerId={}", noteId, ownerId);
+                    return new ResponseStatusException(NOT_FOUND, "回收站中不存在该笔记");
                 });
     }
 
@@ -117,7 +164,22 @@ public class NoteService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> listUserNotes(String ownerId) {
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Note note : noteRepository.findByOwnerIdOrderByUpdatedAtDesc(ownerId)) {
+        for (Note note : noteRepository.findByOwnerIdAndDeletedAtIsNullOrderByUpdatedAtDesc(ownerId)) {
+            result.add(toSummary(note));
+        }
+        return result;
+    }
+
+    /**
+     * 获取当前用户回收站中的笔记列表。
+     *
+     * @param ownerId 用户 ID
+     * @return 回收站摘要列表
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listTrashNotes(String ownerId) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Note note : noteRepository.findByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDesc(ownerId)) {
             result.add(toSummary(note));
         }
         return result;
@@ -136,14 +198,79 @@ public class NoteService {
     }
 
     /**
+     * 获取回收站中笔记的详情。
+     *
+     * @param ownerId 用户 ID
+     * @param noteId  笔记 ID
+     * @return 回收站笔记详情
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> getTrashNoteDetail(String ownerId, String noteId) {
+        return toDetail(getOwnedTrashNote(ownerId, noteId));
+    }
+
+    /**
      * 删除笔记。
      *
      * @param ownerId 用户 ID
      * @param noteId  笔记 ID
      */
     public void deleteNote(String ownerId, String noteId) {
-        log.info("删除笔记: noteId={}, ownerId={}", noteId, ownerId);
-        noteRepository.delete(getOwnedNote(ownerId, noteId));
+        Note note = getOwnedNote(ownerId, noteId);
+        LocalDateTime deletedAt = LocalDateTime.now();
+        note.setDeletedAt(deletedAt);
+        noteRepository.save(note);
+        log.info("笔记已移入回收站: noteId={}, ownerId={}, purgeAt={}", noteId, ownerId, calculatePurgeAt(deletedAt));
+    }
+
+    /**
+     * 恢复回收站中的笔记。
+     *
+     * @param ownerId 用户 ID
+     * @param noteId  笔记 ID
+     * @return 恢复后的笔记
+     */
+    public Note restoreNote(String ownerId, String noteId) {
+        Note note = getOwnedTrashNote(ownerId, noteId);
+        note.setDeletedAt(null);
+        Note saved = noteRepository.save(note);
+        log.info("笔记已从回收站恢复: noteId={}, ownerId={}", noteId, ownerId);
+        return saved;
+    }
+
+    /**
+     * 彻底删除回收站中的笔记。
+     * <p>会同时移除关联分享记录，避免外键约束失败。</p>
+     *
+     * @param ownerId 用户 ID
+     * @param noteId  笔记 ID
+     */
+    public void purgeNote(String ownerId, String noteId) {
+        Note note = getOwnedTrashNote(ownerId, noteId);
+        long shareCount = noteShareRepository.countByNoteId(noteId);
+        if (shareCount > 0) {
+            noteShareRepository.deleteByNoteId(noteId);
+            noteShareRepository.flush();
+        }
+        noteRepository.delete(note);
+        log.info("回收站笔记已彻底删除: noteId={}, ownerId={}, removedShareCount={}", noteId, ownerId, shareCount);
+    }
+
+    /**
+     * 更新笔记置顶状态。
+     *
+     * @param ownerId 用户 ID
+     * @param noteId  笔记 ID
+     * @param pinned  是否置顶
+     * @return 更新后的笔记
+     */
+    public Note setPinned(String ownerId, String noteId, boolean pinned) {
+        Note note = getOwnedNote(ownerId, noteId);
+        note.setPinnedFlag(pinned);
+        note.setPinnedAt(pinned ? LocalDateTime.now() : null);
+        Note saved = noteRepository.save(note);
+        log.info("笔记置顶状态已更新: noteId={}, ownerId={}, pinned={}", noteId, ownerId, pinned);
+        return saved;
     }
 
     /**
@@ -156,7 +283,7 @@ public class NoteService {
     @Transactional(readOnly = true)
     public Map<String, Object> buildTree(String ownerId) {
         List<Category> categories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
-        List<Note> notes = noteRepository.findByOwnerIdOrderByUpdatedAtDesc(ownerId);
+        List<Note> notes = noteRepository.findByOwnerIdAndDeletedAtIsNullOrderByUpdatedAtDesc(ownerId);
 
         Map<String, Map<String, Object>> categoryMap = new HashMap<>();
         List<Map<String, Object>> roots = new ArrayList<>();
@@ -182,11 +309,16 @@ public class NoteService {
             roots.add(node);
         }
 
+        List<Map<String, Object>> pinnedItems = notes.stream()
+                .filter(Note::isPinnedFlag)
+                .sorted(PINNED_NOTE_COMPARATOR)
+                .map(this::toTreeNote)
+                .toList();
         for (Note note : notes) {
-            Map<String, Object> node = new HashMap<>();
-            node.put("id", note.getId());
-            node.put("name", note.getTitle());
-            node.put("type", "note");
+            if (note.isPinnedFlag()) {
+                continue;
+            }
+            Map<String, Object> node = toTreeNote(note);
             if (note.getCategory() != null) {
                 Map<String, Object> categoryNode = categoryMap.get(note.getCategory().getId());
                 if (categoryNode != null) {
@@ -198,7 +330,52 @@ public class NoteService {
         }
 
         roots.sort(Comparator.comparing(item -> item.get("name").toString()));
-        return Map.of("items", roots);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("items", roots);
+        data.put("pinnedItems", pinnedItems);
+        data.put("trashCount", noteRepository.countByOwnerIdAndDeletedAtIsNotNull(ownerId));
+        return data;
+    }
+
+    /**
+     * 定时清理超出保留期的回收站笔记。
+     * <p>默认每天凌晨执行一次，保留 30 天，可通过配置覆盖。</p>
+     */
+    @Scheduled(cron = "${starlight.note-trash.cleanup-cron:0 20 3 * * *}")
+    public void cleanupExpiredTrashOnSchedule() {
+        cleanupExpiredTrash();
+    }
+
+    /**
+     * 手动触发回收站过期清理。
+     *
+     * @return 清理掉的笔记数量
+     */
+    public int cleanupExpiredTrash() {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(getRetentionDays());
+        List<Note> expiredNotes = noteRepository.findByDeletedAtBefore(cutoff);
+        if (expiredNotes.isEmpty()) {
+            log.debug("回收站自动清理完成，本次无过期笔记: cutoff={}", cutoff);
+            return 0;
+        }
+
+        int removedShareCount = 0;
+        for (Note note : expiredNotes) {
+            long shareCount = noteShareRepository.countByNoteId(note.getId());
+            if (shareCount > 0) {
+                noteShareRepository.deleteByNoteId(note.getId());
+                removedShareCount += (int) shareCount;
+            }
+        }
+        if (removedShareCount > 0) {
+            noteShareRepository.flush();
+        }
+        for (Note note : expiredNotes) {
+            noteRepository.delete(note);
+        }
+        noteRepository.flush();
+        log.info("回收站自动清理完成: noteCount={}, removedShareCount={}, cutoff={}", expiredNotes.size(), removedShareCount, cutoff);
+        return expiredNotes.size();
     }
 
     /**
@@ -263,6 +440,9 @@ public class NoteService {
         map.put("title", note.getTitle());
         map.put("categoryId", note.getCategory() == null ? null : note.getCategory().getId());
         map.put("updatedAt", note.getUpdatedAt());
+        map.put("deletedAt", note.getDeletedAt());
+        map.put("purgeAt", calculatePurgeAt(note.getDeletedAt()));
+        map.put("pinnedFlag", note.isPinnedFlag());
         return map;
     }
 
@@ -279,7 +459,35 @@ public class NoteService {
         map.put("categoryId", note.getCategory() == null ? null : note.getCategory().getId());
         map.put("updatedAt", note.getUpdatedAt());
         map.put("createdAt", note.getCreatedAt());
+        map.put("deletedAt", note.getDeletedAt());
+        map.put("purgeAt", calculatePurgeAt(note.getDeletedAt()));
+        map.put("pinnedFlag", note.isPinnedFlag());
         return map;
+    }
+
+    /** 将笔记转换为目录树节点。 */
+    private Map<String, Object> toTreeNote(Note note) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", note.getId());
+        map.put("name", note.getTitle());
+        map.put("type", "note");
+        map.put("categoryId", note.getCategory() == null ? null : note.getCategory().getId());
+        map.put("updatedAt", note.getUpdatedAt());
+        map.put("pinnedFlag", note.isPinnedFlag());
+        return map;
+    }
+
+    /** 根据删除时间计算自动清理时间。 */
+    private LocalDateTime calculatePurgeAt(LocalDateTime deletedAt) {
+        if (deletedAt == null) {
+            return null;
+        }
+        return deletedAt.plusDays(getRetentionDays());
+    }
+
+    /** 获取回收站保留天数，至少为 1 天。 */
+    private int getRetentionDays() {
+        return Math.max(starlightProperties.getNoteTrash().getRetentionDays(), 1);
     }
 
     /** 安全地将 children 属性转为 List */

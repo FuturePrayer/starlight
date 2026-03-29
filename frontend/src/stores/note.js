@@ -3,7 +3,8 @@ import { ref, computed } from 'vue'
 import { noteApi, categoryApi } from '@/api'
 
 export const useNoteStore = defineStore('note', () => {
-  const tree = ref({ items: [] })
+  const tree = ref({ items: [], pinnedItems: [], trashCount: 0 })
+  const trashNotes = ref([])
   const currentNote = ref(null)
   const editMode = ref(false)
   const dirty = ref(false)
@@ -59,12 +60,25 @@ export const useNoteStore = defineStore('note', () => {
     const nextTree = await noteApi.tree()
     tree.value = {
       ...nextTree,
-      items: sortTreeItems(nextTree?.items || [])
+      items: sortTreeItems(nextTree?.items || []),
+      pinnedItems: nextTree?.pinnedItems || [],
+      trashCount: Number(nextTree?.trashCount || 0)
     }
+  }
+
+  async function refreshTrash() {
+    trashNotes.value = await noteApi.trash()
   }
 
   async function openNote(id) {
     const note = await noteApi.get(id)
+    currentNote.value = note
+    resetEditSession()
+    return note
+  }
+
+  async function openTrashNote(id) {
+    const note = await noteApi.getTrash(id)
     currentNote.value = note
     resetEditSession()
     return note
@@ -82,6 +96,7 @@ export const useNoteStore = defineStore('note', () => {
     lastSavedAt.value = Date.now()
     editSnapshot.value = cloneNote(note)
     await refreshTree()
+    await refreshTrash()
     return note
   }
 
@@ -92,6 +107,36 @@ export const useNoteStore = defineStore('note', () => {
     }
     resetEditSession()
     await refreshTree()
+    await refreshTrash()
+  }
+
+  async function restoreNote(id) {
+    const note = await noteApi.restore(id)
+    currentNote.value = note
+    resetEditSession()
+    await refreshTree()
+    await refreshTrash()
+    return note
+  }
+
+  async function purgeNote(id) {
+    await noteApi.purge(id)
+    if (currentNote.value?.id === id) {
+      currentNote.value = null
+    }
+    resetEditSession()
+    await refreshTree()
+    await refreshTrash()
+  }
+
+  async function setPinned(id, value) {
+    const note = await noteApi.setPinned(id, value)
+    if (currentNote.value?.id === id) {
+      currentNote.value = note
+    }
+    await refreshTree()
+    await refreshTrash()
+    return note
   }
 
   async function createCategory(name, parentId) {
@@ -164,11 +209,23 @@ export const useNoteStore = defineStore('note', () => {
     return collector
   }
 
-  const allNotes = computed(() => flatNotes(tree.value?.items, []))
+  const allNotes = computed(() => {
+    const merged = [
+      ...flatNotes(tree.value?.items, []),
+      ...(tree.value?.pinnedItems || [])
+    ]
+    const unique = new Map()
+    for (const item of merged) {
+      if (item?.id && !unique.has(item.id)) {
+        unique.set(item.id, item)
+      }
+    }
+    return [...unique.values()]
+  })
 
   return {
-    tree, currentNote, editMode, dirty, autosaveEnabled, lastSavedAt, expandedCategoryIds,
-    refreshTree, openNote, saveNote, deleteNote,
+    tree, trashNotes, currentNote, editMode, dirty, autosaveEnabled, lastSavedAt, expandedCategoryIds,
+    refreshTree, refreshTrash, openNote, openTrashNote, saveNote, deleteNote, restoreNote, purgeNote, setPinned,
     createCategory, exportArchive, importArchive,
     startNewNote, enterEditMode, discardEdit, finishEditing,
     setEditMode, setAutosaveEnabled, hasExpandedCategory, setCategoryExpanded, toggleCategoryExpanded,

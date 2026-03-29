@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -28,6 +29,7 @@ public class SearchConfig {
     private static final Logger log = LoggerFactory.getLogger(SearchConfig.class);
 
     @Bean
+    @DependsOn("flywayDependencyConfig")
     public NoteSearchService noteSearchService(DataSource dataSource,
                                                 EntityManager entityManager,
                                                 PlatformTransactionManager txManager) {
@@ -37,12 +39,12 @@ public class SearchConfig {
         return switch (dbType) {
             case "mysql" -> {
                 var service = new MysqlNoteSearchService(entityManager);
-                runInTransaction(txManager, () -> service.ensureFulltextIndex());
+                runInTransaction(txManager, service::ensureFulltextIndex);
                 yield service;
             }
             case "postgresql" -> {
                 var service = new PostgresNoteSearchService(entityManager);
-                runInTransaction(txManager, () -> service.tryEnableTrgmIndex());
+                runInTransaction(txManager, service::tryEnableTrgmIndex);
                 yield service;
             }
             default -> {
