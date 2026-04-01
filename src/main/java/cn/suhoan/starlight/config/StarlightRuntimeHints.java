@@ -1,5 +1,6 @@
 package cn.suhoan.starlight.config;
 
+import com.webauthn4j.data.PublicKeyCredential;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
@@ -34,6 +35,10 @@ public class StarlightRuntimeHints implements RuntimeHintsRegistrar {
         } catch (IOException ex) {
             throw new IllegalStateException("Failed to register native runtime hints", ex);
         }
+        //WebAuthn4J 需要反射访问 PublicKeyCredential 的构造器和方法
+        hints.reflection().registerType(PublicKeyCredential.class,
+                MemberCategory.INVOKE_DECLARED_CONSTRUCTORS,
+                MemberCategory.INVOKE_DECLARED_METHODS);
     }
 
     private void registerFlywayConfigurationExtensionHints(RuntimeHints hints,
