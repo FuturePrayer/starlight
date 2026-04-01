@@ -20,6 +20,8 @@ public class StarlightRuntimeHints implements RuntimeHintsRegistrar {
     private static final String FLYWAY_VENDOR_MIGRATION_DIRECTORY_PATTERN = "db/migration/*";
     private static final String FLYWAY_VENDOR_MIGRATION_RESOURCE_PATTERN = "db/migration/*/*.sql";
     private static final String ROOT_PACKAGE_PREFIX = "org/";
+    private static final String WEBAUTHN_PATTERN =
+            "classpath*:com/webauthn4j/data/**/*.class";
 
     @Override
     public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
@@ -31,19 +33,17 @@ public class StarlightRuntimeHints implements RuntimeHintsRegistrar {
         hints.resources().registerPattern(FLYWAY_VENDOR_MIGRATION_RESOURCE_PATTERN);
         hints.resources().registerPattern("logback.xml");
         try {
-            registerFlywayConfigurationExtensionHints(hints, resolver);
+            registerHintsByClassPattern(hints, resolver, FLYWAY_CONFIGURATION_EXTENSION_PATTERN);
+            registerHintsByClassPattern(hints, resolver, WEBAUTHN_PATTERN);
         } catch (IOException ex) {
             throw new IllegalStateException("Failed to register native runtime hints", ex);
         }
-        //WebAuthn4J 需要反射访问 PublicKeyCredential 的构造器和方法
-        hints.reflection().registerType(PublicKeyCredential.class,
-                MemberCategory.INVOKE_DECLARED_CONSTRUCTORS,
-                MemberCategory.INVOKE_DECLARED_METHODS);
     }
 
-    private void registerFlywayConfigurationExtensionHints(RuntimeHints hints,
-                                                           PathMatchingResourcePatternResolver resolver) throws IOException {
-        Resource[] resources = resolver.getResources(FLYWAY_CONFIGURATION_EXTENSION_PATTERN);
+    private void registerHintsByClassPattern(RuntimeHints hints,
+                                             PathMatchingResourcePatternResolver resolver,
+                                             String pattern) throws IOException {
+        Resource[] resources = resolver.getResources(pattern);
         for (Resource resource : resources) {
             String className = toClassName(resource);
             if (!className.endsWith(".")) {
