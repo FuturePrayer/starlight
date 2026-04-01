@@ -10,7 +10,7 @@
     </parent>
     <groupId>cn.suhoan</groupId>
     <artifactId>starlight</artifactId>
-    <version>0.1.2</version>
+    <version>0.1.3</version>
     <name>starlight</name>
     <description>starlight</description>
     <url/>
@@ -41,7 +41,6 @@
     </scm>
     <properties>
         <java.version>25</java.version>
-        <graalvm.buildtools.version>0.11.1</graalvm.buildtools.version>
     </properties>
     <dependencies>
         <dependency>
@@ -146,7 +145,6 @@
                     <plugin>
                         <groupId>org.graalvm.buildtools</groupId>
                         <artifactId>native-maven-plugin</artifactId>
-                        <version>${graalvm.buildtools.version}</version>
                         <extensions>true</extensions>
                         <executions>
                             <execution>
@@ -169,6 +167,22 @@
                                 <enabled>true</enabled>
                             </metadataRepository>
                         </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.hibernate.orm</groupId>
+                        <artifactId>hibernate-maven-plugin</artifactId>
+                        <version>${hibernate.version}</version>
+                        <executions>
+                            <execution>
+                                <id>enhance</id>
+                                <goals>
+                                    <goal>enhance</goal>
+                                </goals>
+                                <configuration>
+                                    <enableAssociationManagement>true</enableAssociationManagement>
+                                </configuration>
+                            </execution>
+                        </executions>
                     </plugin>
                 </plugins>
             </build>

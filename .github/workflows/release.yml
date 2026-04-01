@@ -19,6 +19,7 @@ jobs:
     outputs:
       version: ${{ steps.meta.outputs.version }}
       artifact_id: ${{ steps.meta.outputs.artifact_id }}
+      image_name: ${{ steps.meta.outputs.image_name }}
       owner_lc: ${{ steps.meta.outputs.owner_lc }}
       tag: ${{ steps.meta.outputs.tag }}
     steps:
@@ -53,9 +54,11 @@ jobs:
           ./scripts/check-tag-branch.sh "${GITHUB_SHA}"
 
           OWNER_LC="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE_NAME="starlight"
 
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "artifact_id=${ARTIFACT_ID}" >> "${GITHUB_OUTPUT}"
+          echo "image_name=${IMAGE_NAME}" >> "${GITHUB_OUTPUT}"
           echo "owner_lc=${OWNER_LC}" >> "${GITHUB_OUTPUT}"
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
 
@@ -237,9 +240,11 @@ jobs:
           context: .
           file: ./Dockerfile.frontend
           push: true
-          tags: ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}-frontend:${{ needs.validate.outputs.version }}
+          tags: |
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:${{ needs.validate.outputs.version }}-frontend
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:latest-frontend
           labels: |
-            org.opencontainers.image.title=${{ needs.validate.outputs.artifact_id }}-frontend
+            org.opencontainers.image.title=${{ needs.validate.outputs.image_name }}
             org.opencontainers.image.version=${{ needs.validate.outputs.version }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -252,9 +257,11 @@ jobs:
           push: true
           build-args: |
             JAR_FILE=.docker/backend/${{ needs.validate.outputs.artifact_id }}-backend-${{ needs.validate.outputs.version }}.jar
-          tags: ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}-backend:${{ needs.validate.outputs.version }}
+          tags: |
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:${{ needs.validate.outputs.version }}-backend
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:latest-backend
           labels: |
-            org.opencontainers.image.title=${{ needs.validate.outputs.artifact_id }}-backend
+            org.opencontainers.image.title=${{ needs.validate.outputs.image_name }}
             org.opencontainers.image.version=${{ needs.validate.outputs.version }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -268,10 +275,10 @@ jobs:
           build-args: |
             JAR_FILE=.docker/combined/${{ needs.validate.outputs.artifact_id }}-combined-${{ needs.validate.outputs.version }}.jar
           tags: |
-            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}:${{ needs.validate.outputs.version }}
-            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}:latest
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:${{ needs.validate.outputs.version }}
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:latest
           labels: |
-            org.opencontainers.image.title=${{ needs.validate.outputs.artifact_id }}
+            org.opencontainers.image.title=${{ needs.validate.outputs.image_name }}
             org.opencontainers.image.version=${{ needs.validate.outputs.version }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -310,6 +317,7 @@ jobs:
           VERSION='${{ needs.validate.outputs.version }}'
           ARTIFACT_ID='${{ needs.validate.outputs.artifact_id }}'
           OWNER='${{ needs.validate.outputs.owner_lc }}'
+          IMAGE_NAME='${{ needs.validate.outputs.image_name }}'
           find .release -type f \( -name '*.jar' -o -name '*.tar.gz' \) -print0 | sort -z | xargs -0 sha256sum > .release/SHA256SUMS
           cat > .release/RELEASE-NOTES.md <<EOF
           ## Release ${VERSION}
@@ -321,10 +329,12 @@ jobs:
           - SHA256SUMS
 
           ### Container images
-          - ghcr.io/${OWNER}/${ARTIFACT_ID}-frontend:${VERSION}
-          - ghcr.io/${OWNER}/${ARTIFACT_ID}-backend:${VERSION}
-          - ghcr.io/${OWNER}/${ARTIFACT_ID}:${VERSION}
-          - ghcr.io/${OWNER}/${ARTIFACT_ID}:latest （仅 combined）
+          - ghcr.io/${OWNER}/${IMAGE_NAME}:${VERSION}-frontend
+          - ghcr.io/${OWNER}/${IMAGE_NAME}:latest-frontend
+          - ghcr.io/${OWNER}/${IMAGE_NAME}:${VERSION}-backend
+          - ghcr.io/${OWNER}/${IMAGE_NAME}:latest-backend
+          - ghcr.io/${OWNER}/${IMAGE_NAME}:${VERSION}
+          - ghcr.io/${OWNER}/${IMAGE_NAME}:latest
           EOF
 
       - name: Publish GitHub release

@@ -19,6 +19,7 @@ jobs:
     outputs:
       version: ${{ steps.meta.outputs.version }}
       artifact_id: ${{ steps.meta.outputs.artifact_id }}
+      image_name: ${{ steps.meta.outputs.image_name }}
       owner_lc: ${{ steps.meta.outputs.owner_lc }}
       tag: ${{ steps.meta.outputs.tag }}
     steps:
@@ -53,9 +54,11 @@ jobs:
           ./scripts/check-tag-branch.sh "${GITHUB_SHA}"
 
           OWNER_LC="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE_NAME="starlight"
 
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "artifact_id=${ARTIFACT_ID}" >> "${GITHUB_OUTPUT}"
+          echo "image_name=${IMAGE_NAME}" >> "${GITHUB_OUTPUT}"
           echo "owner_lc=${OWNER_LC}" >> "${GITHUB_OUTPUT}"
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
 
@@ -179,9 +182,11 @@ jobs:
           push: true
           build-args: |
             BINARY_FILE=.docker/backend-native/${{ needs.validate.outputs.artifact_id }}-backend-native
-          tags: ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}-backend-native:${{ needs.validate.outputs.version }}
+          tags: |
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:${{ needs.validate.outputs.version }}-backend-native
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:latest-backend-native
           labels: |
-            org.opencontainers.image.title=${{ needs.validate.outputs.artifact_id }}-backend-native
+            org.opencontainers.image.title=${{ needs.validate.outputs.image_name }}
             org.opencontainers.image.version=${{ needs.validate.outputs.version }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -195,10 +200,10 @@ jobs:
           build-args: |
             BINARY_FILE=.docker/combined-native/${{ needs.validate.outputs.artifact_id }}-native
           tags: |
-            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}-native:${{ needs.validate.outputs.version }}
-            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}-native:latest
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:${{ needs.validate.outputs.version }}-native
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:latest-native
           labels: |
-            org.opencontainers.image.title=${{ needs.validate.outputs.artifact_id }}-native
+            org.opencontainers.image.title=${{ needs.validate.outputs.image_name }}
             org.opencontainers.image.version=${{ needs.validate.outputs.version }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
