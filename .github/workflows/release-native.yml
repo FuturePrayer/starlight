@@ -1,0 +1,204 @@
+name: release-native
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-native-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      artifact_id: ${{ steps.meta.outputs.artifact_id }}
+      owner_lc: ${{ steps.meta.outputs.owner_lc }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Validate tag, version and source branch
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout | tail -n 1 | tr -d '\r')"
+          ARTIFACT_ID="$(mvn -q help:evaluate -Dexpression=project.artifactId -DforceStdout | tail -n 1 | tr -d '\r')"
+          TAG="${GITHUB_REF_NAME}"
+          EXPECTED_TAG="v${VERSION}"
+
+          if [[ "${TAG}" != "${EXPECTED_TAG}" ]]; then
+            echo "Tag ${TAG} does not match pom.xml version ${VERSION}. Expected ${EXPECTED_TAG}." >&2
+            exit 1
+          fi
+
+          chmod +x scripts/check-tag-branch.sh
+          ./scripts/check-tag-branch.sh "${GITHUB_SHA}"
+
+          OWNER_LC="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_id=${ARTIFACT_ID}" >> "${GITHUB_OUTPUT}"
+          echo "owner_lc=${OWNER_LC}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+
+  build_backend_native:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: graalvm-community
+          java-version: '25'
+          cache: maven
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          components: native-image
+
+      - name: Build backend native executable
+        run: mvn -B -Pnative -DskipTests clean package
+
+      - name: Package backend native artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACT_ID='${{ needs.validate.outputs.artifact_id }}'
+          mkdir -p .native/backend
+          cp "target/${ARTIFACT_ID}" ".native/backend/${ARTIFACT_ID}-backend-native"
+
+      - name: Upload backend native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-native-binary
+          path: .native/backend/*
+          if-no-files-found: error
+
+  build_combined_native:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend into Spring Boot static resources
+        working-directory: frontend
+        run: npm run build:combined
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: graalvm-community
+          java-version: '25'
+          cache: maven
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          components: native-image
+
+      - name: Build combined native executable
+        run: mvn -B -Pnative -DskipTests clean package
+
+      - name: Package combined native artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACT_ID='${{ needs.validate.outputs.artifact_id }}'
+          mkdir -p .native/combined
+          cp "target/${ARTIFACT_ID}" ".native/combined/${ARTIFACT_ID}-native"
+
+      - name: Upload combined native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined-native-binary
+          path: .native/combined/*
+          if-no-files-found: error
+
+  publish_native_images:
+    needs:
+      - validate
+      - build_backend_native
+      - build_combined_native
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download backend native artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-native-binary
+          path: .docker/backend-native
+
+      - name: Download combined native artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: combined-native-binary
+          path: .docker/combined-native
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend native image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.backend.native
+          push: true
+          build-args: |
+            BINARY_FILE=.docker/backend-native/${{ needs.validate.outputs.artifact_id }}-backend-native
+          tags: ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}-backend-native:${{ needs.validate.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=${{ needs.validate.outputs.artifact_id }}-backend-native
+            org.opencontainers.image.version=${{ needs.validate.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push combined native image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.combined.native
+          push: true
+          build-args: |
+            BINARY_FILE=.docker/combined-native/${{ needs.validate.outputs.artifact_id }}-native
+          tags: |
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}-native:${{ needs.validate.outputs.version }}
+            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.artifact_id }}-native:latest
+          labels: |
+            org.opencontainers.image.title=${{ needs.validate.outputs.artifact_id }}-native
+            org.opencontainers.image.version=${{ needs.validate.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}

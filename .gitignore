@@ -37,3 +37,5 @@ data/
 ### Vue build ###
 frontend/dist/
 src/main/resources/static/
+
+jdks/

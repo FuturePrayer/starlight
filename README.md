@@ -74,7 +74,47 @@ mvn clean package
 - 登录页：`http://localhost:8080/login`
 - 工作台：`http://localhost:8080/app`
 
-### 4）仅构建前端静态包
+### 4）构建 GraalVM 原生可执行文件
+
+项目已支持通过 GraalVM 将 Spring Boot 后端编译为可直接运行的原生可执行程序。
+
+> 除了 GraalVM 本身，原生编译还依赖系统 C 工具链；在 Linux 上通常需要可用的 `gcc`。GitHub Actions 的 `ubuntu-latest` 已自带该依赖。
+
+#### A. 构建后端原生可执行文件
+
+```powershell
+cd D:\devProjects\java\starlight
+mvn -Pnative -DskipTests clean package
+```
+
+产物位于：
+
+- `target/starlight`
+
+启动：
+
+```powershell
+.\target\starlight.exe
+```
+
+#### B. 构建前后端合并原生可执行文件
+
+```powershell
+cd D:\devProjects\java\starlight\frontend
+npm ci
+npm run build:combined
+
+cd D:\devProjects\java\starlight
+mvn -Pnative -DskipTests clean package
+```
+
+产物同样位于：
+
+- `target/starlight`
+
+> 合并原生包依赖前端资源先构建进 `src/main/resources/static/`，否则生成的原生程序只包含 API，不带 Web UI。
+
+### 5）仅构建前端静态包
 
 ```powershell
 cd D:\devProjects\java\starlight\frontend
@@ -203,6 +243,18 @@ git push origin v0.0.1
 
 - `ghcr.io/futureprayer/starlight:latest` **只会指向最新的前后端合并镜像**
 - 不会给 frontend-only / backend-only 镜像打 `latest`
+
+此外，仓库还提供独立工作流：`.github/workflows/release-native.yml`，触发条件与上面的 release 工作流一致，也是在推送合法版本 Tag 时触发。
+
+它会额外发布两个“直接运行原生可执行程序”的镜像到 `ghcr.io`：
+
+- `ghcr.io/futureprayer/starlight-backend-native:<version>`
+- `ghcr.io/futureprayer/starlight-native:<version>`
+
+其中：
+
+- `ghcr.io/futureprayer/starlight-native:latest` **只会指向最新的前后端合并原生镜像**
+- backend native 镜像不会打 `latest`
 
 ---
 
@@ -336,4 +388,3 @@ docker run -d --name starlight-frontend --network starlight-net -p 8080:80 -e BA
 cd D:\devProjects\java\starlight
 mvn test
 ```
-

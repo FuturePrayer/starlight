@@ -5,9 +5,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 import javax.sql.DataSource;
+import java.io.IOException;
 import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 /**
  * 确保 Flyway 先于 JPA 校验执行。
@@ -33,16 +42,63 @@ public class FlywayDependencyConfig implements InitializingBean {
     @Override
     public void afterPropertiesSet() {
         String vendor = detectVendor(dataSource);
+        String[] migrationLocations = {"db/migration/common", "db/migration/" + vendor};
+        String[] filesystemMigrationLocations = prepareFilesystemMigrationLocations(migrationLocations);
         log.info("初始化 Flyway 迁移器: vendor={}", vendor);
         Flyway flyway = Flyway.configure()
                 .baselineOnMigrate(true)
                 .validateOnMigrate(true)
-                .locations("classpath:db/migration/common", "classpath:db/migration/" + vendor)
+                .locations("filesystem:" + filesystemMigrationLocations[0], "filesystem:" + filesystemMigrationLocations[1])
                 .dataSource(dataSource)
                 .load();
         log.info("开始执行 Flyway 数据库迁移");
         flyway.migrate();
         log.info("Flyway 数据库迁移完成");
+    }
+
+    private String[] prepareFilesystemMigrationLocations(String[] locations) {
+        try {
+            Path root = Files.createTempDirectory("starlight-flyway-");
+            String[] resolvedLocations = new String[locations.length];
+            for (int i = 0; i < locations.length; i++) {
+                resolvedLocations[i] = copyMigrationResources(root, locations[i]).toString();
+            }
+            return resolvedLocations;
+        } catch (IOException ex) {
+            throw new IllegalStateException("准备 Flyway 迁移目录失败", ex);
+        }
+    }
+
+    private Path copyMigrationResources(Path root, String locationPath) throws IOException {
+        PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver(getClass().getClassLoader());
+        Path targetDirectory = root.resolve(locationPath);
+        Files.createDirectories(targetDirectory);
+        for (Resource resource : loadMigrationResources(resolver, locationPath)) {
+            if (resource.getFilename() == null) {
+                continue;
+            }
+            Files.copy(resource.getInputStream(), targetDirectory.resolve(resource.getFilename()),
+                    StandardCopyOption.REPLACE_EXISTING);
+        }
+        return targetDirectory;
+    }
+
+    private List<Resource> loadMigrationResources(PathMatchingResourcePatternResolver resolver,
+                                                  String locationPath) {
+        try {
+            Resource[] resources = resolver.getResources("classpath*:" + locationPath + "/*.sql");
+            List<Resource> result = new ArrayList<>(resources.length);
+            for (Resource resource : resources) {
+                if (!resource.exists() || resource.getFilename() == null) {
+                    continue;
+                }
+                result.add(resource);
+            }
+            result.sort(Comparator.comparing(Resource::getFilename));
+            return result;
+        } catch (IOException ex) {
+            throw new IllegalStateException("读取 Flyway 迁移脚本失败: " + locationPath, ex);
+        }
     }
 
     /**
@@ -63,6 +119,3 @@ public class FlywayDependencyConfig implements InitializingBean {
         return "h2";
     }
 }
-
-
-

@@ -1,0 +1,15 @@
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+ARG BINARY_FILE=target/starlight
+COPY ${BINARY_FILE} /app/starlight
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && chmod +x /app/starlight
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/starlight"]
