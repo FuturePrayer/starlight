@@ -1,6 +1,5 @@
 package cn.suhoan.starlight.config;
 
-import com.webauthn4j.data.PublicKeyCredential;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
