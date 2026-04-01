@@ -49,19 +49,22 @@ public class AuthController {
     private final TotpService totpService;
     private final QrCodeService qrCodeService;
     private final WebAuthnService webAuthnService;
+    private final ObjectMapper objectMapper;
 
     public AuthController(AuthService authService,
                           SessionAuthService sessionAuthService,
                           SettingsService settingsService,
                           TotpService totpService,
                           QrCodeService qrCodeService,
-                          WebAuthnService webAuthnService) {
+                          WebAuthnService webAuthnService,
+                          ObjectMapper objectMapper) {
         this.authService = authService;
         this.sessionAuthService = sessionAuthService;
         this.settingsService = settingsService;
         this.totpService = totpService;
         this.qrCodeService = qrCodeService;
         this.webAuthnService = webAuthnService;
+        this.objectMapper = objectMapper;
     }
 
     /** 获取注册状态信息（是否允许注册、是否需要引导管理员等） */
@@ -209,20 +212,9 @@ public class AuthController {
 
     /** 完成通行密钥注册 */
     @PostMapping("/passkey/register/finish")
-    public ApiResponse<Void> passkeyRegisterFinish(@RequestBody Map<String, Object> body) {
+    public ApiResponse<Void> passkeyRegisterFinish(@RequestBody PasskeyRegisterFinishRequest request) {
         UserAccount user = sessionAuthService.requireUser();
-        String handle = (String) body.get("handle");
-        String credentialJson = body.get("credential").toString();
-        String nickname = (String) body.get("nickname");
-        // If credential is a Map (from JSON parsing), re-serialize it
-        if (body.get("credential") instanceof Map) {
-            try {
-                credentialJson = new ObjectMapper().writeValueAsString(body.get("credential"));
-            } catch (Exception e) {
-                throw new IllegalArgumentException("请求格式错误");
-            }
-        }
-        webAuthnService.finishRegistration(user, handle, credentialJson, nickname);
+        webAuthnService.finishRegistration(user, request.handle(), toCredentialJson(request.credential()), request.nickname());
         return ApiResponse.okMessage("通行密钥已注册");
     }
 
@@ -247,19 +239,24 @@ public class AuthController {
 
     /** 完成通行密钥登录认证 */
     @PostMapping("/passkey/login/finish")
-    public ApiResponse<Map<String, Object>> passkeyLoginFinish(@RequestBody Map<String, Object> body) {
-        String handle = (String) body.get("handle");
-        String credentialJson = body.get("credential").toString();
-        if (body.get("credential") instanceof Map) {
-            try {
-                credentialJson = new ObjectMapper().writeValueAsString(body.get("credential"));
-            } catch (Exception e) {
-                throw new IllegalArgumentException("请求格式错误");
-            }
-        }
-        UserAccount userAccount = webAuthnService.finishAssertion(handle, credentialJson);
+    public ApiResponse<Map<String, Object>> passkeyLoginFinish(@RequestBody PasskeyLoginFinishRequest request) {
+        UserAccount userAccount = webAuthnService.finishAssertion(request.handle(), toCredentialJson(request.credential()));
         sessionAuthService.login(userAccount.getId());
         return ApiResponse.ok(authService.toProfile(userAccount));
+    }
+
+    private String toCredentialJson(Object credential) {
+        if (credential == null) {
+            throw new IllegalArgumentException("请求格式错误");
+        }
+        if (credential instanceof String credentialJson) {
+            return credentialJson;
+        }
+        try {
+            return objectMapper.writeValueAsString(credential);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("请求格式错误", e);
+        }
     }
 
     /** 清理已过期的 TOTP 待验证记录 */
@@ -278,4 +275,8 @@ public class AuthController {
     public record TotpLoginRequest(String pendingToken, String code) {}
     /** TOTP 绑定确认请求体 */
     public record TotpConfirmRequest(String secret, String code) {}
+    /** 通行密钥注册完成请求体 */
+    public record PasskeyRegisterFinishRequest(String handle, Object credential, String nickname) {}
+    /** 通行密钥登录完成请求体 */
+    public record PasskeyLoginFinishRequest(String handle, Object credential) {}
 }

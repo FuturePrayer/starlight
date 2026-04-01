@@ -5,19 +5,23 @@ import cn.suhoan.starlight.dto.ApiResponse;
 import cn.suhoan.starlight.entity.Category;
 import cn.suhoan.starlight.entity.Note;
 import cn.suhoan.starlight.entity.UserAccount;
+import cn.suhoan.starlight.entity.UserCredential;
 import cn.suhoan.starlight.repository.NoteRepository;
 import cn.suhoan.starlight.repository.NoteShareRepository;
+import cn.suhoan.starlight.repository.UserCredentialRepository;
 import cn.suhoan.starlight.service.AuthService;
 import cn.suhoan.starlight.service.NoteService;
 import cn.suhoan.starlight.service.NoteTransferService;
 import cn.suhoan.starlight.service.SettingsService;
 import cn.suhoan.starlight.service.ShareService;
+import cn.suhoan.starlight.service.WebAuthnService;
 import cn.suhoan.starlight.service.search.NoteSearchService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -25,6 +29,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +73,15 @@ class StarlightFeatureTests {
 
     @Autowired
     private NoteShareRepository noteShareRepository;
+
+    @Autowired
+    private WebAuthnService webAuthnService;
+
+    @Autowired
+    private UserCredentialRepository userCredentialRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Test
     void firstUserBecomesAdminAndRegistrationDefaultsToDisabled() {
@@ -282,6 +296,38 @@ class StarlightFeatureTests {
         assertEquals(1, removed);
         assertTrue(noteRepository.findById(note.getId()).isEmpty());
         assertTrue(noteShareRepository.findByToken(share.get("token").toString()).isEmpty());
+    }
+
+    @Test
+    void passkeyOptionsRemainCompatibleWithFrontendContract() throws IOException {
+        settingsService.setShareBaseUrl("https://notes.example.com/app");
+        UserAccount user = authService.register("passkey@example.com", "123456");
+
+        String existingCredentialId = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString("credential-1".getBytes(StandardCharsets.UTF_8));
+        UserCredential credential = new UserCredential();
+        credential.setUserId(user.getId());
+        credential.setCredentialId(existingCredentialId);
+        credential.setPublicKeyCose(Base64.getUrlEncoder().withoutPadding()
+                .encodeToString("placeholder-cose".getBytes(StandardCharsets.UTF_8)));
+        credential.setSignatureCount(0);
+        credential.setNickname("已有通行密钥");
+        userCredentialRepository.save(credential);
+
+        Map<String, Object> registration = webAuthnService.startRegistration(user);
+        var registrationPublicKey = objectMapper.readTree(registration.get("optionsJson").toString());
+        assertNotNull(registration.get("handle"));
+        assertEquals("notes.example.com", registrationPublicKey.get("rp").get("id").textValue());
+        assertEquals(user.getUsername(), registrationPublicKey.get("user").get("name").textValue());
+        assertTrue(registrationPublicKey.has("challenge"));
+        assertEquals(existingCredentialId, registrationPublicKey.get("excludeCredentials").get(0).get("id").textValue());
+
+        Map<String, Object> assertion = webAuthnService.startAssertion();
+        var assertionPublicKey = objectMapper.readTree(assertion.get("optionsJson").toString());
+        assertNotNull(assertion.get("handle"));
+        assertEquals("notes.example.com", assertionPublicKey.get("rpId").textValue());
+        assertTrue(assertionPublicKey.has("challenge"));
+        assertEquals("preferred", assertionPublicKey.get("userVerification").textValue());
     }
 
     private byte[] createZipWithEntry(String entryName, String content) throws IOException {

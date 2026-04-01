@@ -192,7 +192,7 @@ async function handlePasskeyLogin() {
   try {
     // 1. Get assertion options
     const { handle, optionsJson } = await authApi.passkeyLoginStart();
-    const options = JSON.parse(optionsJson).publicKey;
+    const options = JSON.parse(optionsJson);
 
     // 2. Convert base64url to ArrayBuffer
     const publicKey = {
