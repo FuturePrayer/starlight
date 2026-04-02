@@ -156,6 +156,7 @@
                                 <buildArg>--parallelism=1</buildArg>
                                 <buildArg>-O1</buildArg>
                                 <buildArg>-J-XX:MaxRAMPercentage=95.0</buildArg>
+                                <buildArg>--enable-all-security-services</buildArg>
                             </buildArgs>
                             <metadataRepository>
                                 <enabled>true</enabled>

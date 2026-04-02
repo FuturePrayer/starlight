@@ -44,13 +44,16 @@ public class StarlightRuntimeHints implements RuntimeHintsRegistrar {
                                              String pattern) throws IOException {
         Resource[] resources = resolver.getResources(pattern);
         for (Resource resource : resources) {
-            String className = toClassName(resource);
-            if (!className.endsWith(".")) {
-                hints.reflection().registerType(TypeReference.of(className),
-                        builder -> builder.withMembers(
-                                MemberCategory.INVOKE_DECLARED_CONSTRUCTORS,
-                                MemberCategory.INVOKE_PUBLIC_METHODS
-                        ));
+            try {
+                String className = toClassName(resource);
+                if (!className.endsWith(".")) {
+                    hints.reflection().registerType(TypeReference.of(className),
+                            builder -> builder.withMembers(
+                                    MemberCategory.INVOKE_DECLARED_CONSTRUCTORS,
+                                    MemberCategory.INVOKE_PUBLIC_METHODS
+                            ));
+                }
+            } catch (Exception _) {
             }
         }
     }
