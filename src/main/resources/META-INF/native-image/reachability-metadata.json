@@ -1,0 +1,223 @@
+{
+  "reflection": [
+    {
+      "type": "com.webauthn4j.data.AuthenticatorAssertionResponse",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "byte[]",
+            "byte[]",
+            "byte[]",
+            "byte[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.AuthenticatorAttachment"
+    },
+    {
+      "type": "com.webauthn4j.data.AuthenticatorAttestationResponse",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "byte[]",
+            "byte[]",
+            "java.util.Set"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.AuthenticatorResponse"
+    },
+    {
+      "type": "com.webauthn4j.data.AuthenticatorTransport",
+      "methods": [
+        {
+          "name": "deserialize",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.PublicKeyCredential",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String",
+            "byte[]",
+            "com.webauthn4j.data.AuthenticatorResponse",
+            "com.webauthn4j.data.AuthenticatorAttachment",
+            "com.webauthn4j.data.extension.client.AuthenticationExtensionsClientOutputs"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.attestation.AttestationObject",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "com.webauthn4j.data.attestation.authenticator.AuthenticatorData",
+            "com.webauthn4j.data.attestation.statement.AttestationStatement"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.attestation.authenticator.AbstractCOSEKey"
+    },
+    {
+      "type": "com.webauthn4j.data.attestation.authenticator.COSEKey"
+    },
+    {
+      "type": "com.webauthn4j.data.attestation.authenticator.Curve",
+      "methods": [
+        {
+          "name": "deserialize",
+          "parameterTypes": [
+            "int"
+          ]
+        },
+        {
+          "name": "getValue",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.attestation.authenticator.EC2COSEKey",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "byte[]",
+            "com.webauthn4j.data.attestation.statement.COSEAlgorithmIdentifier",
+            "java.util.List",
+            "com.webauthn4j.data.attestation.authenticator.Curve",
+            "byte[]",
+            "byte[]",
+            "byte[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.attestation.statement.AttestationStatement"
+    },
+    {
+      "type": "com.webauthn4j.data.attestation.statement.COSEAlgorithmIdentifier",
+      "methods": [
+        {
+          "name": "deserialize",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "getValue",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.attestation.statement.COSEKeyOperation",
+      "methods": [
+        {
+          "name": "getValue",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.attestation.statement.COSEKeyType",
+      "methods": [
+        {
+          "name": "getValue",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.attestation.statement.NoneAttestationStatement",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.client.ClientDataType",
+      "methods": [
+        {
+          "name": "create",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.client.CollectedClientData",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "com.webauthn4j.data.client.ClientDataType",
+            "com.webauthn4j.data.client.challenge.Challenge",
+            "com.webauthn4j.data.client.Origin",
+            "java.lang.Boolean",
+            "com.webauthn4j.data.client.Origin",
+            "com.webauthn4j.data.client.TokenBinding"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.client.Origin",
+      "methods": [
+        {
+          "name": "deserialize",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.client.TokenBinding"
+    },
+    {
+      "type": "com.webauthn4j.data.client.TokenBindingStatus"
+    },
+    {
+      "type": "com.webauthn4j.data.extension.HMACGetSecretOutput"
+    },
+    {
+      "type": "com.webauthn4j.data.extension.UvmEntries"
+    },
+    {
+      "type": "com.webauthn4j.data.extension.UvmEntry"
+    },
+    {
+      "type": "com.webauthn4j.data.extension.client.AuthenticationExtensionsClientOutputs",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.webauthn4j.data.extension.client.CredentialPropertiesOutput"
+    }
+  ]
+}

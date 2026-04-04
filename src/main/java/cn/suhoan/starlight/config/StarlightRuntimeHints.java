@@ -19,8 +19,6 @@ public class StarlightRuntimeHints implements RuntimeHintsRegistrar {
     private static final String FLYWAY_VENDOR_MIGRATION_DIRECTORY_PATTERN = "db/migration/*";
     private static final String FLYWAY_VENDOR_MIGRATION_RESOURCE_PATTERN = "db/migration/*/*.sql";
     private static final String ROOT_PACKAGE_PREFIX = "org/";
-    private static final String WEBAUTHN_PATTERN =
-            "classpath*:com/webauthn4j/data/**/*.class";
 
     @Override
     public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
@@ -31,29 +29,25 @@ public class StarlightRuntimeHints implements RuntimeHintsRegistrar {
         hints.resources().registerPattern(FLYWAY_VENDOR_MIGRATION_DIRECTORY_PATTERN);
         hints.resources().registerPattern(FLYWAY_VENDOR_MIGRATION_RESOURCE_PATTERN);
         hints.resources().registerPattern("logback.xml");
+        hints.resources().registerPattern("cert/*.pem");
         try {
-            registerHintsByClassPattern(hints, resolver, FLYWAY_CONFIGURATION_EXTENSION_PATTERN);
-            registerHintsByClassPattern(hints, resolver, WEBAUTHN_PATTERN);
+            registerFlywayConfigurationExtensionHints(hints, resolver);
         } catch (IOException ex) {
             throw new IllegalStateException("Failed to register native runtime hints", ex);
         }
     }
 
-    private void registerHintsByClassPattern(RuntimeHints hints,
-                                             PathMatchingResourcePatternResolver resolver,
-                                             String pattern) throws IOException {
-        Resource[] resources = resolver.getResources(pattern);
+    private void registerFlywayConfigurationExtensionHints(RuntimeHints hints,
+                                                           PathMatchingResourcePatternResolver resolver) throws IOException {
+        Resource[] resources = resolver.getResources(FLYWAY_CONFIGURATION_EXTENSION_PATTERN);
         for (Resource resource : resources) {
-            try {
-                String className = toClassName(resource);
-                if (!className.endsWith(".")) {
-                    hints.reflection().registerType(TypeReference.of(className),
-                            builder -> builder.withMembers(
-                                    MemberCategory.INVOKE_DECLARED_CONSTRUCTORS,
-                                    MemberCategory.INVOKE_PUBLIC_METHODS
-                            ));
-                }
-            } catch (Exception _) {
+            String className = toClassName(resource);
+            if (!className.endsWith(".")) {
+                hints.reflection().registerType(TypeReference.of(className),
+                        builder -> builder.withMembers(
+                                MemberCategory.INVOKE_DECLARED_CONSTRUCTORS,
+                                MemberCategory.INVOKE_PUBLIC_METHODS
+                        ));
             }
         }
     }
