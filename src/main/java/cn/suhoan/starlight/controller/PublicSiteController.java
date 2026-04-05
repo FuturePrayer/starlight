@@ -3,7 +3,6 @@ package cn.suhoan.starlight.controller;
 import cn.suhoan.starlight.dto.ApiResponse;
 import cn.suhoan.starlight.entity.UserAccount;
 import cn.suhoan.starlight.service.PublicSiteService;
-import cn.suhoan.starlight.service.QrCodeService;
 import cn.suhoan.starlight.service.SessionAuthService;
 import cn.suhoan.starlight.service.SettingsService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,16 +32,13 @@ public class PublicSiteController {
 
     private final SessionAuthService sessionAuthService;
     private final PublicSiteService publicSiteService;
-    private final QrCodeService qrCodeService;
     private final SettingsService settingsService;
 
     public PublicSiteController(SessionAuthService sessionAuthService,
                                 PublicSiteService publicSiteService,
-                                QrCodeService qrCodeService,
                                 SettingsService settingsService) {
         this.sessionAuthService = sessionAuthService;
         this.publicSiteService = publicSiteService;
-        this.qrCodeService = qrCodeService;
         this.settingsService = settingsService;
     }
 
@@ -99,15 +95,18 @@ public class PublicSiteController {
         return ApiResponse.ok(publicSiteService.getPublicSiteNote(token, noteId));
     }
 
-    /** 公开访问：获取站点二维码 */
+    /**
+     * 公开访问：获取站点 URL。
+     * <p>二维码由前端根据返回的 URL 自行生成，后端不再负责图片渲染。</p>
+     */
     @GetMapping("/api/site/{token}/qrcode")
     public ApiResponse<Map<String, Object>> siteQrCode(@PathVariable String token,
                                                        HttpServletRequest request) {
         // 先验证 token 有效性（会在 service 层抛异常）
         publicSiteService.getPublicSiteIndex(token);
         String url = getSiteUrl(token, request);
-        String qrDataUrl = qrCodeService.generateDataUrl(url, 280);
-        return ApiResponse.ok(Map.of("qrDataUrl", qrDataUrl, "url", url));
+        log.debug("获取站点URL: token={}", token);
+        return ApiResponse.ok(Map.of("url", url));
     }
 
     /** 构建站点公开访问 URL */

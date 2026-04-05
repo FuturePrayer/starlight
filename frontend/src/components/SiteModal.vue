@@ -131,6 +131,7 @@
 import { ref, onMounted } from 'vue'
 import { siteApi } from '@/api'
 import { useToastStore } from '@/stores/toast'
+import { generateQrDataUrl } from '@/utils/qrcode'
 import PopupLayer from '@/components/PopupLayer.vue'
 
 const props = defineProps({
@@ -192,8 +193,9 @@ async function loadSiteInfo() {
 async function loadQrCode(token) {
   try {
     const data = await siteApi.qrCode(token)
-    qrDataUrl.value = data.qrDataUrl
     if (data.url) siteUrl.value = data.url
+    // 使用前端库根据 URL 生成二维码
+    qrDataUrl.value = await generateQrDataUrl(data.url, 280)
   } catch {
     // 二维码加载失败不影响功能
   }

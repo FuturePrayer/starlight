@@ -4,7 +4,6 @@ import cn.suhoan.starlight.dto.ApiResponse;
 import cn.suhoan.starlight.entity.Note;
 import cn.suhoan.starlight.entity.UserAccount;
 import cn.suhoan.starlight.service.NoteService;
-import cn.suhoan.starlight.service.QrCodeService;
 import cn.suhoan.starlight.service.SessionAuthService;
 import cn.suhoan.starlight.service.ShareService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -37,16 +36,13 @@ public class ShareController {
     private final SessionAuthService sessionAuthService;
     private final NoteService noteService;
     private final ShareService shareService;
-    private final QrCodeService qrCodeService;
 
     public ShareController(SessionAuthService sessionAuthService,
                            NoteService noteService,
-                           ShareService shareService,
-                           QrCodeService qrCodeService) {
+                           ShareService shareService) {
         this.sessionAuthService = sessionAuthService;
         this.noteService = noteService;
         this.shareService = shareService;
-        this.qrCodeService = qrCodeService;
     }
 
     /** 获取指定笔记的所有分享链接 */
@@ -97,13 +93,16 @@ public class ShareController {
         return ApiResponse.ok(shareService.openShare(token, password));
     }
 
-    /** 获取分享链接的二维码 */
+    /**
+     * 获取分享链接的 URL。
+     * <p>二维码由前端根据返回的 URL 自行生成，后端不再负责图片渲染。</p>
+     */
     @GetMapping("/api/shares/{token}/qrcode")
     public ApiResponse<Map<String, Object>> shareQrCode(@PathVariable String token,
                                                          HttpServletRequest request) {
         String url = shareService.getShareUrl(token, getBaseUrl(request));
-        String qrDataUrl = qrCodeService.generateDataUrl(url, 280);
-        return ApiResponse.ok(Map.of("qrDataUrl", qrDataUrl, "url", url));
+        log.debug("获取分享链接URL: token={}", token);
+        return ApiResponse.ok(Map.of("url", url));
     }
 
     /** 从 HTTP 请求中提取基础 URL */

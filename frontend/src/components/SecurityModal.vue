@@ -15,7 +15,7 @@
         <template v-else-if="totpSetupData">
           <p class="hint">使用认证器应用扫描二维码，然后输入 6 位验证码完成绑定。</p>
           <div class="qr-container">
-            <img :src="totpSetupData.qrDataUrl" alt="TOTP QR Code" class="qr-img" />
+            <img v-if="totpQrDataUrl" :src="totpQrDataUrl" alt="TOTP QR Code" class="qr-img" />
           </div>
           <div class="form-field security-form-field security-form-field--compact">
             <label class="sl-label">密钥（手动输入）</label>
@@ -27,7 +27,7 @@
           </div>
           <div class="btn-row security-btn-row">
             <button class="sl-btn sl-btn--primary" @click="handleTotpConfirm" :disabled="!totpCode">确认绑定</button>
-            <button class="sl-btn" @click="totpSetupData = null">取消</button>
+            <button class="sl-btn" @click="totpSetupData = null; totpQrDataUrl = ''">取消</button>
           </div>
         </template>
         <!-- Not yet bound -->
@@ -75,6 +75,7 @@ import { authApi, adminApi, base64urlToBuffer, bufferToBase64url } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { formatTime } from '@/utils/markdown'
+import { generateQrDataUrl } from '@/utils/qrcode'
 import PopupLayer from '@/components/PopupLayer.vue'
 
 const emit = defineEmits(['close'])
@@ -85,6 +86,7 @@ const totpGlobalEnabled = ref(false)
 const passkeyGlobalEnabled = ref(false)
 const siteUrlHttps = ref(false)
 const totpSetupData = ref(null)
+const totpQrDataUrl = ref('')
 const totpCode = ref('')
 const passkeys = ref([])
 const registeringPasskey = ref(false)
@@ -112,8 +114,11 @@ onMounted(async () => {
 
 async function handleTotpSetup() {
   try {
-    totpSetupData.value = await authApi.totpSetup()
+    const data = await authApi.totpSetup()
+    totpSetupData.value = data
     totpCode.value = ''
+    // 使用前端库生成二维码
+    totpQrDataUrl.value = await generateQrDataUrl(data.otpAuthUri, 256)
   } catch (err) {
     if (err.message?.includes('尚未开启')) totpGlobalEnabled.value = false
     toast.error(err.message)
@@ -124,6 +129,7 @@ async function handleTotpConfirm() {
   try {
     await authApi.totpConfirm(totpSetupData.value.secret, totpCode.value)
     totpSetupData.value = null
+    totpQrDataUrl.value = ''
     totpCode.value = ''
     await authStore.fetchMe()
     toast.success('两步验证已绑定')

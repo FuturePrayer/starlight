@@ -48,7 +48,7 @@
     <div v-if="qrData" class="qr-section sl-card">
       <h4>分享二维码</h4>
       <div class="qr-container">
-        <img :src="qrData.qrDataUrl" alt="分享二维码" class="qr-img" />
+        <img v-if="qrImgDataUrl" :src="qrImgDataUrl" alt="分享二维码" class="qr-img" />
       </div>
       <div class="qr-url" @click="copyUrl(qrData.url)">{{ qrData.url }}</div>
       <p class="qr-hint">点击链接可复制，扫描二维码可直接访问。</p>
@@ -78,6 +78,7 @@ import { ref, onMounted } from 'vue'
 import { shareApi } from '@/api'
 import { useToastStore } from '@/stores/toast'
 import { formatTime } from '@/utils/markdown'
+import { generateQrDataUrl } from '@/utils/qrcode'
 import PopupLayer from '@/components/PopupLayer.vue'
 
 const props = defineProps({ noteId: String })
@@ -94,6 +95,7 @@ const day = ref(now.getDate())
 const hour = ref(23)
 const shares = ref([])
 const qrData = ref(null)
+const qrImgDataUrl = ref('')
 
 onMounted(async () => {
   try { shares.value = await shareApi.list(props.noteId) } catch {}
@@ -128,7 +130,10 @@ async function handleCreate() {
 
 async function handleShowQr(token) {
   try {
-    qrData.value = await shareApi.qrCode(token)
+    const data = await shareApi.qrCode(token)
+    qrData.value = data
+    // 使用前端库根据 URL 生成二维码
+    qrImgDataUrl.value = await generateQrDataUrl(data.url, 280)
   } catch (err) {
     toast.error(err.message)
   }
@@ -145,6 +150,7 @@ async function handleDelete(shareId) {
     await shareApi.delete(props.noteId, shareId)
     shares.value = await shareApi.list(props.noteId)
     qrData.value = null
+    qrImgDataUrl.value = ''
     toast.success('分享链接已删除')
   } catch (err) {
     toast.error(err.message)

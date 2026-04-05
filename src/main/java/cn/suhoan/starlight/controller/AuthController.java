@@ -3,7 +3,6 @@ package cn.suhoan.starlight.controller;
 import cn.suhoan.starlight.dto.ApiResponse;
 import cn.suhoan.starlight.entity.UserAccount;
 import cn.suhoan.starlight.service.AuthService;
-import cn.suhoan.starlight.service.QrCodeService;
 import cn.suhoan.starlight.service.SessionAuthService;
 import cn.suhoan.starlight.service.SettingsService;
 import cn.suhoan.starlight.service.TotpService;
@@ -47,7 +46,6 @@ public class AuthController {
     private final SessionAuthService sessionAuthService;
     private final SettingsService settingsService;
     private final TotpService totpService;
-    private final QrCodeService qrCodeService;
     private final WebAuthnService webAuthnService;
     private final ObjectMapper objectMapper;
 
@@ -55,14 +53,12 @@ public class AuthController {
                           SessionAuthService sessionAuthService,
                           SettingsService settingsService,
                           TotpService totpService,
-                          QrCodeService qrCodeService,
                           WebAuthnService webAuthnService,
                           ObjectMapper objectMapper) {
         this.authService = authService;
         this.sessionAuthService = sessionAuthService;
         this.settingsService = settingsService;
         this.totpService = totpService;
-        this.qrCodeService = qrCodeService;
         this.webAuthnService = webAuthnService;
         this.objectMapper = objectMapper;
     }
@@ -154,7 +150,10 @@ public class AuthController {
 
     // ──── TOTP 两步验证管理（需要登录） ────
 
-    /** 发起 TOTP 设置，生成密钥和二维码 */
+    /**
+     * 发起 TOTP 设置，生成密钥和 otpauth URI。
+     * <p>前端使用 otpAuthUri 自行生成二维码，无需后端参与图片渲染。</p>
+     */
     @PostMapping("/totp/setup")
     public ApiResponse<Map<String, Object>> totpSetup() {
         UserAccount user = sessionAuthService.requireUser();
@@ -162,11 +161,12 @@ public class AuthController {
             throw new IllegalArgumentException("管理员尚未开启两步验证功能");
         }
         String secret = totpService.generateSecret();
+        // 生成 otpauth:// URI，前端据此渲染二维码
         String otpAuthUri = totpService.generateOtpAuthUri(user.getEmail(), secret);
-        String qrDataUrl = qrCodeService.generateDataUrl(otpAuthUri, 256);
+        log.info("TOTP 设置发起: userId={}", user.getId());
         Map<String, Object> data = new HashMap<>();
         data.put("secret", secret);
-        data.put("qrDataUrl", qrDataUrl);
+        data.put("otpAuthUri", otpAuthUri);
         return ApiResponse.ok(data);
     }
 
