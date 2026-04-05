@@ -71,6 +71,21 @@
       </div>
     </div>
   </PopupLayer>
+
+  <PopupLayer
+    v-if="confirmState.visible"
+    title="确认操作"
+    tone="danger"
+    :description="confirmState.message"
+    width="min(360px, calc(100vw - 32px))"
+    :close-on-backdrop="false"
+    @close="confirmState.visible = false"
+  >
+    <template #footer>
+      <button class="sl-btn" @click="confirmState.visible = false">取消</button>
+      <button class="sl-btn sl-btn--danger" @click="handleConfirmOk">确定</button>
+    </template>
+  </PopupLayer>
 </template>
 
 <script setup>
@@ -84,6 +99,7 @@ import PopupLayer from '@/components/PopupLayer.vue'
 const props = defineProps({ noteId: String })
 const emit = defineEmits(['close'])
 const toast = useToastStore()
+const confirmState = ref({ visible: false, message: '', callback: null })
 
 const accessType = ref('PUBLIC')
 const sharePassword = ref('')
@@ -144,17 +160,28 @@ function copyUrl(url) {
   toast.info('链接已复制')
 }
 
-async function handleDelete(shareId) {
-  if (!confirm('确定删除该分享链接？')) return
-  try {
-    await shareApi.delete(props.noteId, shareId)
-    shares.value = await shareApi.list(props.noteId)
-    qrData.value = null
-    qrImgDataUrl.value = ''
-    toast.success('分享链接已删除')
-  } catch (err) {
-    toast.error(err.message)
+function handleDelete(shareId) {
+  confirmState.value = {
+    visible: true,
+    message: '确定删除该分享链接？',
+    callback: async () => {
+      try {
+        await shareApi.delete(props.noteId, shareId)
+        shares.value = await shareApi.list(props.noteId)
+        qrData.value = null
+        qrImgDataUrl.value = ''
+        toast.success('分享链接已删除')
+      } catch (err) {
+        toast.error(err.message)
+      }
+    }
   }
+}
+
+function handleConfirmOk() {
+  const cb = confirmState.value.callback
+  confirmState.value.visible = false
+  cb?.()
 }
 </script>
 

@@ -67,6 +67,38 @@
       </template>
     </div>
   </PopupLayer>
+
+  <PopupLayer
+    v-if="confirmState.visible"
+    title="确认操作"
+    tone="danger"
+    :description="confirmState.message"
+    width="min(360px, calc(100vw - 32px))"
+    :close-on-backdrop="false"
+    @close="confirmState.visible = false"
+  >
+    <template #footer>
+      <button class="sl-btn" @click="confirmState.visible = false">取消</button>
+      <button class="sl-btn sl-btn--danger" @click="handleConfirmOk">确定</button>
+    </template>
+  </PopupLayer>
+
+  <PopupLayer
+    v-if="promptState.visible"
+    title="输入"
+    :description="promptState.message"
+    width="min(380px, calc(100vw - 32px))"
+    :close-on-backdrop="false"
+    @close="promptState.visible = false"
+  >
+    <div class="form-field" style="margin-top:4px">
+      <input v-model="promptState.value" class="sl-input" @keyup.enter="handlePromptOk" />
+    </div>
+    <template #footer>
+      <button class="sl-btn" @click="promptState.visible = false">取消</button>
+      <button class="sl-btn sl-btn--primary" @click="handlePromptOk">确定</button>
+    </template>
+  </PopupLayer>
 </template>
 
 <script setup>
@@ -81,6 +113,8 @@ import PopupLayer from '@/components/PopupLayer.vue'
 const emit = defineEmits(['close'])
 const authStore = useAuthStore()
 const toast = useToastStore()
+const confirmState = ref({ visible: false, message: '', callback: null })
+const promptState = ref({ visible: false, message: '', value: '', callback: null })
 
 const totpGlobalEnabled = ref(false)
 const passkeyGlobalEnabled = ref(false)
@@ -138,14 +172,19 @@ async function handleTotpConfirm() {
   }
 }
 
-async function handleTotpRevoke() {
-  if (!confirm('确定解除两步验证绑定？')) return
-  try {
-    await authApi.totpRevoke()
-    await authStore.fetchMe()
-    toast.success('两步验证已解除')
-  } catch (err) {
-    toast.error(err.message)
+function handleTotpRevoke() {
+  confirmState.value = {
+    visible: true,
+    message: '确定解除两步验证绑定？',
+    callback: async () => {
+      try {
+        await authApi.totpRevoke()
+        await authStore.fetchMe()
+        toast.success('两步验证已解除')
+      } catch (err) {
+        toast.error(err.message)
+      }
+    }
   }
 }
 
@@ -189,12 +228,22 @@ async function handlePasskeyRegister() {
     }
 
     // 5. Send to server
-    const nickname = prompt('为这个通行密钥取个名字：', '我的通行密钥') || '通行密钥'
-    await authApi.passkeyRegisterFinish({ handle, credential: credentialResponse, nickname })
-
-    passkeys.value = await authApi.passkeyList()
-    await authStore.fetchMe()
-    toast.success('通行密钥已注册')
+    promptState.value = {
+      visible: true,
+      message: '为这个通行密钥取个名字：',
+      value: '我的通行密钥',
+      callback: async (nickname) => {
+        const name = nickname || '通行密钥'
+        try {
+          await authApi.passkeyRegisterFinish({ handle, credential: credentialResponse, nickname: name })
+          passkeys.value = await authApi.passkeyList()
+          await authStore.fetchMe()
+          toast.success('通行密钥已注册')
+        } catch (err) {
+          toast.error(err.message || '通行密钥注册失败')
+        }
+      }
+    }
   } catch (err) {
     if (err.name !== 'AbortError' && err.name !== 'NotAllowedError') {
       toast.error(err.message || '通行密钥注册失败')
@@ -204,21 +253,39 @@ async function handlePasskeyRegister() {
   }
 }
 
-async function handlePasskeyDelete(id) {
-  if (!confirm('确定删除该通行密钥？')) return
-  try {
-    await authApi.passkeyDelete(id)
-    passkeys.value = await authApi.passkeyList()
-    await authStore.fetchMe()
-    toast.success('通行密钥已删除')
-  } catch (err) {
-    toast.error(err.message)
+function handlePasskeyDelete(id) {
+  confirmState.value = {
+    visible: true,
+    message: '确定删除该通行密钥？',
+    callback: async () => {
+      try {
+        await authApi.passkeyDelete(id)
+        passkeys.value = await authApi.passkeyList()
+        await authStore.fetchMe()
+        toast.success('通行密钥已删除')
+      } catch (err) {
+        toast.error(err.message)
+      }
+    }
   }
 }
 
 function copyText(text) {
   navigator.clipboard?.writeText(text)
   toast.info('已复制到剪贴板')
+}
+
+function handleConfirmOk() {
+  const cb = confirmState.value.callback
+  confirmState.value.visible = false
+  cb?.()
+}
+
+function handlePromptOk() {
+  const cb = promptState.value.callback
+  const val = promptState.value.value
+  promptState.value.visible = false
+  cb?.(val)
 }
 </script>
 
