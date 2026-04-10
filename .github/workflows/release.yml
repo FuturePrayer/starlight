@@ -227,6 +227,57 @@ jobs:
           name: combined-release
           path: .docker/combined
 
+      - name: Prepare image tags
+        id: image_meta
+        shell: bash
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          OWNER_LC: ${{ needs.validate.outputs.owner_lc }}
+          IMAGE_NAME: ${{ needs.validate.outputs.image_name }}
+          EXTRA_REGISTRY: ${{ secrets.EXTRA_REGISTRY }}
+          EXTRA_REGISTRY_NAMESPACE: ${{ secrets.EXTRA_REGISTRY_NAMESPACE }}
+          EXTRA_REGISTRY_USERNAME: ${{ secrets.EXTRA_REGISTRY_USERNAME }}
+          EXTRA_REGISTRY_PASSWORD: ${{ secrets.EXTRA_REGISTRY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          GHCR_BASE="ghcr.io/${OWNER_LC}/${IMAGE_NAME}"
+          FRONTEND_TAGS="$(printf '%s\n%s' "${GHCR_BASE}:${VERSION}-frontend" "${GHCR_BASE}:latest-frontend")"
+          BACKEND_TAGS="$(printf '%s\n%s' "${GHCR_BASE}:${VERSION}-backend" "${GHCR_BASE}:latest-backend")"
+          COMBINED_TAGS="$(printf '%s\n%s' "${GHCR_BASE}:${VERSION}" "${GHCR_BASE}:latest")"
+
+          EXTRA_READY=false
+          EXTRA_REGISTRY_TRIMMED="$(echo "${EXTRA_REGISTRY}" | xargs)"
+          EXTRA_NAMESPACE_TRIMMED="$(echo "${EXTRA_REGISTRY_NAMESPACE}" | xargs)"
+          EXTRA_USERNAME_TRIMMED="$(echo "${EXTRA_REGISTRY_USERNAME}" | xargs)"
+          EXTRA_PASSWORD_TRIMMED="$(echo "${EXTRA_REGISTRY_PASSWORD}" | xargs)"
+
+          if [[ -n "${EXTRA_REGISTRY_TRIMMED}" && -n "${EXTRA_NAMESPACE_TRIMMED}" && -n "${EXTRA_USERNAME_TRIMMED}" && -n "${EXTRA_PASSWORD_TRIMMED}" ]]; then
+            EXTRA_READY=true
+            EXTRA_REGISTRY_TRIMMED="${EXTRA_REGISTRY_TRIMMED%/}"
+            EXTRA_NAMESPACE_TRIMMED="${EXTRA_NAMESPACE_TRIMMED#/}"
+            EXTRA_NAMESPACE_TRIMMED="${EXTRA_NAMESPACE_TRIMMED%/}"
+            EXTRA_BASE="${EXTRA_REGISTRY_TRIMMED}/${EXTRA_NAMESPACE_TRIMMED}/${IMAGE_NAME}"
+            FRONTEND_TAGS="$(printf '%s\n%s\n%s' "${FRONTEND_TAGS}" "${EXTRA_BASE}:${VERSION}-frontend" "${EXTRA_BASE}:latest-frontend")"
+            BACKEND_TAGS="$(printf '%s\n%s\n%s' "${BACKEND_TAGS}" "${EXTRA_BASE}:${VERSION}-backend" "${EXTRA_BASE}:latest-backend")"
+            COMBINED_TAGS="$(printf '%s\n%s\n%s' "${COMBINED_TAGS}" "${EXTRA_BASE}:${VERSION}" "${EXTRA_BASE}:latest")"
+          else
+            echo "第二镜像仓库 secrets 未配置完整，跳过额外推送。"
+          fi
+
+          {
+            echo "extra_registry_ready=${EXTRA_READY}"
+            echo "frontend_tags<<EOF"
+            echo "${FRONTEND_TAGS}"
+            echo "EOF"
+            echo "backend_tags<<EOF"
+            echo "${BACKEND_TAGS}"
+            echo "EOF"
+            echo "combined_tags<<EOF"
+            echo "${COMBINED_TAGS}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -234,15 +285,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to extra registry
+        if: steps.image_meta.outputs.extra_registry_ready == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.EXTRA_REGISTRY }}
+          username: ${{ secrets.EXTRA_REGISTRY_USERNAME }}
+          password: ${{ secrets.EXTRA_REGISTRY_PASSWORD }}
+
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.frontend
           push: true
-          tags: |
-            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:${{ needs.validate.outputs.version }}-frontend
-            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:latest-frontend
+          tags: ${{ steps.image_meta.outputs.frontend_tags }}
           labels: |
             org.opencontainers.image.title=${{ needs.validate.outputs.image_name }}
             org.opencontainers.image.version=${{ needs.validate.outputs.version }}
@@ -257,9 +314,7 @@ jobs:
           push: true
           build-args: |
             JAR_FILE=.docker/backend/${{ needs.validate.outputs.artifact_id }}-backend-${{ needs.validate.outputs.version }}.jar
-          tags: |
-            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:${{ needs.validate.outputs.version }}-backend
-            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:latest-backend
+          tags: ${{ steps.image_meta.outputs.backend_tags }}
           labels: |
             org.opencontainers.image.title=${{ needs.validate.outputs.image_name }}
             org.opencontainers.image.version=${{ needs.validate.outputs.version }}
@@ -274,9 +329,7 @@ jobs:
           push: true
           build-args: |
             JAR_FILE=.docker/combined/${{ needs.validate.outputs.artifact_id }}-combined-${{ needs.validate.outputs.version }}.jar
-          tags: |
-            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:${{ needs.validate.outputs.version }}
-            ghcr.io/${{ needs.validate.outputs.owner_lc }}/${{ needs.validate.outputs.image_name }}:latest
+          tags: ${{ steps.image_meta.outputs.combined_tags }}
           labels: |
             org.opencontainers.image.title=${{ needs.validate.outputs.image_name }}
             org.opencontainers.image.version=${{ needs.validate.outputs.version }}

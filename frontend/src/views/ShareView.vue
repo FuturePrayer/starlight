@@ -16,7 +16,11 @@
 
         <div class="share-outline-section">
           <h3>文档大纲</h3>
-          <OutlineList :markdown="noteMarkdown" />
+          <OutlineList
+            :markdown="noteMarkdown"
+            :active-anchor="activeOutlineAnchor"
+            @select="handleOutlineSelect"
+          />
         </div>
 
         <div class="share-password-section sl-card" v-if="needsPassword || !loaded">
@@ -41,8 +45,8 @@
           </div>
         </div>
       </div>
-      <div class="share-content">
-        <div v-if="loaded && noteMarkdown" class="markdown-body" v-html="renderedHtml"></div>
+      <div ref="shareContentRef" class="share-content" @scroll="handleContentScroll">
+        <div v-if="loaded && noteMarkdown" ref="shareMarkdownRef" class="markdown-body" v-html="renderedHtml"></div>
         <div v-else-if="errorMsg" class="empty-state">
           <div class="empty-icon">🔒</div>
           <h2>无法查看</h2>
@@ -58,15 +62,21 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useToastStore } from '@/stores/toast'
 import { shareApi } from '@/api'
 import { renderMarkdown, formatTime } from '@/utils/markdown'
+import {
+  enhanceMarkdown,
+  scrollMarkdownContainerToHash,
+  detectActiveHeadingAnchor
+} from '@/utils/markdownEnhance'
 import OutlineList from '@/components/OutlineList.vue'
 
 const route = useRoute()
+const router = useRouter()
 const themeStore = useThemeStore()
 const toast = useToastStore()
 
@@ -82,10 +92,46 @@ const accessType = ref('')
 const expiresAt = ref(null)
 const sidebarOpen = ref(false)
 const isMobile = ref(window.innerWidth <= 768)
+const shareContentRef = ref(null)
+const shareMarkdownRef = ref(null)
+const activeOutlineAnchor = ref('')
+
+function normalizeHash(value) {
+  return decodeURIComponent(String(value || '').replace(/^#/, '').trim())
+}
 
 const renderedHtml = computed(() => renderMarkdown(noteMarkdown.value))
 const accessLabel = computed(() => accessType.value === 'PASSWORD' ? '私密' : '公开')
 const expiresLabel = computed(() => formatTime(expiresAt.value))
+
+async function enhanceShareContent() {
+  await nextTick()
+  await enhanceMarkdown(shareMarkdownRef.value)
+  const scrolled = await applyHashScroll('auto')
+  if (!scrolled) {
+    activeOutlineAnchor.value = detectActiveHeadingAnchor(shareContentRef.value)
+  }
+}
+
+async function applyHashScroll(behavior = 'smooth') {
+  const anchor = normalizeHash(route.hash)
+  activeOutlineAnchor.value = anchor
+  return scrollMarkdownContainerToHash(shareContentRef.value, anchor, { behavior })
+}
+
+async function handleOutlineSelect(item) {
+  activeOutlineAnchor.value = item.anchor
+  await router.replace({ path: route.path, query: route.query, hash: `#${item.anchor}` })
+  scrollMarkdownContainerToHash(shareContentRef.value, item.anchor)
+}
+
+function handleResize() {
+  isMobile.value = window.innerWidth <= 768
+}
+
+function handleContentScroll() {
+  activeOutlineAnchor.value = detectActiveHeadingAnchor(shareContentRef.value)
+}
 
 async function loadShare() {
   const token = route.params.token
@@ -112,10 +158,27 @@ async function loadShare() {
   }
 }
 
+watch([renderedHtml, () => themeStore.currentId], async () => {
+  if (!loaded.value) return
+  await enhanceShareContent()
+}, { flush: 'post' })
+
+watch(() => route.hash, async hash => {
+  activeOutlineAnchor.value = normalizeHash(hash)
+  await nextTick()
+  await applyHashScroll('smooth')
+})
+
 onMounted(async () => {
   themeStore.loadCached()
-  window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 768 })
+  activeOutlineAnchor.value = normalizeHash(route.hash)
+  window.addEventListener('resize', handleResize)
   await loadShare()
+  await enhanceShareContent()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
 })
 </script>
 

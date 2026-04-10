@@ -172,7 +172,11 @@
             </div>
           </div>
           <div v-show="sidebarTab === 'outline'" class="outline-panel">
-            <OutlineList :markdown="outlineSource" />
+            <OutlineList
+              :markdown="outlineSource"
+              :active-anchor="activeOutlineAnchor"
+              @select="handleOutlineSelect"
+            />
           </div>
         </div>
       </div>
@@ -251,7 +255,7 @@
       </div>
 
       <!-- View mode -->
-      <div v-if="!noteStore.editMode" class="viewer-area">
+      <div v-if="!noteStore.editMode" ref="viewerAreaRef" class="viewer-area" @scroll="handleViewerScroll">
         <template v-if="noteStore.currentNote">
           <div v-if="isDeletedNote" class="trash-banner">
             <div class="trash-banner__title">这篇笔记当前位于回收站</div>
@@ -260,7 +264,7 @@
               恢复后即可继续编辑、分享与置顶。
             </div>
           </div>
-          <div class="markdown-body" v-html="renderedHtml"></div>
+          <div ref="viewerMarkdownRef" class="markdown-body" v-html="renderedHtml"></div>
         </template>
         <div v-else class="empty-state">
           <div class="empty-icon">✨</div>
@@ -302,10 +306,17 @@
             class="editor-textarea"
             placeholder="# 从这里开始记录你的星光..."
             @input="handleEditorInput"
+            @scroll="handleEditorScroll"
           ></textarea>
         </div>
-        <div v-if="previewVisible" class="preview-pane" :class="{ 'mobile-full': isMobile }">
-          <div class="markdown-body" v-html="livePreviewHtml"></div>
+        <div
+          v-if="previewVisible"
+          ref="previewPaneRef"
+          class="preview-pane"
+          :class="{ 'mobile-full': isMobile }"
+          @scroll="handlePreviewScroll"
+        >
+          <div ref="previewMarkdownRef" class="markdown-body" v-html="livePreviewHtml"></div>
         </div>
       </div>
     </main>
@@ -400,12 +411,18 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useNoteStore } from '@/stores/note'
 import { useToastStore } from '@/stores/toast'
-import { renderMarkdown, formatTime } from '@/utils/markdown'
+import { renderMarkdown, formatTime, parseOutline } from '@/utils/markdown'
+import {
+  enhanceMarkdown,
+  scrollMarkdownContainerToHash,
+  detectActiveHeadingAnchor,
+  detectActiveOutlineAnchorByEditor
+} from '@/utils/markdownEnhance'
 import { noteApi } from '@/api'
 import TreeNode from '@/components/TreeNode.vue'
 import OutlineList from '@/components/OutlineList.vue'
@@ -418,6 +435,7 @@ import ProfileModal from '@/components/ProfileModal.vue'
 import SecurityModal from '@/components/SecurityModal.vue'
 import SiteModal from '@/components/SiteModal.vue'
 
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
@@ -447,13 +465,24 @@ const deleteTargetTitle = ref('')
 const editorTitle = ref('')
 const editorContent = ref('')
 const editorCategory = ref('')
+const editorTextarea = ref(null)
+const viewerAreaRef = ref(null)
+const viewerMarkdownRef = ref(null)
+const previewPaneRef = ref(null)
+const previewMarkdownRef = ref(null)
 const nowTick = ref(Date.now())
 const saveInProgress = ref(false)
+const activeOutlineAnchor = ref('')
+const appReady = ref(false)
 
 const isMobile = ref(window.innerWidth <= 768)
 let autosaveTimer = null
 let clockTimer = null
 let searchDebounceTimer = null
+let editorScrollSyncTimer = null
+let previewScrollSyncTimer = null
+let syncFromEditor = false
+let syncFromPreview = false
 
 // Search state
 const searchInputRef = ref(null)
@@ -504,6 +533,8 @@ const outlineSource = computed(() => {
   if (noteStore.editMode) return editorContent.value
   return noteStore.currentNote?.markdownContent || ''
 })
+
+const outlineItems = computed(() => parseOutline(outlineSource.value))
 
 const categoryOptions = computed(() => {
   const result = []
@@ -575,6 +606,241 @@ function handleEditorInput() { noteStore.dirty = true }
 
 function togglePreview() { previewVisible.value = !previewVisible.value }
 
+function normalizeHash(value) {
+  return decodeURIComponent(String(value || '').replace(/^#/, '').trim())
+}
+
+function getOutlineItemByAnchor(anchor) {
+  return outlineItems.value.find(item => item.anchor === anchor) || null
+}
+
+function getScrollProgress(element) {
+  if (!element) return 0
+  const maxScrollTop = element.scrollHeight - element.clientHeight
+  if (maxScrollTop <= 0) return 0
+  return element.scrollTop / maxScrollTop
+}
+
+function setScrollProgress(element, progress) {
+  if (!element) return
+  const maxScrollTop = element.scrollHeight - element.clientHeight
+  element.scrollTop = maxScrollTop > 0 ? maxScrollTop * progress : 0
+}
+
+function releaseEditorSyncLock() {
+  clearTimeout(editorScrollSyncTimer)
+  editorScrollSyncTimer = setTimeout(() => {
+    syncFromPreview = false
+  }, 80)
+}
+
+function releasePreviewSyncLock() {
+  clearTimeout(previewScrollSyncTimer)
+  previewScrollSyncTimer = setTimeout(() => {
+    syncFromEditor = false
+  }, 80)
+}
+
+function syncPreviewToEditor() {
+  if (!noteStore.editMode || !previewVisible.value) return
+  const editor = editorTextarea.value
+  const preview = previewPaneRef.value
+  if (!editor || !preview) return
+  syncFromEditor = true
+  setScrollProgress(preview, getScrollProgress(editor))
+  releasePreviewSyncLock()
+}
+
+function syncEditorToPreview() {
+  if (!noteStore.editMode || !previewVisible.value) return
+  const editor = editorTextarea.value
+  const preview = previewPaneRef.value
+  if (!editor || !preview) return
+  syncFromPreview = true
+  setScrollProgress(editor, getScrollProgress(preview))
+  releaseEditorSyncLock()
+}
+
+function getLineOffset(text, lineNumber) {
+  const safeLineNumber = Math.max(1, Number(lineNumber) || 1)
+  let currentLine = 1
+  let offset = 0
+  const content = String(text || '')
+  while (currentLine < safeLineNumber && offset < content.length) {
+    const nextBreak = content.indexOf('\n', offset)
+    if (nextBreak < 0) {
+      return content.length
+    }
+    offset = nextBreak + 1
+    currentLine += 1
+  }
+  return offset
+}
+
+function scrollEditorToLine(lineNumber, { focus = false } = {}) {
+  const textarea = editorTextarea.value
+  if (!textarea || !lineNumber) return
+  const lineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight) || 24
+  const targetTop = Math.max((Number(lineNumber) - 1) * lineHeight - lineHeight * 2, 0)
+  syncFromPreview = true
+  textarea.scrollTo({ top: targetTop, behavior: 'smooth' })
+  const selectionStart = getLineOffset(editorContent.value, lineNumber)
+  textarea.setSelectionRange(selectionStart, selectionStart)
+  if (focus && !isMobile.value) {
+    textarea.focus()
+  }
+  releaseEditorSyncLock()
+}
+
+function handleEditorScroll() {
+  if (syncFromPreview) return
+  activeOutlineAnchor.value = detectActiveOutlineAnchorByEditor(editorTextarea.value, outlineItems.value)
+  syncPreviewToEditor()
+  if (previewVisible.value) {
+    activeOutlineAnchor.value = detectActiveHeadingAnchor(previewPaneRef.value)
+  }
+}
+
+function handlePreviewScroll() {
+  if (syncFromEditor) return
+  activeOutlineAnchor.value = detectActiveHeadingAnchor(previewPaneRef.value)
+  syncEditorToPreview()
+}
+
+function handleViewerScroll() {
+  activeOutlineAnchor.value = detectActiveHeadingAnchor(viewerAreaRef.value)
+}
+
+async function applyCurrentHashScroll(behavior = 'auto') {
+  const anchor = normalizeHash(route.hash)
+  activeOutlineAnchor.value = anchor
+  if (!anchor) {
+    return false
+  }
+
+  if (noteStore.editMode) {
+    const outlineItem = getOutlineItemByAnchor(anchor)
+    if (outlineItem) {
+      scrollEditorToLine(outlineItem.line)
+    }
+  }
+
+  const container = noteStore.editMode && previewVisible.value
+    ? previewPaneRef.value
+    : viewerAreaRef.value
+
+  if (!container) {
+    return false
+  }
+
+  return scrollMarkdownContainerToHash(container, anchor, { behavior })
+}
+
+async function enhanceViewerContent() {
+  if (noteStore.editMode) return
+  await nextTick()
+  await enhanceMarkdown(viewerMarkdownRef.value)
+  const scrolled = await applyCurrentHashScroll('auto')
+  if (!scrolled) {
+    activeOutlineAnchor.value = detectActiveHeadingAnchor(viewerAreaRef.value)
+  }
+}
+
+async function enhancePreviewContent() {
+  if (!noteStore.editMode || !previewVisible.value) return
+  await nextTick()
+  await enhanceMarkdown(previewMarkdownRef.value)
+  syncPreviewToEditor()
+  const scrolled = await applyCurrentHashScroll('auto')
+  if (!scrolled) {
+    activeOutlineAnchor.value = previewVisible.value
+      ? detectActiveHeadingAnchor(previewPaneRef.value)
+      : detectActiveOutlineAnchorByEditor(editorTextarea.value, outlineItems.value)
+  }
+}
+
+async function updateRouteHash(anchor) {
+  const nextHash = anchor ? `#${anchor}` : ''
+  if (route.hash === nextHash) {
+    activeOutlineAnchor.value = anchor || ''
+    return
+  }
+  await router.replace({ path: route.path, query: route.query, hash: nextHash })
+  activeOutlineAnchor.value = anchor || ''
+}
+
+async function handleOutlineSelect(item) {
+  await updateRouteHash(item.anchor)
+  activeOutlineAnchor.value = item.anchor
+
+  if (noteStore.editMode) {
+    scrollEditorToLine(item.line, { focus: true })
+    if (previewVisible.value) {
+      scrollMarkdownContainerToHash(previewPaneRef.value, item.anchor)
+    }
+    return
+  }
+
+  scrollMarkdownContainerToHash(viewerAreaRef.value, item.anchor)
+}
+
+async function syncRouteToCurrentNote({ replace = true, preserveHash = false } = {}) {
+  const noteId = noteStore.currentNote?.id || undefined
+  const nextHash = preserveHash ? route.hash : ''
+  const nextQuery = noteStore.currentNote?.deletedAt ? { trash: '1' } : {}
+  const currentNoteId = String(route.params.noteId || '')
+  const currentTrash = route.query.trash === '1'
+  const nextTrash = nextQuery.trash === '1'
+
+  if (currentNoteId === String(noteId || '') && currentTrash === nextTrash && route.hash === nextHash) {
+    return
+  }
+
+  const location = noteId
+    ? { name: 'App', params: { noteId }, query: nextQuery, hash: nextHash }
+    : { name: 'App', query: {}, hash: '' }
+
+  if (replace) {
+    await router.replace(location)
+    return
+  }
+  await router.push(location)
+}
+
+async function syncNoteFromRoute() {
+  if (!appReady.value) return
+  const noteId = String(route.params.noteId || '').trim()
+  const routeTrash = route.query.trash === '1'
+  activeOutlineAnchor.value = normalizeHash(route.hash)
+
+  if (!noteId) {
+    if (!noteStore.editMode && noteStore.currentNote) {
+      noteStore.clearCurrentNote()
+    }
+    return
+  }
+
+  const currentId = String(noteStore.currentNote?.id || '')
+  const currentTrash = Boolean(noteStore.currentNote?.deletedAt)
+  if (currentId === noteId && currentTrash === routeTrash) {
+    await nextTick()
+    await applyCurrentHashScroll('auto')
+    return
+  }
+
+  try {
+    if (routeTrash) {
+      await noteStore.openTrashNote(noteId)
+    } else {
+      await noteStore.openNote(noteId)
+    }
+    sidebarOpen.value = false
+    mobileActionsOpen.value = false
+  } catch (err) {
+    toast.error(err.message)
+  }
+}
+
 function formatAbsoluteTime(value) {
   return new Date(value).toLocaleString('zh-CN', {
     hour12: false
@@ -610,6 +876,7 @@ async function persistNote({ successMessage = '已保存', exitAfterSave = false
   saveInProgress.value = true
   try {
     await noteStore.saveNote(buildNotePayload())
+    await syncRouteToCurrentNote({ replace: true })
     if (exitAfterSave) {
       noteStore.finishEditing()
     }
@@ -638,6 +905,7 @@ async function handleFinish() {
 async function handleOpenNote(id) {
   try {
     await noteStore.openNote(id)
+    await syncRouteToCurrentNote({ replace: false })
     sidebarOpen.value = false
     mobileActionsOpen.value = false
   } catch (err) {
@@ -670,6 +938,7 @@ function handleDiscardExit() {
 function confirmDiscardExit() {
   showDiscardConfirm.value = false
   noteStore.discardEdit()
+  applyCurrentHashScroll('auto')
   toast.info('已退出编辑，未保存内容已放弃')
 }
 
@@ -680,6 +949,8 @@ function handleNewNote() {
   editorCategory.value = selectedCategoryId.value || ''
   sidebarOpen.value = false
   mobileActionsOpen.value = false
+  activeOutlineAnchor.value = ''
+  router.replace({ name: 'App', query: {}, hash: '' })
 }
 
 function handleShare() {
@@ -695,6 +966,7 @@ async function handleRestore(id = noteStore.currentNote?.id) {
   if (!id) return
   try {
     await noteStore.restoreNote(id)
+    await syncRouteToCurrentNote({ replace: true })
     toast.success('笔记已恢复')
     sidebarTab.value = 'tree'
     mobileActionsOpen.value = false
@@ -739,6 +1011,7 @@ async function confirmDeleteAction() {
       toast.success('已移入回收站')
       sidebarTab.value = 'trash'
     }
+    await syncRouteToCurrentNote({ replace: true })
     mobileActionsOpen.value = false
   } catch (err) {
     toast.error(err.message)
@@ -878,6 +1151,7 @@ async function handleTrashTabClick() {
 async function handleOpenSearchResult(id) {
   try {
     await noteStore.openNote(id)
+    await syncRouteToCurrentNote({ replace: false })
     sidebarOpen.value = false
     mobileActionsOpen.value = false
   } catch (err) {
@@ -888,12 +1162,40 @@ async function handleOpenSearchResult(id) {
 async function handleOpenTrashNote(id) {
   try {
     await noteStore.openTrashNote(id)
+    await syncRouteToCurrentNote({ replace: false })
     sidebarOpen.value = false
     mobileActionsOpen.value = false
   } catch (err) {
     toast.error(err.message)
   }
 }
+
+watch(() => [route.params.noteId, route.query.trash], async () => {
+  await syncNoteFromRoute()
+})
+
+watch(() => route.hash, async hash => {
+  activeOutlineAnchor.value = normalizeHash(hash)
+  await nextTick()
+  await applyCurrentHashScroll('smooth')
+})
+
+watch([renderedHtml, () => themeStore.currentId], async () => {
+  await enhanceViewerContent()
+}, { flush: 'post' })
+
+watch([livePreviewHtml, previewVisible, () => themeStore.currentId], async () => {
+  await enhancePreviewContent()
+}, { flush: 'post' })
+
+watch([() => noteStore.editMode, previewVisible], async () => {
+  await nextTick()
+  if (noteStore.editMode) {
+    await enhancePreviewContent()
+    return
+  }
+  await enhanceViewerContent()
+}, { flush: 'post' })
 
 onMounted(async () => {
   themeStore.loadCached()
@@ -913,6 +1215,11 @@ onMounted(async () => {
     clockTimer = setInterval(() => {
       nowTick.value = Date.now()
     }, 1000)
+    appReady.value = true
+    activeOutlineAnchor.value = normalizeHash(route.hash)
+    await syncNoteFromRoute()
+    await enhanceViewerContent()
+    await enhancePreviewContent()
   } catch {
     router.replace('/login')
   }
@@ -923,6 +1230,8 @@ onUnmounted(() => {
   clearInterval(autosaveTimer)
   clearInterval(clockTimer)
   clearTimeout(searchDebounceTimer)
+  clearTimeout(editorScrollSyncTimer)
+  clearTimeout(previewScrollSyncTimer)
 })
 </script>
 

@@ -16,7 +16,7 @@ const routes = [
     component: () => import('@/views/LoginView.vue')
   },
   {
-    path: '/app',
+    path: '/app/:noteId?',
     name: 'App',
     component: () => import('@/views/AppView.vue')
   },

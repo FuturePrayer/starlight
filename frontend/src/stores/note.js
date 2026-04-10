@@ -84,6 +84,11 @@ export const useNoteStore = defineStore('note', () => {
     return note
   }
 
+  function clearCurrentNote() {
+    currentNote.value = null
+    resetEditSession()
+  }
+
   async function saveNote(payload) {
     let note
     if (currentNote.value?.id) {
@@ -225,7 +230,7 @@ export const useNoteStore = defineStore('note', () => {
 
   return {
     tree, trashNotes, currentNote, editMode, dirty, autosaveEnabled, lastSavedAt, expandedCategoryIds,
-    refreshTree, refreshTrash, openNote, openTrashNote, saveNote, deleteNote, restoreNote, purgeNote, setPinned,
+    refreshTree, refreshTrash, openNote, openTrashNote, clearCurrentNote, saveNote, deleteNote, restoreNote, purgeNote, setPinned,
     createCategory, exportArchive, importArchive,
     startNewNote, enterEditMode, discardEdit, finishEditing,
     setEditMode, setAutosaveEnabled, hasExpandedCategory, setCategoryExpanded, toggleCategoryExpanded,

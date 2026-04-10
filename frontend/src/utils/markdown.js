@@ -104,10 +104,35 @@ function renderCodeBlock(content, { lang = '', showLineNumbers = false } = {}) {
   return `<div class="sl-code-block">${langLabel}<pre><code class="sl-code${highlightedClass}${languageClass}">${lineHtml}</code></pre></div>`
 }
 
+function createSlugTracker() {
+  return new Map()
+}
+
+function getUniqueSlug(text, tracker) {
+  const baseSlug = slugify(text)
+  const nextIndex = tracker.get(baseSlug) || 0
+  tracker.set(baseSlug, nextIndex + 1)
+  return nextIndex === 0 ? baseSlug : `${baseSlug}-${nextIndex + 1}`
+}
+
+function renderMermaidBlock(content) {
+  const encodedSource = encodeURIComponent(String(content || '').trim())
+  return [
+    '<div class="sl-mermaid" data-mermaid-source="',
+    encodedSource,
+    '">',
+    '<div class="sl-mermaid__placeholder">Mermaid 图表渲染中...</div>',
+    '</div>'
+  ].join('')
+}
+
 // ── Code blocks: fenced blocks with line numbers, indented blocks with same spacing ──
 md.renderer.rules.fence = function (tokens, idx) {
   const token = tokens[idx]
   const lang = token.info ? token.info.trim().split(/\s+/)[0] : ''
+  if (normalizeLanguage(lang) === 'mermaid') {
+    return renderMermaidBlock(token.content)
+  }
   return renderCodeBlock(token.content, { lang, showLineNumbers: true })
 }
 
@@ -123,8 +148,9 @@ md.renderer.rules.heading_open = function (tokens, idx, options, env, self) {
   const token = tokens[idx]
   const contentToken = tokens[idx + 1]
   if (contentToken && contentToken.children) {
+    env.__slSlugTracker ||= createSlugTracker()
     const text = contentToken.children.map(t => t.content).join('')
-    const slug = slugify(text)
+    const slug = getUniqueSlug(text, env.__slSlugTracker)
     token.attrSet('id', slug)
   }
   return defaultRender(tokens, idx, options, env, self)
@@ -135,15 +161,18 @@ export function renderMarkdown(text) {
 }
 
 export function parseOutline(markdown) {
+  const slugTracker = createSlugTracker()
   return String(markdown || '')
     .split(/\r?\n/)
-    .map(line => {
+    .map((line, index) => {
       const match = line.match(/^(#{2,6})\s+(.+)$/)
       if (!match) return null
+      const title = match[2].trim()
       return {
         level: match[1].length,
-        title: match[2].trim(),
-        anchor: slugify(match[2].trim())
+        title,
+        anchor: getUniqueSlug(title, slugTracker),
+        line: index + 1
       }
     })
     .filter(Boolean)

@@ -114,6 +114,7 @@ Passkey 相关说明：
 - 前端镜像：`ghcr.io/futureprayer/starlight:latest-frontend`
 - 后端镜像：`ghcr.io/futureprayer/starlight:latest-backend`
 - 原生镜像：`latest-native` / `latest-backend-native`
+- 中国大陆用户可以使用华为云仓库：`swr.cn-east-3.myhuaweicloud.com/suhoan/starlight:latest`
 
 前端镜像通过 `BACKEND_UPSTREAM` 反向代理后端。
 

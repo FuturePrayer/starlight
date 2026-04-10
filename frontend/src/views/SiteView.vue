@@ -62,7 +62,12 @@
 
           <!-- Outline panel -->
           <div v-show="sidebarTab === 'outline'" class="outline-panel">
-            <OutlineList v-if="currentNoteMarkdown" :markdown="currentNoteMarkdown" />
+            <OutlineList
+              v-if="currentNoteMarkdown"
+              :markdown="currentNoteMarkdown"
+              :active-anchor="activeOutlineAnchor"
+              @select="handleOutlineSelect"
+            />
             <div v-else class="empty-hint">选择一篇文章后查看大纲</div>
           </div>
         </div>
@@ -86,8 +91,8 @@
             返回列表
           </button>
         </div>
-        <div class="site-content">
-          <div class="markdown-body" v-html="renderedHtml"></div>
+        <div ref="siteContentRef" class="site-content" @scroll="handleContentScroll">
+          <div ref="siteMarkdownRef" class="markdown-body" v-html="renderedHtml"></div>
         </div>
       </template>
 
@@ -102,7 +107,7 @@
             </div>
           </div>
         </div>
-        <div class="site-content">
+        <div ref="siteContentRef" class="site-content" @scroll="handleContentScroll">
           <!-- Grouped view when has sub-categories -->
           <div v-if="hasSubCategories" class="site-grouped-list">
             <!-- Root category notes -->
@@ -175,7 +180,7 @@
 
       <!-- Loading / Error -->
       <template v-else>
-        <div class="site-content">
+        <div ref="siteContentRef" class="site-content" @scroll="handleContentScroll">
           <div v-if="errorMsg" class="empty-state">
             <div class="empty-icon">🔒</div>
             <h2>无法访问</h2>
@@ -192,12 +197,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useToastStore } from '@/stores/toast'
 import { siteApi } from '@/api'
 import { renderMarkdown, formatTime } from '@/utils/markdown'
+import {
+  enhanceMarkdown,
+  scrollMarkdownContainerToHash,
+  detectActiveHeadingAnchor
+} from '@/utils/markdownEnhance'
 import OutlineList from '@/components/OutlineList.vue'
 import SiteTreeNode from '@/components/SiteTreeNode.vue'
 
@@ -219,10 +229,56 @@ const sidebarOpen = ref(false)
 const sidebarTab = ref('tree')
 const isMobile = ref(window.innerWidth <= 768)
 const expandedCats = ref([])
+const siteContentRef = ref(null)
+const siteMarkdownRef = ref(null)
+const activeOutlineAnchor = ref('')
+
+function normalizeHash(value) {
+  return decodeURIComponent(String(value || '').replace(/^#/, '').trim())
+}
 
 const currentNoteId = computed(() => currentNote.value?.id || route.params.noteId || null)
 const currentNoteMarkdown = computed(() => currentNote.value?.markdownContent || '')
 const renderedHtml = computed(() => renderMarkdown(currentNoteMarkdown.value))
+
+async function enhanceSiteContent() {
+  if (!currentNote.value) return
+  await nextTick()
+  await enhanceMarkdown(siteMarkdownRef.value)
+  const scrolled = await applyHashScroll('auto')
+  if (!scrolled) {
+    activeOutlineAnchor.value = detectActiveHeadingAnchor(siteContentRef.value)
+  }
+}
+
+async function applyHashScroll(behavior = 'smooth') {
+  const anchor = normalizeHash(route.hash)
+  activeOutlineAnchor.value = anchor
+  return scrollMarkdownContainerToHash(siteContentRef.value, anchor, { behavior })
+}
+
+async function updateHash(anchor) {
+  const hash = anchor ? `#${anchor}` : ''
+  if (route.hash === hash) {
+    activeOutlineAnchor.value = anchor || ''
+    return
+  }
+  await router.replace({ path: route.path, query: route.query, hash })
+  activeOutlineAnchor.value = anchor || ''
+}
+
+async function handleOutlineSelect(item) {
+  await updateHash(item.anchor)
+  scrollMarkdownContainerToHash(siteContentRef.value, item.anchor)
+}
+
+function handleResize() {
+  isMobile.value = window.innerWidth <= 768
+}
+
+function handleContentScroll() {
+  activeOutlineAnchor.value = detectActiveHeadingAnchor(siteContentRef.value)
+}
 
 /** 根分类下的笔记（不属于任何子分类的） */
 const rootNotes = computed(() => {
@@ -340,7 +396,7 @@ async function loadNote(noteId) {
 /** 选择文章 */
 function handleSelectNote(noteId) {
   const token = route.params.token
-  router.push(`/site/${token}/${noteId}`)
+  router.push({ path: `/site/${token}/${noteId}`, hash: '' })
   sidebarOpen.value = false
 }
 
@@ -348,25 +404,42 @@ function handleSelectNote(noteId) {
 function handleBackToList() {
   currentNote.value = null
   const token = route.params.token
-  router.push(`/site/${token}`)
+  router.push({ path: `/site/${token}`, hash: '' })
 }
 
 // 监听路由参数变化
 watch(() => route.params.noteId, async (noteId) => {
   if (noteId) {
     await loadNote(noteId)
+    await enhanceSiteContent()
   } else {
     currentNote.value = null
   }
 }, { immediate: false })
 
+watch([renderedHtml, () => themeStore.currentId], async () => {
+  await enhanceSiteContent()
+}, { flush: 'post' })
+
+watch(() => route.hash, async hash => {
+  activeOutlineAnchor.value = normalizeHash(hash)
+  await nextTick()
+  await applyHashScroll('smooth')
+})
+
 onMounted(async () => {
   themeStore.loadCached()
-  window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 768 })
+  activeOutlineAnchor.value = normalizeHash(route.hash)
+  window.addEventListener('resize', handleResize)
   await loadSiteIndex()
   if (route.params.noteId) {
     await loadNote(route.params.noteId)
+    await enhanceSiteContent()
   }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
 })
 </script>
 

@@ -10,7 +10,7 @@
     </parent>
     <groupId>cn.suhoan</groupId>
     <artifactId>starlight</artifactId>
-    <version>0.1.9</version>
+    <version>0.2.0</version>
     <name>starlight</name>
     <description>starlight</description>
     <url/>
@@ -73,7 +73,7 @@
         <dependency>
             <groupId>com.webauthn4j</groupId>
             <artifactId>webauthn4j-core</artifactId>
-            <version>0.31.1.RELEASE</version>
+            <version>0.31.2.RELEASE</version>
         </dependency>
 
         <dependency>
