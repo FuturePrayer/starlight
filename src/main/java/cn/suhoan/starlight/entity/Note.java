@@ -4,7 +4,6 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
@@ -35,22 +34,18 @@ public class Note extends BaseEntity {
     private String title;
 
     /** Markdown 原始内容 */
-    @Lob
-    @Column(nullable = false, length = 65535)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String markdownContent;
 
     /** 由 Markdown 渲染后的 HTML 内容 */
-    @Lob
-    @Column(nullable = false, length = 65535)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String renderedHtml;
 
     /** 笔记大纲结构（JSON 格式），用于目录导航 */
-    @Lob
-    @Column(nullable = false, length = 65535)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String outlineJson;
 
     /** 纯文本内容，去除 Markdown 语法，用于全文搜索索引 */
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String plainText = "";
 

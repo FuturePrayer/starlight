@@ -1,11 +1,13 @@
 package cn.suhoan.starlight;
 
 import cn.suhoan.starlight.controller.AuthController;
+import cn.suhoan.starlight.config.PlainTextMigrationRunner;
 import cn.suhoan.starlight.dto.ApiResponse;
 import cn.suhoan.starlight.entity.Category;
 import cn.suhoan.starlight.entity.Note;
 import cn.suhoan.starlight.entity.UserAccount;
 import cn.suhoan.starlight.entity.UserCredential;
+import jakarta.persistence.EntityManager;
 import cn.suhoan.starlight.repository.NoteRepository;
 import cn.suhoan.starlight.repository.NoteShareRepository;
 import cn.suhoan.starlight.repository.UserCredentialRepository;
@@ -19,6 +21,7 @@ import cn.suhoan.starlight.service.search.NoteSearchService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -39,6 +42,7 @@ import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -69,7 +73,13 @@ class StarlightFeatureTests {
     private NoteSearchService noteSearchService;
 
     @Autowired
+    private PlainTextMigrationRunner plainTextMigrationRunner;
+
+    @Autowired
     private NoteRepository noteRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Autowired
     private NoteShareRepository noteShareRepository;
@@ -263,6 +273,26 @@ class StarlightFeatureTests {
         assertTrue(entryNames.contains("客户回访.md"));
         assertTrue(entryNames.contains("周会待办.md"));
         assertFalse(entryNames.contains("回收站专用词.md"));
+    }
+
+    @Test
+    void legacyNumericPlainTextCanBeRepairedFromMarkdown() {
+        UserAccount author = authService.register("plaintext-repair@example.com", "123456");
+        Note note = noteService.createNote(author, "历史搜索修复", "# 历史搜索修复\n\n这里是需要被恢复的正文内容", null);
+
+        entityManager.createNativeQuery("UPDATE sl_note SET plain_text = '123456' WHERE id = :id")
+                .setParameter("id", note.getId())
+                .executeUpdate();
+        entityManager.flush();
+        entityManager.clear();
+
+        plainTextMigrationRunner.run(new DefaultApplicationArguments());
+        entityManager.flush();
+        entityManager.clear();
+
+        Note repaired = noteRepository.findById(note.getId()).orElseThrow();
+        assertNotEquals("123456", repaired.getPlainText());
+        assertTrue(repaired.getPlainText().contains("这里是需要被恢复的正文内容"));
     }
 
     @Test

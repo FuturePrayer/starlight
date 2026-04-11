@@ -209,7 +209,7 @@ public class NoteController {
         if (q == null || q.isBlank()) {
             return ApiResponse.ok(Map.of("items", List.of(), "hasMore", false));
         }
-        int safeLimit = Math.min(Math.max(limit, 1), 50);
+        int safeLimit = Math.clamp(limit, 1, 50);
         int safeOffset = Math.max(offset, 0);
         UserAccount userAccount = sessionAuthService.requireUser();
         // 多取一条用于判断是否有下一页
