@@ -7,8 +7,11 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * PostgreSQL 全文搜索实现。
@@ -54,18 +57,24 @@ public class PostgresNoteSearchService implements NoteSearchService {
 
     @Override
     @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> search(String ownerId, String keyword, int offset, int limit) {
+    public List<Map<String, Object>> search(String ownerId, String keyword, int offset, int limit,
+                                            Collection<String> allowedCategoryIds) {
+        if (allowedCategoryIds != null && allowedCategoryIds.isEmpty()) {
+            return List.of();
+        }
+        String categoryCondition = buildCategoryCondition(allowedCategoryIds);
         String sql = """
                 SELECT id, title, plain_text, updated_at
                 FROM sl_note
                 WHERE owner_id = :ownerId
                   AND deleted_at IS NULL
                   AND (title ILIKE :pattern OR plain_text ILIKE :pattern)
+                %s
                 ORDER BY
                   CASE WHEN title ILIKE :pattern THEN 0 ELSE 1 END,
                   updated_at DESC
                 OFFSET :offset LIMIT :limit
-                """;
+                """.formatted(categoryCondition);
 
         String pattern = "%" + SearchSnippetUtil.escapeLike(keyword) + "%";
         Query query = entityManager.createNativeQuery(sql)
@@ -73,6 +82,7 @@ public class PostgresNoteSearchService implements NoteSearchService {
                 .setParameter("pattern", pattern)
                 .setParameter("offset", offset)
                 .setParameter("limit", limit);
+        bindCategoryParameters(query, allowedCategoryIds);
 
         List<Object[]> rows = query.getResultList();
         return rows.stream()
@@ -86,6 +96,26 @@ public class PostgresNoteSearchService implements NoteSearchService {
         if (value instanceof LocalDateTime ldt) return ldt;
         if (value instanceof Timestamp ts) return ts.toLocalDateTime();
         return null;
+    }
+
+    private String buildCategoryCondition(Collection<String> allowedCategoryIds) {
+        if (allowedCategoryIds == null) {
+            return "";
+        }
+        String placeholders = IntStream.range(0, allowedCategoryIds.size())
+                .mapToObj(index -> ":categoryId" + index)
+                .collect(Collectors.joining(", "));
+        return "AND category_id IN (" + placeholders + ")";
+    }
+
+    private void bindCategoryParameters(Query query, Collection<String> allowedCategoryIds) {
+        if (allowedCategoryIds == null) {
+            return;
+        }
+        int index = 0;
+        for (String categoryId : allowedCategoryIds) {
+            query.setParameter("categoryId" + index++, categoryId);
+        }
     }
 }
 

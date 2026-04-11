@@ -7,8 +7,11 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * MySQL 全文搜索实现。
@@ -46,15 +49,21 @@ public class MysqlNoteSearchService implements NoteSearchService {
 
     @Override
     @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> search(String ownerId, String keyword, int offset, int limit) {
+    public List<Map<String, Object>> search(String ownerId, String keyword, int offset, int limit,
+                                            Collection<String> allowedCategoryIds) {
+        if (allowedCategoryIds != null && allowedCategoryIds.isEmpty()) {
+            return List.of();
+        }
         // ngram_token_size 默认为 2，太短的关键词走 LIKE
         if (keyword.length() < 2) {
-            return likeFallback(ownerId, keyword, offset, limit);
+            return likeFallback(ownerId, keyword, offset, limit, allowedCategoryIds);
         }
-        return fulltextSearch(ownerId, keyword, offset, limit);
+        return fulltextSearch(ownerId, keyword, offset, limit, allowedCategoryIds);
     }
 
-    private List<Map<String, Object>> fulltextSearch(String ownerId, String keyword, int offset, int limit) {
+    private List<Map<String, Object>> fulltextSearch(String ownerId, String keyword, int offset, int limit,
+                                                     Collection<String> allowedCategoryIds) {
+        String categoryCondition = buildCategoryCondition(allowedCategoryIds);
         String sql = """
                 SELECT id, title, plain_text, updated_at,
                        MATCH(title, plain_text) AGAINST(:keyword IN BOOLEAN MODE) AS score
@@ -62,15 +71,17 @@ public class MysqlNoteSearchService implements NoteSearchService {
                 WHERE owner_id = :ownerId
                   AND deleted_at IS NULL
                   AND MATCH(title, plain_text) AGAINST(:keyword IN BOOLEAN MODE)
+                %s
                 ORDER BY score DESC, updated_at DESC
                 LIMIT :limit OFFSET :offset
-                """;
+                """.formatted(categoryCondition);
 
         Query query = entityManager.createNativeQuery(sql)
                 .setParameter("ownerId", ownerId)
                 .setParameter("keyword", keyword)
                 .setParameter("offset", offset)
                 .setParameter("limit", limit);
+        bindCategoryParameters(query, allowedCategoryIds);
 
         @SuppressWarnings("unchecked")
         List<Object[]> rows = query.getResultList();
@@ -81,7 +92,9 @@ public class MysqlNoteSearchService implements NoteSearchService {
                 .toList();
     }
 
-    private List<Map<String, Object>> likeFallback(String ownerId, String keyword, int offset, int limit) {
+    private List<Map<String, Object>> likeFallback(String ownerId, String keyword, int offset, int limit,
+                                                   Collection<String> allowedCategoryIds) {
+        String categoryCondition = buildCategoryCondition(allowedCategoryIds);
         String sql = """
                 SELECT id, title, plain_text, updated_at
                 FROM sl_note
@@ -89,11 +102,12 @@ public class MysqlNoteSearchService implements NoteSearchService {
                   AND deleted_at IS NULL
                   AND (LOWER(title) LIKE LOWER(:pattern)
                        OR LOWER(plain_text) LIKE LOWER(:pattern))
+                %s
                 ORDER BY
                   CASE WHEN LOWER(title) LIKE LOWER(:pattern) THEN 0 ELSE 1 END,
                   updated_at DESC
                 LIMIT :limit OFFSET :offset
-                """;
+                """.formatted(categoryCondition);
 
         String pattern = "%" + SearchSnippetUtil.escapeLike(keyword) + "%";
         Query query = entityManager.createNativeQuery(sql)
@@ -101,6 +115,7 @@ public class MysqlNoteSearchService implements NoteSearchService {
                 .setParameter("pattern", pattern)
                 .setParameter("offset", offset)
                 .setParameter("limit", limit);
+        bindCategoryParameters(query, allowedCategoryIds);
 
         @SuppressWarnings("unchecked")
         List<Object[]> rows = query.getResultList();
@@ -115,6 +130,26 @@ public class MysqlNoteSearchService implements NoteSearchService {
         if (value instanceof LocalDateTime ldt) return ldt;
         if (value instanceof Timestamp ts) return ts.toLocalDateTime();
         return null;
+    }
+
+    private String buildCategoryCondition(Collection<String> allowedCategoryIds) {
+        if (allowedCategoryIds == null) {
+            return "";
+        }
+        String placeholders = IntStream.range(0, allowedCategoryIds.size())
+                .mapToObj(index -> ":categoryId" + index)
+                .collect(Collectors.joining(", "));
+        return "AND category_id IN (" + placeholders + ")";
+    }
+
+    private void bindCategoryParameters(Query query, Collection<String> allowedCategoryIds) {
+        if (allowedCategoryIds == null) {
+            return;
+        }
+        int index = 0;
+        for (String categoryId : allowedCategoryIds) {
+            query.setParameter("categoryId" + index++, categoryId);
+        }
     }
 }
 

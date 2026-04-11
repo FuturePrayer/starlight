@@ -123,6 +123,13 @@ export const adminApi = {
   saveSettings: (data) => request('/api/admin/settings', { method: 'POST', body: JSON.stringify(data) })
 }
 
+export const apiKeyApi = {
+  list: () => request('/api/auth/api-keys'),
+  create: (data) => request('/api/auth/api-keys', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => request(`/api/auth/api-keys/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id) => request(`/api/auth/api-keys/${id}`, { method: 'DELETE' })
+}
+
 export const siteApi = {
   /** 获取分类的星迹书阁信息（需登录） */
   getInfo: (categoryId) => request(`/api/categories/${categoryId}/site`),

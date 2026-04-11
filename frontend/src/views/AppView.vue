@@ -10,7 +10,7 @@
       <div class="sidebar-inner">
         <!-- Profile section -->
         <div class="sidebar-profile">
-          <div class="profile-info" style="cursor:pointer" @click="showProfileModal = true" title="修改个人资料">
+          <div class="profile-info" style="cursor:pointer" @click="openSettings('profile')" title="打开设置中心">
             <div class="profile-avatar">{{ authStore.username?.charAt(0)?.toUpperCase() || '?' }}</div>
             <div>
               <div class="profile-name">{{ authStore.username }}</div>
@@ -18,7 +18,7 @@
             </div>
           </div>
           <div class="profile-actions">
-            <button class="sl-btn sl-btn--ghost sl-btn--sm" @click="showSecurityModal = true" title="安全设置">
+            <button class="sl-btn sl-btn--ghost sl-btn--sm" @click="openSettings('security')" title="安全与集成设置">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
             </button>
             <button class="sl-btn sl-btn--ghost sl-btn--sm" @click="handleLogout" title="退出登录">
@@ -44,7 +44,7 @@
           <button class="sl-btn" @click="showCategoryModal = true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
           </button>
-          <button v-if="authStore.isAdmin" class="sl-btn" @click="showAdminModal = true" title="管理员设置">
+          <button v-if="authStore.isAdmin" class="sl-btn" @click="openSettings('admin')" title="管理员设置">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
           </button>
         </div>
@@ -333,17 +333,11 @@
       @close="showCategoryModal = false"
       @created="handleCategoryCreated"
     />
-    <AdminModal
-      v-if="showAdminModal"
-      @close="showAdminModal = false"
-    />
-    <ProfileModal
-      v-if="showProfileModal"
-      @close="showProfileModal = false"
-    />
-    <SecurityModal
-      v-if="showSecurityModal"
-      @close="showSecurityModal = false"
+    <SettingsModal
+      v-if="showSettingsModal"
+      :tree-items="noteStore.tree.items"
+      :initial-tab="settingsInitialTab"
+      @close="showSettingsModal = false"
     />
     <ImportExportModal
       v-if="showImportExportModal"
@@ -430,9 +424,7 @@ import ImportExportModal from '@/components/ImportExportModal.vue'
 import PopupLayer from '@/components/PopupLayer.vue'
 import ShareModal from '@/components/ShareModal.vue'
 import CategoryModal from '@/components/CategoryModal.vue'
-import AdminModal from '@/components/AdminModal.vue'
-import ProfileModal from '@/components/ProfileModal.vue'
-import SecurityModal from '@/components/SecurityModal.vue'
+import SettingsModal from '@/components/SettingsModal.vue'
 import SiteModal from '@/components/SiteModal.vue'
 
 const route = useRoute()
@@ -450,9 +442,8 @@ const selectedCategoryId = ref(null)
 const allThemes = ref([])
 const showShareModal = ref(false)
 const showCategoryModal = ref(false)
-const showAdminModal = ref(false)
-const showProfileModal = ref(false)
-const showSecurityModal = ref(false)
+const showSettingsModal = ref(false)
+const settingsInitialTab = ref('profile')
 const showImportExportModal = ref(false)
 const showSiteModal = ref(false)
 const selectedCategoryName = ref('')
@@ -1033,6 +1024,11 @@ async function handleTogglePinned() {
 function handleCategoryCreated() {
   showCategoryModal.value = false
   toast.success('分类已创建')
+}
+
+function openSettings(tab = 'profile') {
+  settingsInitialTab.value = tab
+  showSettingsModal.value = true
 }
 
 function handleOpenSiteModal(categoryId) {

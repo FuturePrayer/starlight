@@ -1,4 +1,4 @@
-# *Starlight*
+# Starlight
 
 [English](./README.en.md) · 中文
 
@@ -11,29 +11,80 @@
 
 ![Starlight Logo](./logo.png)
 
-一个基于 **Spring Boot 4 + Vue 3** 的轻量笔记应用，用来写 Markdown 笔记、管理分类树、生成分享链接，并把分类发布成公开站点。
+Starlight 是一个基于 **Spring Boot 4 + Vue 3** 的 Markdown 笔记系统，支持分类树、全文搜索、分享链接、公开站点、主题扩展，以及面向 AI 客户端的 **MCP Server**。
 
-## 为什么是 Starlight
+## 特性概览
 
-- 📝 Markdown 笔记编辑、预览、30 秒自动保存
-- 🌲 无限级分类树、置顶、大纲、回收站
-- 🔎 搜索笔记标题与正文
+- 📝 Markdown 笔记编辑、自动保存、目录大纲
+- 🌲 无限级分类树、根目录笔记、置顶与回收站
+- 🔎 标题与正文全文搜索
 - 📦 ZIP 导入 / 导出（Markdown + 文件夹结构）
 - 🔗 公开分享、密码分享、过期时间、二维码
-- 🌌 星迹书阁：把某个分类及其子分类发布为只读公开站点
+- 🌌 星迹书阁：把分类发布为只读公开站点
 - 🎨 内置与外部主题
-- 🔐 TOTP 两步验证与 Passkey / WebAuthn
+- 🔐 TOTP 两步验证、Passkey / WebAuthn
+- 🤖 无状态 Streamable HTTP MCP Server，支持 API Key、目录范围和只读权限
 
 ## 技术栈
 
-- **Backend:** Java 25, Spring Boot 4, Spring MVC, Spring Data JPA, Flyway, Sa-Token
-- **Frontend:** Vue 3, Vite, Pinia, Vue Router
-- **Database:** H2 by default, also supports PostgreSQL and MySQL
-- **Packaging:** standalone frontend, Spring Boot Jar, GraalVM native image, Docker / GHCR
+- **后端：** Java 25、Spring Boot 4、Spring MVC、Spring Data JPA、Flyway、Sa-Token、Spring AI MCP
+- **前端：** Vue 3、Vite、Pinia、Vue Router
+- **数据库：** 默认 H2，同时支持 PostgreSQL 与 MySQL
+- **部署形态：** 合并镜像、前后端分离镜像、Spring Boot Jar、GraalVM Native Image
 
-## 快速开始
+## 快速部署
 
-### 方式一：运行完整 Web 应用（推荐）
+### 方式一：Docker Compose（推荐）
+
+仓库已提供根目录 `docker-compose.yml`，默认使用：
+
+- 合并镜像：`ghcr.io/futureprayer/starlight:latest`
+- 数据库：H2 文件库
+- 数据持久化目录：`./data`
+- 主题目录：`./themes`
+
+启动：
+
+```bash
+docker compose up -d
+```
+
+停止：
+
+```bash
+docker compose down
+```
+
+启动后访问：
+
+- `http://localhost:8080/login`
+- `http://localhost:8080/register`
+- `http://localhost:8080/app`
+
+首次启动说明：
+
+- 第一个注册用户会自动成为管理员
+- 公共注册默认关闭，可由管理员在设置中心开启
+- MCP Server 默认关闭，需管理员手动开启
+
+### 方式二：直接运行容器
+
+```bash
+docker run -d \
+  --name starlight \
+  -p 8080:8080 \
+  -v ./data:/app/data \
+  -v ./themes:/app/themes \
+  ghcr.io/futureprayer/starlight:latest
+```
+
+中国大陆环境可按需替换镜像源：
+
+- `swr.cn-east-3.myhuaweicloud.com/suhoan/starlight:latest`
+
+### 方式三：源码构建后运行
+
+先构建前端静态资源并打包后端：
 
 ```bash
 cd frontend
@@ -45,26 +96,103 @@ mvn clean package
 java -jar target/starlight-<version>.jar
 ```
 
-默认访问：
-
-- `http://localhost:8080/login`
-- `http://localhost:8080/register`
-- `http://localhost:8080/app`
-
-首次启动时：
-
-- 首个注册用户会自动成为管理员
-- 普通注册默认关闭，管理员可在应用内开启
-
-### 方式二：仅启动后端
+如果只需要后端 API：
 
 ```bash
 mvn spring-boot:run
 ```
 
-默认数据库为本地 H2 文件库：`./data/starlight`
+> 未将前端资源构建进后端时，服务仍可提供 API，但不会自带完整的合并式 Web UI。
 
-> 如果没有先构建前端静态资源，后端仍可提供 API，但不会自带完整 Web UI。
+## 配置说明
+
+默认配置位于 `src/main/resources/application.yaml`。
+
+### 常用环境变量
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `STARLIGHT_DATASOURCE_URL` | `jdbc:h2:file:./data/starlight;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE` | 数据库连接串 |
+| `STARLIGHT_DATASOURCE_USERNAME` | `sa` | 数据库用户名 |
+| `STARLIGHT_DATASOURCE_PASSWORD` | 空 | 数据库密码 |
+| `STARLIGHT_THEME_DIR` | `themes` | 外部主题目录 |
+| `STARLIGHT_NOTE_TRASH_RETENTION_DAYS` | `30` | 回收站保留天数 |
+| `STARLIGHT_NOTE_TRASH_CLEANUP_CRON` | `0 20 3 * * *` | 回收站清理计划 |
+| `JAVA_OPTS` | 空 | JVM 启动参数（容器场景常用） |
+
+### 数据库支持
+
+- **H2：** 默认方案，最适合单机部署与快速试用
+- **PostgreSQL：** 适合正式环境
+- **MySQL：** 适合已有 MySQL 基础设施的场景
+
+Flyway 会在启动时自动执行数据库迁移；运行时不依赖 JPA 自动建表。
+
+### HTTPS 与 Passkey
+
+若要启用 Passkey / WebAuthn：
+
+- 需要管理员显式开启通行密钥功能
+- 站点 URL 必须配置为 `https://`
+- 变更站点域名可能导致已有通行密钥失效，需要重新注册
+
+## MCP Server
+
+Starlight 内置 **Stateless Streamable HTTP MCP Server**，默认端点为：
+
+- `POST /api/mcp`
+
+### MCP 的启用方式
+
+1. 管理员进入设置中心，开启 **MCP Server** 开关
+2. 用户在设置中心创建自己的 **API Key**
+3. 为每个 Key 分别配置：
+   - 是否启用
+   - 是否只读（默认只读）
+   - 是否允许访问全部目录
+   - 指定目录范围（自动包含子目录）
+
+### MCP 权限模型
+
+- MCP **不使用普通登录会话**，必须通过 API Key 访问
+- 管理员关闭 MCP 后，所有 API Key 都无法访问 MCP 端点
+- 每个 Key 只能访问授权目录及其子目录内的分类与笔记
+- 只读 Key 只能使用查询类工具，不能执行增删改
+- 后端会记录每个 Key 的最近使用时间，便于在设置中心审计
+
+### 当前提供的工具
+
+| 工具名 | 说明 | 只读 Key 可用 |
+| --- | --- | --- |
+| `starlight_list_tree` | 查询目录树与笔记树，支持按分类与深度裁剪 | 是 |
+| `starlight_get_note_content` | 获取笔记 Markdown 原文与元数据 | 是 |
+| `starlight_search_note_content` | 在授权范围内全文搜索笔记 | 是 |
+| `starlight_create_category` | 创建分类 | 否 |
+| `starlight_update_category` | 修改分类名称或移动分类 | 否 |
+| `starlight_delete_category` | 删除空分类 | 否 |
+| `starlight_create_note` | 创建笔记 | 否 |
+| `starlight_update_note` | 修改笔记标题、内容或分类 | 否 |
+| `starlight_delete_note` | 将笔记移入回收站 | 否 |
+
+### MCP 接入提示
+
+- 推荐使用支持 **Streamable HTTP** 的 MCP 客户端
+- 认证头可使用：
+  - `Authorization: Bearer <api-key>`
+  - `X-API-Key: <api-key>`
+- 若模型会把空分类传成字符串 `"null"` 或 `"undefined"`，服务端已兼容为“根目录”
+
+## 镜像与发布
+
+仓库当前提供以下镜像变体：
+
+- `ghcr.io/futureprayer/starlight:latest`：Java 前后端合并镜像
+- `ghcr.io/futureprayer/starlight:latest-frontend`：独立前端镜像
+- `ghcr.io/futureprayer/starlight:latest-backend`：独立后端镜像
+- `ghcr.io/futureprayer/starlight:latest-native`：前后端合并原生镜像
+- `ghcr.io/futureprayer/starlight:latest-backend-native`：后端原生镜像
+
+推送 `v<version>` 标签后，可通过仓库中的发布工作流构建 Release 与容器镜像。
 
 ## 本地开发
 
@@ -76,7 +204,7 @@ npm ci
 npm run dev
 ```
 
-Vite 会将 `/api` 与 `/theme-files` 代理到 `http://localhost:8080`。
+Vite 开发服务器会将 `/api` 与 `/theme-files` 代理到 `http://localhost:8080`。
 
 ### 后端
 
@@ -90,62 +218,25 @@ mvn spring-boot:run
 mvn test
 ```
 
-## 配置摘要
-
-- 默认数据库：H2 文件库
-- 数据库切换：通过 `STARLIGHT_DATASOURCE_URL` 等环境变量切换到 PostgreSQL / MySQL
-- 外部主题目录：`STARLIGHT_THEME_DIR`，默认 `themes`
-- 回收站保留天数：`STARLIGHT_NOTE_TRASH_RETENTION_DAYS`，默认 `30`
-- 回收站清理 cron：`STARLIGHT_NOTE_TRASH_CLEANUP_CRON`
-
-Passkey 相关说明：
-
-- 需要管理员启用
-- 需要站点 URL 为 `https://`
-- 变更站点域名会清空已注册的通行密钥
-
-## 部署
-
-### Docker / GHCR
-
-仓库当前提供：
-
-- 合并镜像：`ghcr.io/futureprayer/starlight:latest`
-- 前端镜像：`ghcr.io/futureprayer/starlight:latest-frontend`
-- 后端镜像：`ghcr.io/futureprayer/starlight:latest-backend`
-- 原生镜像：`latest-native` / `latest-backend-native`
-- 中国大陆用户可以使用华为云仓库：`swr.cn-east-3.myhuaweicloud.com/suhoan/starlight:latest`
-
-前端镜像通过 `BACKEND_UPSTREAM` 反向代理后端。
-
-### 发布工作流
-
-仓库包含：
-
-- `.github/workflows/release.yml`
-- `.github/workflows/release-native.yml`
-
-推送 `v<version>` 标签后会自动构建 Releases 与 GHCR 镜像。
-
 ## 项目结构
 
 ```text
 startlight/
-├─ src/main/java/          # Spring Boot backend
-├─ src/main/resources/     # application.yaml, Flyway, static assets
-├─ frontend/               # Vue 3 + Vite frontend
-├─ deploy/nginx/           # Nginx template for standalone frontend
-├─ sql/                    # schema reference SQL
-└─ .github/workflows/      # release workflows
+├─ src/main/java/          # Spring Boot 后端源码
+├─ src/main/resources/     # 配置、Flyway、静态资源
+├─ frontend/               # Vue 3 + Vite 前端
+├─ deploy/nginx/           # 独立前端部署的 Nginx 模板
+├─ docker-compose.yml      # 默认 H2 的 Compose 部署文件
+├─ sql/                    # 初始化 / 参考 SQL
+└─ .github/workflows/      # 发布流程（如仓库中存在）
 ```
 
-## 相关说明
+## 说明
 
-- 当前工作区目录名是 `startlight`，但项目名、包名、产物名、镜像名均为 `starlight`
-- 数据库结构迁移由 **Flyway** 管理，运行时不是依赖 JPA 自动建表
-- 搜索功能在不同数据库下会使用不同实现，匹配细节可能略有差异
+- 当前工作区目录可能是 `startlight`，但应用名、包名、制品名和镜像名统一使用 `starlight`
+- 搜索功能在不同数据库上的实现有所区分，但都会保证功能可用
+- 后端设计兼顾 GraalVM Native Image，新增能力尽量避免不利于原生编译的实现方式
 
 ## License
 
 [**Anti 996**](./LICENSE)
-

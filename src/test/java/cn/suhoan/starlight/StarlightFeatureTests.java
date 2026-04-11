@@ -7,11 +7,17 @@ import cn.suhoan.starlight.entity.Category;
 import cn.suhoan.starlight.entity.Note;
 import cn.suhoan.starlight.entity.UserAccount;
 import cn.suhoan.starlight.entity.UserCredential;
+import cn.suhoan.starlight.repository.ApiKeyRepository;
 import jakarta.persistence.EntityManager;
+import io.modelcontextprotocol.common.McpTransportContext;
+import io.modelcontextprotocol.server.transport.ServerTransportSecurityException;
 import cn.suhoan.starlight.repository.NoteRepository;
 import cn.suhoan.starlight.repository.NoteShareRepository;
 import cn.suhoan.starlight.repository.UserCredentialRepository;
+import cn.suhoan.starlight.service.ApiKeyService;
 import cn.suhoan.starlight.service.AuthService;
+import cn.suhoan.starlight.service.McpAuthService;
+import cn.suhoan.starlight.service.McpNoteToolService;
 import cn.suhoan.starlight.service.NoteService;
 import cn.suhoan.starlight.service.NoteTransferService;
 import cn.suhoan.starlight.service.SettingsService;
@@ -33,6 +39,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -92,6 +99,18 @@ class StarlightFeatureTests {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private ApiKeyService apiKeyService;
+
+    @Autowired
+    private McpAuthService mcpAuthService;
+
+    @Autowired
+    private McpNoteToolService mcpNoteToolService;
+
+    @Autowired
+    private ApiKeyRepository apiKeyRepository;
 
     @Test
     void firstUserBecomesAdminAndRegistrationDefaultsToDisabled() {
@@ -358,6 +377,116 @@ class StarlightFeatureTests {
         assertEquals("notes.example.com", assertionPublicKey.get("rpId").textValue());
         assertTrue(assertionPublicKey.has("challenge"));
         assertEquals("preferred", assertionPublicKey.get("userVerification").textValue());
+    }
+
+    @Test
+    void apiKeyScopeAndReadOnlyPermissionShouldTakeEffectForMcpTools() {
+        UserAccount owner = authService.register("mcp-scope@example.com", "123456");
+        Category root = noteService.createCategory(owner, "工作", null);
+        Category child = noteService.createCategory(owner, "周报", root.getId());
+        Category secret = noteService.createCategory(owner, "私密", null);
+        Note visibleNote = noteService.createNote(owner, "周报总结", "本周进展一切顺利", child.getId());
+        noteService.createNote(owner, "私密备忘", "只允许在私密目录内访问", secret.getId());
+
+        Map<String, Object> createdKey = apiKeyService.createKey(owner, "只读周报 Key", true, false, List.of(root.getId()));
+        String rawKey = createdKey.get("apiKey").toString();
+        var principal = apiKeyService.authenticate(rawKey);
+
+        assertTrue(principal.readOnly());
+        assertTrue(principal.accessibleCategoryIds().contains(root.getId()));
+        assertTrue(principal.accessibleCategoryIds().contains(child.getId()));
+        assertFalse(principal.accessibleCategoryIds().contains(secret.getId()));
+
+        McpTransportContext transportContext = McpTransportContext.create(Map.of(
+                McpAuthService.TRANSPORT_PRINCIPAL_KEY, principal
+        ));
+
+        Map<String, Object> tree = mcpNoteToolService.listTree(null, null, transportContext);
+        String treeText = tree.toString();
+        assertTrue(treeText.contains("工作"));
+        assertTrue(treeText.contains("周报总结"));
+        assertFalse(treeText.contains("私密"));
+        assertFalse(treeText.contains("私密备忘"));
+
+        Map<String, Object> searchResult = mcpNoteToolService.searchNoteContent("周报", 0, 10, transportContext);
+        List<?> items = (List<?>) searchResult.get("items");
+        assertEquals(1, items.size());
+        assertTrue(items.getFirst().toString().contains(visibleNote.getId()));
+
+        assertThrows(RuntimeException.class, () -> mcpNoteToolService.createNote("新建", "内容", child.getId(), transportContext));
+    }
+
+    @Test
+    void mcpGlobalSwitchShouldGuardApiKeyAuthentication() throws Exception {
+        UserAccount owner = authService.register("mcp-toggle@example.com", "123456");
+        Map<String, Object> createdKey = apiKeyService.createKey(owner, "MCP 开关键测试", true, true, Collections.emptyList());
+        String rawKey = createdKey.get("apiKey").toString();
+
+        Map<String, List<String>> headers = Map.of("Authorization", List.of("Bearer " + rawKey));
+
+        settingsService.setMcpServerEnabled(false);
+        ServerTransportSecurityException disabledException = assertThrows(ServerTransportSecurityException.class,
+                () -> mcpAuthService.validateAndBind(headers));
+        assertEquals(503, disabledException.getStatusCode());
+
+        settingsService.setMcpServerEnabled(true);
+        mcpAuthService.validateAndBind(headers);
+        assertNotNull(apiKeyRepository.findById(createdKey.get("id").toString()).orElseThrow().getLastUsedAt());
+    }
+
+    @Test
+    void mcpUpdateNoteShouldTreatStringNullCategoryAsRoot() {
+        UserAccount owner = authService.register("mcp-null-category@example.com", "123456");
+        Category category = noteService.createCategory(owner, "临时分类", null);
+        Note note = noteService.createNote(owner, "待转根目录", "初始内容", category.getId());
+        Map<String, Object> createdKey = apiKeyService.createKey(owner, "根目录兼容测试", false, true, Collections.emptyList());
+        var principal = apiKeyService.authenticate(createdKey.get("apiKey").toString());
+        McpTransportContext transportContext = McpTransportContext.create(Map.of(
+                McpAuthService.TRANSPORT_PRINCIPAL_KEY, principal
+        ));
+
+        Map<String, Object> updated = mcpNoteToolService.updateNote(
+                note.getId(),
+                "已回到根目录",
+                "更新后的内容",
+                "null",
+                transportContext
+        );
+
+        assertEquals("已回到根目录", updated.get("title"));
+        assertEquals(null, updated.get("categoryId"));
+        assertEquals(null, noteService.getNoteDetail(owner.getId(), note.getId()).get("categoryId"));
+    }
+
+    @Test
+    void mcpTreeShouldSupportSubtreeDepthAndCompactNoteContent() {
+        UserAccount owner = authService.register("mcp-tree@example.com", "123456");
+        Category root = noteService.createCategory(owner, "项目", null);
+        Category child = noteService.createCategory(owner, "模块A", root.getId());
+        Category grandchild = noteService.createCategory(owner, "深层目录", child.getId());
+        Note childNote = noteService.createNote(owner, "模块A说明", "# 模块A说明\n\n这里是 Markdown 原文", child.getId());
+        noteService.createNote(owner, "深层笔记", "# 深层\n\n不应在 depth=1 时出现", grandchild.getId());
+
+        Map<String, Object> createdKey = apiKeyService.createKey(owner, "子树查询测试", true, true, Collections.emptyList());
+        var principal = apiKeyService.authenticate(createdKey.get("apiKey").toString());
+        McpTransportContext transportContext = McpTransportContext.create(Map.of(
+                McpAuthService.TRANSPORT_PRINCIPAL_KEY, principal
+        ));
+
+        Map<String, Object> tree = mcpNoteToolService.listTree(root.getId(), 1, transportContext);
+        assertEquals(root.getId(), tree.get("categoryId"));
+        assertEquals(1, tree.get("depth"));
+        String treeText = tree.toString();
+        assertTrue(treeText.contains("项目"));
+        assertTrue(treeText.contains("模块A"));
+        assertTrue(treeText.contains("模块A说明"));
+        assertFalse(treeText.contains("深层目录"));
+        assertFalse(treeText.contains("深层笔记"));
+
+        Map<String, Object> noteContent = mcpNoteToolService.getNoteContent(childNote.getId(), transportContext);
+        assertEquals(childNote.getId(), noteContent.get("id"));
+        assertEquals("# 模块A说明\n\n这里是 Markdown 原文", noteContent.get("markdownContent"));
+        assertFalse(noteContent.containsKey("renderedHtml"));
     }
 
     private byte[] createZipWithEntry(String entryName, String content) throws IOException {

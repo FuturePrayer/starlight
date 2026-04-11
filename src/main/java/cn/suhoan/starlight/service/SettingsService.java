@@ -31,6 +31,8 @@ public class SettingsService {
     public static final String TOTP_ENABLED_KEY = "totp.enabled";
     /** 配置项：是否启用通行密钥 */
     public static final String PASSKEY_ENABLED_KEY = "passkey.enabled";
+    /** 配置项：是否启用 MCP Server */
+    public static final String MCP_ENABLED_KEY = "mcp.enabled";
 
     private final AppSettingRepository appSettingRepository;
     private final UserAccountRepository userAccountRepository;
@@ -116,6 +118,12 @@ public class SettingsService {
         return Boolean.parseBoolean(getValue(PASSKEY_ENABLED_KEY, "false"));
     }
 
+    /** 查询 MCP Server 是否已启用。 */
+    @Transactional(readOnly = true)
+    public boolean isMcpServerEnabled() {
+        return Boolean.parseBoolean(getValue(MCP_ENABLED_KEY, "false"));
+    }
+
     /** 设置通行密钥开关，仅在 HTTPS 站点下允许启用 */
     public void setPasskeyEnabled(boolean enabled) {
         if (enabled) {
@@ -125,6 +133,12 @@ public class SettingsService {
             }
         }
         saveValue(PASSKEY_ENABLED_KEY, Boolean.toString(enabled));
+    }
+
+    /** 设置 MCP Server 开关。 */
+    public void setMcpServerEnabled(boolean enabled) {
+        log.info("设置 MCP Server 开关: enabled={}", enabled);
+        saveValue(MCP_ENABLED_KEY, Boolean.toString(enabled));
     }
 
     @Transactional(readOnly = true)

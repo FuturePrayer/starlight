@@ -44,6 +44,7 @@ public class AdminController {
         data.put("totpEnabled", settingsService.isTotpEnabled());
         data.put("passkeyEnabled", settingsService.isPasskeyEnabled());
         data.put("siteUrlHttps", settingsService.isSiteUrlHttps());
+        data.put("mcpEnabled", settingsService.isMcpServerEnabled());
         return ApiResponse.ok(data);
     }
 
@@ -65,16 +66,19 @@ public class AdminController {
         } else {
             settingsService.setPasskeyEnabled(false);
         }
+        settingsService.setMcpServerEnabled(request.mcpEnabled());
         Map<String, Object> data = new HashMap<>();
         data.put("registrationEnabled", settingsService.isRegistrationEnabled());
         data.put("shareBaseUrl", settingsService.getShareBaseUrl());
         data.put("totpEnabled", settingsService.isTotpEnabled());
         data.put("passkeyEnabled", settingsService.isPasskeyEnabled());
         data.put("siteUrlHttps", settingsService.isSiteUrlHttps());
+        data.put("mcpEnabled", settingsService.isMcpServerEnabled());
         return ApiResponse.ok(data);
     }
 
     /** 管理员设置请求体 */
     public record AdminSettingsRequest(boolean registrationEnabled, String shareBaseUrl,
-                                       boolean totpEnabled, boolean passkeyEnabled) {}
+                                       boolean totpEnabled, boolean passkeyEnabled,
+                                       boolean mcpEnabled) {}
 }

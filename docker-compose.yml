@@ -1,0 +1,13 @@
+services:
+  starlight:
+    image: ghcr.io/futureprayer/starlight:latest
+    container_name: starlight
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75.0"
+    volumes:
+      - ./data:/app/data
+      - ./themes:/app/themes
+

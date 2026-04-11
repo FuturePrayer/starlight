@@ -21,6 +21,15 @@ spring:
   threads:
     virtual:
       enabled: true
+  ai:
+    mcp:
+      server:
+        protocol: STATELESS
+        name: Starlight notebook stateless mcp server
+        version: 1.0.0
+        type: SYNC
+        streamable-http:
+          mcp-endpoint: /api/mcp
 
 starlight:
   theme-dir: ${STARLIGHT_THEME_DIR:themes}

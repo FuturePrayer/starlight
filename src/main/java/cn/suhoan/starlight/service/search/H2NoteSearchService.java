@@ -5,8 +5,11 @@ import jakarta.persistence.Query;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * H2 数据库全文搜索实现（LIKE 兜底方案，也作为未知数据库的默认实现）。
@@ -24,7 +27,20 @@ public class H2NoteSearchService implements NoteSearchService {
 
     @Override
     @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> search(String ownerId, String keyword, int offset, int limit) {
+    public List<Map<String, Object>> search(String ownerId, String keyword, int offset, int limit,
+                                            Collection<String> allowedCategoryIds) {
+        if (allowedCategoryIds != null && allowedCategoryIds.isEmpty()) {
+            return List.of();
+        }
+
+        String categoryCondition = "";
+        if (allowedCategoryIds != null) {
+            String placeholders = IntStream.range(0, allowedCategoryIds.size())
+                    .mapToObj(index -> ":categoryId" + index)
+                    .collect(Collectors.joining(", "));
+            categoryCondition = " AND category_id IN (" + placeholders + ")";
+        }
+
         // H2 的 LOWER() 不支持 CLOB，需要先 CAST 为 VARCHAR
         String sql = """
                 SELECT id, title, CAST(plain_text AS VARCHAR) AS plain_text, updated_at
@@ -37,7 +53,7 @@ public class H2NoteSearchService implements NoteSearchService {
                   CASE WHEN LOWER(title) LIKE :pattern THEN 0 ELSE 1 END,
                   updated_at DESC
                 LIMIT :limit OFFSET :offset
-                """;
+                """.replace("ORDER BY", categoryCondition + "\n                ORDER BY");
 
         String pattern = "%" + SearchSnippetUtil.escapeLike(keyword).toLowerCase() + "%";
         Query query = entityManager.createNativeQuery(sql)
@@ -45,6 +61,12 @@ public class H2NoteSearchService implements NoteSearchService {
                 .setParameter("pattern", pattern)
                 .setParameter("offset", offset)
                 .setParameter("limit", limit);
+        if (allowedCategoryIds != null) {
+            int index = 0;
+            for (String categoryId : allowedCategoryIds) {
+                query.setParameter("categoryId" + index++, categoryId);
+            }
+        }
 
         List<Object[]> rows = query.getResultList();
         return rows.stream()

@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.LinkedHashSet;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
@@ -282,8 +284,51 @@ public class NoteService {
      */
     @Transactional(readOnly = true)
     public Map<String, Object> buildTree(String ownerId) {
-        List<Category> categories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
-        List<Note> notes = noteRepository.findByOwnerIdAndDeletedAtIsNullOrderByUpdatedAtDesc(ownerId);
+        return buildTree(ownerId, null);
+    }
+
+    /**
+     * 构建指定分类权限范围内的树形结构。
+     * <p>当 accessibleCategoryIds 为 null 时表示不限制分类范围。</p>
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> buildTree(String ownerId, Set<String> accessibleCategoryIds) {
+        return buildTree(ownerId, accessibleCategoryIds, null, Integer.MAX_VALUE);
+    }
+
+    /**
+     * 构建指定分类权限范围与深度限制下的树形结构。
+     * <p>当 rootCategoryId 为空时表示查询根目录；当 depth 为 null 时表示不限制深度。</p>
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> buildTree(String ownerId,
+                                         Set<String> accessibleCategoryIds,
+                                         String rootCategoryId,
+                                         Integer depth) {
+        List<Category> allCategories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
+        List<Note> allNotes = noteRepository.findByOwnerIdAndDeletedAtIsNullOrderByUpdatedAtDesc(ownerId);
+
+        String normalizedRootCategoryId = normalizeNullableCategoryId(rootCategoryId);
+        int safeDepth = depth == null ? Integer.MAX_VALUE : Math.max(depth, 0);
+
+        boolean restricted = accessibleCategoryIds != null;
+        List<Category> visibleCategories = restricted
+                ? allCategories.stream().filter(category -> accessibleCategoryIds.contains(category.getId())).toList()
+                : allCategories;
+
+        Map<String, Integer> depthMap = computeCategoryDepths(visibleCategories, normalizedRootCategoryId, safeDepth);
+        Set<String> includedCategoryIds = depthMap.keySet();
+
+        List<Category> categories = visibleCategories.stream()
+                .filter(category -> includedCategoryIds.contains(category.getId()))
+                .toList();
+        List<Note> notes = restricted
+                ? allNotes.stream()
+                .filter(note -> isNoteIncluded(note, normalizedRootCategoryId, includedCategoryIds))
+                .toList()
+                : allNotes.stream()
+                .filter(note -> isNoteIncluded(note, normalizedRootCategoryId, includedCategoryIds))
+                .toList();
 
         Map<String, Map<String, Object>> categoryMap = new HashMap<>();
         List<Map<String, Object>> roots = new ArrayList<>();
@@ -329,6 +374,10 @@ public class NoteService {
 
         for (Category category : categories) {
             Map<String, Object> node = categoryMap.get(category.getId());
+            if (normalizedRootCategoryId != null && normalizedRootCategoryId.equals(category.getId())) {
+                roots.add(node);
+                continue;
+            }
             if (category.getParent() != null) {
                 Map<String, Object> parent = categoryMap.get(category.getParent().getId());
                 if (parent != null) {
@@ -356,15 +405,27 @@ public class NoteService {
                     continue;
                 }
             }
-            roots.add(node);
+            if (normalizedRootCategoryId == null) {
+                roots.add(node);
+            }
         }
 
         roots.sort(Comparator.comparing(item -> item.get("name").toString()));
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("items", roots);
         data.put("pinnedItems", pinnedItems);
-        data.put("trashCount", noteRepository.countByOwnerIdAndDeletedAtIsNotNull(ownerId));
+        data.put("trashCount", restricted ? 0 : noteRepository.countByOwnerIdAndDeletedAtIsNotNull(ownerId));
         return data;
+    }
+
+    /** 查询当前用户拥有的分类。 */
+    @Transactional(readOnly = true)
+    public Category getOwnedCategory(String ownerId, String categoryId) {
+        Category category = resolveCategory(ownerId, categoryId);
+        if (category == null) {
+            throw new ResponseStatusException(NOT_FOUND, "分类不存在");
+        }
+        return category;
     }
 
     /**
@@ -431,6 +492,49 @@ public class NoteService {
     }
 
     /**
+     * 更新分类名称或父级位置。
+     */
+    public Category updateCategory(UserAccount owner, String categoryId, String name, String parentId) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("分类名称不能为空");
+        }
+        Category category = resolveCategory(owner.getId(), categoryId);
+        Category newParent = resolveCategory(owner.getId(), parentId);
+        if (newParent != null) {
+            if (category.getId().equals(newParent.getId())) {
+                throw new IllegalArgumentException("分类不能移动到自身下方");
+            }
+            Set<String> descendants = collectDescendantCategoryIds(owner.getId(), category.getId());
+            if (descendants.contains(newParent.getId())) {
+                throw new IllegalArgumentException("分类不能移动到自己的子分类下");
+            }
+        }
+        category.setName(name.trim());
+        category.setParent(newParent);
+        Category saved = categoryRepository.save(category);
+        log.info("分类更新成功: categoryId={}, ownerId={}, parentId={}", saved.getId(), owner.getId(),
+                saved.getParent() == null ? null : saved.getParent().getId());
+        return saved;
+    }
+
+    /**
+     * 删除空分类。
+     * <p>若分类下仍存在子分类或笔记，则拒绝删除，避免误操作。</p>
+     */
+    public void deleteCategory(String ownerId, String categoryId) {
+        Category category = resolveCategory(ownerId, categoryId);
+        Set<String> descendants = collectDescendantCategoryIds(ownerId, categoryId);
+        if (descendants.size() > 1) {
+            throw new IllegalArgumentException("请先清空子分类后再删除该分类");
+        }
+        if (noteRepository.countByCategoryIdIn(descendants) > 0) {
+            throw new IllegalArgumentException("请先移除分类下的笔记后再删除该分类");
+        }
+        categoryRepository.delete(category);
+        log.info("分类删除成功: categoryId={}, ownerId={}", categoryId, ownerId);
+    }
+
+    /**
      * 根据分类 ID 和所有者 ID 解析分类实体。
      *
      * @param ownerId    用户 ID
@@ -439,11 +543,109 @@ public class NoteService {
      * @throws ResponseStatusException 当分类不存在时
      */
     private Category resolveCategory(String ownerId, String categoryId) {
-        if (categoryId == null || categoryId.isBlank()) {
+        String normalizedCategoryId = normalizeNullableCategoryId(categoryId);
+        if (normalizedCategoryId == null) {
             return null;
         }
-        return categoryRepository.findByIdAndOwnerId(categoryId, ownerId)
+        return categoryRepository.findByIdAndOwnerId(normalizedCategoryId, ownerId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "分类不存在"));
+    }
+
+    /**
+     * 归一化可空分类 ID。
+     * <p>兼容 MCP / Web 客户端把“无分类”错误传成字符串 "null" 的场景。</p>
+     */
+    public static String normalizeNullableCategoryId(String categoryId) {
+        if (categoryId == null) {
+            return null;
+        }
+        String normalized = categoryId.trim();
+        if (normalized.isBlank() || "null".equalsIgnoreCase(normalized) || "undefined".equalsIgnoreCase(normalized)) {
+            return null;
+        }
+        return normalized;
+    }
+
+    /** 收集某个分类及其所有子分类 ID。 */
+    private Set<String> collectDescendantCategoryIds(String ownerId, String rootCategoryId) {
+        List<Category> categories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
+        Map<String, List<String>> childrenMap = new HashMap<>();
+        for (Category category : categories) {
+            if (category.getParent() == null) {
+                continue;
+            }
+            childrenMap.computeIfAbsent(category.getParent().getId(), key -> new ArrayList<>())
+                    .add(category.getId());
+        }
+        Set<String> result = new LinkedHashSet<>();
+        ArrayList<String> queue = new ArrayList<>();
+        result.add(rootCategoryId);
+        queue.add(rootCategoryId);
+        while (!queue.isEmpty()) {
+            String currentId = queue.removeFirst();
+            for (String childId : childrenMap.getOrDefault(currentId, List.of())) {
+                if (result.add(childId)) {
+                    queue.add(childId);
+                }
+            }
+        }
+        return result;
+    }
+
+    /** 计算分类相对根节点的深度。 */
+    private Map<String, Integer> computeCategoryDepths(List<Category> categories, String rootCategoryId, int safeDepth) {
+        Map<String, Integer> depthMap = new HashMap<>();
+        Map<String, List<Category>> childrenMap = new HashMap<>();
+        Category rootCategory = null;
+        for (Category category : categories) {
+            if (rootCategoryId != null && rootCategoryId.equals(category.getId())) {
+                rootCategory = category;
+            }
+            if (category.getParent() != null) {
+                childrenMap.computeIfAbsent(category.getParent().getId(), ignored -> new ArrayList<>())
+                        .add(category);
+            }
+        }
+
+        if (rootCategoryId != null && rootCategory == null) {
+            return depthMap;
+        }
+
+        ArrayList<Category> queue = new ArrayList<>();
+        if (rootCategory != null) {
+            depthMap.put(rootCategory.getId(), 0);
+            queue.add(rootCategory);
+        } else {
+            for (Category category : categories) {
+                if (category.getParent() == null) {
+                    depthMap.put(category.getId(), 0);
+                    queue.add(category);
+                }
+            }
+        }
+
+        while (!queue.isEmpty()) {
+            Category current = queue.removeFirst();
+            int currentDepth = depthMap.getOrDefault(current.getId(), 0);
+            if (currentDepth >= safeDepth) {
+                continue;
+            }
+            for (Category child : childrenMap.getOrDefault(current.getId(), List.of())) {
+                if (!depthMap.containsKey(child.getId())) {
+                    depthMap.put(child.getId(), currentDepth + 1);
+                    queue.add(child);
+                }
+            }
+        }
+        return depthMap;
+    }
+
+    /** 判断笔记是否应出现在当前根节点与深度限制下。 */
+    private boolean isNoteIncluded(Note note, String rootCategoryId, Set<String> includedCategoryIds) {
+        if (note.getCategory() == null) {
+            return rootCategoryId == null;
+        }
+        return includedCategoryIds.contains(note.getCategory().getId());
     }
 
     /**

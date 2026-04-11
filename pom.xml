@@ -10,7 +10,7 @@
     </parent>
     <groupId>cn.suhoan</groupId>
     <artifactId>starlight</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <name>starlight</name>
     <description>starlight</description>
     <url/>
@@ -41,6 +41,8 @@
     </scm>
     <properties>
         <java.version>25</java.version>
+        <spring-ai.version>2.0.0-M4</spring-ai.version>
+        <maven.compiler.parameters>true</maven.compiler.parameters>
     </properties>
     <dependencies>
         <dependency>
@@ -50,6 +52,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
@@ -102,6 +108,17 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
         <plugins>

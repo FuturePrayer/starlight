@@ -40,5 +40,8 @@ public interface NoteRepository extends JpaRepository<Note, String> {
 
     /** 查询多个分类下未删除的笔记，按置顶优先、更新时间倒序排列 */
     List<Note> findByCategoryIdInAndDeletedAtIsNullOrderByPinnedFlagDescUpdatedAtDesc(Collection<String> categoryIds);
+
+    /** 统计指定分类集合下的笔记数量（包含回收站），用于删除分类前校验。 */
+    long countByCategoryIdIn(Collection<String> categoryIds);
 }
 
