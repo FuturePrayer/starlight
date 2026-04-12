@@ -170,6 +170,55 @@ Starlight includes a built-in **Stateless Streamable HTTP MCP Server**. The defa
 - read-only keys can call query tools only; write tools are blocked
 - the backend records the last usage time for every key for audit and management
 
+### `starlight_list_tree` root semantics
+
+When an MCP client omits `categoryId`, sends `null`, or sends the string values `"null"` / `"undefined"`, `starlight_list_tree` reads from the **MCP scope root** of the current API Key instead of always exposing the real top-level root.
+
+The response now also includes:
+
+- `rootCategoryId`
+- `rootCategoryName`
+- `virtualRoot`
+- `scopeHints`
+
+Typical cases:
+
+| API Key scope | MCP root behavior |
+| --- | --- |
+| Access to all categories | `rootCategoryId = null`, which represents the real root |
+| One scoped path with a shared parent, for example only `/a/b/c` | The MCP root is mapped to `/a/b`; a root query returns `categoryId = b` and `rootCategoryId = b`, and only the authorized entry category `c` is exposed under that root |
+| Multiple disjoint scoped paths, for example `/a/b/c` and `/a/e/f` | MCP returns a virtual root: `rootCategoryId = "__mcp_virtual_root__"`, `categoryId = "__mcp_virtual_root__"`, and `virtualRoot = true`; only `c` and `f` are shown under that root |
+
+### `scopeHints` fields
+
+`scopeHints` helps AI clients understand whether the current view is just a scope container and which category IDs are the best next drill-down targets:
+
+| Field | Meaning |
+| --- | --- |
+| `rootMode` | Root mode: `real_root` / `shared_parent` / `virtual_root` |
+| `currentView` | Whether the current response is a `root` view or a `category` view |
+| `currentNodeVirtualRoot` | Whether the current node itself is the virtual root |
+| `scopeBoundaryContainer` | Whether the current node is only a scope-boundary container rather than a directly authorized write target |
+| `scopeBoundaryType` | Boundary type: `virtual_root` / `shared_parent` / `none` |
+| `recommendedNextAction` | Recommended next step: `query_child_category` or `read_note_or_search` |
+| `nextQueryCategoryIds` | Category IDs recommended for the next `starlight_list_tree` call |
+
+If `recommendedNextAction = query_child_category`, the client should usually pick one value from `nextQueryCategoryIds` and call `starlight_list_tree(categoryId=..., depth=...)` again.
+
+### Low-depth queries and `childrenTruncated`
+
+Even when `depth` is not large enough to expand deeper content, `starlight_list_tree` still returns basic metadata for child categories at the current level, including:
+
+- `id`
+- `name`
+- `type = category`
+- `parentId`
+- `childCategoryCount`
+- `childNoteCount`
+- `hasChildren`
+
+If a category is not expanded further because of the depth limit, that node also includes `childrenTruncated = true`. This allows AI clients to distinguish “no children” from “children exist but require another query”.
+
 ### Available tools
 
 | Tool | Description | Available in read-only mode |
@@ -191,6 +240,7 @@ Starlight includes a built-in **Stateless Streamable HTTP MCP Server**. The defa
   - `Authorization: Bearer <api-key>`
   - `X-API-Key: <api-key>`
 - The server already treats `"null"` and `"undefined"` category values as the root directory for model compatibility
+- The current Spring AI annotation-based MCP server does not support low-complexity per-request trimming of `tools/list`; read-only keys may still see write tools, but actual write calls are still rejected server-side
 
 ## Images and Releases
 

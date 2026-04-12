@@ -11,9 +11,9 @@ import org.springframework.ai.mcp.annotation.McpArg;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Starlight MCP 笔记工具集。
@@ -25,41 +25,31 @@ public class McpNoteToolService {
     private static final Logger log = LoggerFactory.getLogger(McpNoteToolService.class);
 
     private final McpAuthService mcpAuthService;
+    private final McpScopeService mcpScopeService;
     private final SessionAuthService sessionAuthService;
     private final NoteService noteService;
     private final NoteSearchService noteSearchService;
 
     public McpNoteToolService(McpAuthService mcpAuthService,
+                              McpScopeService mcpScopeService,
                               SessionAuthService sessionAuthService,
                               NoteService noteService,
                               NoteSearchService noteSearchService) {
         this.mcpAuthService = mcpAuthService;
+        this.mcpScopeService = mcpScopeService;
         this.sessionAuthService = sessionAuthService;
         this.noteService = noteService;
         this.noteSearchService = noteSearchService;
     }
 
-    @McpTool(name = "starlight_list_tree", description = "查询当前 API Key 权限范围内的分类目录和笔记树结构",
+    @McpTool(name = "starlight_list_tree", description = "查询当前 API Key 权限范围内的分类目录和笔记树结构，并返回权限根与后续查询提示",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false, openWorldHint = false))
     public Map<String, Object> listTree(@McpArg(name = "categoryId", description = "可选。指定要查询的起始分类 ID；省略、null 或字符串 \"null\" 表示根目录") String categoryId,
                                         @McpArg(name = "depth", description = "可选。查询深度，默认 2，最小为 0") Integer depth,
                                         McpTransportContext transportContext) {
         McpApiKeyPrincipal principal = mcpAuthService.requirePrincipal(transportContext);
-        String normalizedCategoryId = NoteService.normalizeNullableCategoryId(categoryId);
-        if (normalizedCategoryId != null) {
-            noteService.getOwnedCategory(principal.ownerId(), normalizedCategoryId);
-            mcpAuthService.assertCategoryAccessible(principal, normalizedCategoryId);
-        }
-        int safeDepth = depth == null ? 2 : Math.max(depth, 0);
         log.debug("MCP 查询目录树: apiKeyId={}, ownerId={}", principal.apiKeyId(), principal.ownerId());
-        Map<String, Object> result = new java.util.LinkedHashMap<>(noteService.buildTree(
-                principal.ownerId(),
-                principal.allowAllCategories() ? null : principal.accessibleCategoryIds(),
-                normalizedCategoryId,
-                safeDepth));
-        result.put("categoryId", normalizedCategoryId);
-        result.put("depth", safeDepth);
-        return result;
+        return new LinkedHashMap<>(mcpScopeService.buildScopedTree(principal, categoryId, depth));
     }
 
     @McpTool(name = "starlight_create_category", description = "创建分类目录",
@@ -68,7 +58,7 @@ public class McpNoteToolService {
                                               @McpArg(name = "parentId", description = "父分类 ID，可为空") String parentId,
                                               McpTransportContext transportContext) {
         McpApiKeyPrincipal principal = mcpAuthService.requireWritable(transportContext);
-        mcpAuthService.assertCategoryAccessible(principal, parentId);
+        mcpScopeService.assertWritableCategoryAccessible(principal, parentId);
         UserAccount owner = sessionAuthService.findUserById(principal.ownerId());
         var category = noteService.createCategory(owner, name, parentId);
         return categoryResult(category);
@@ -82,7 +72,7 @@ public class McpNoteToolService {
                                               McpTransportContext transportContext) {
         McpApiKeyPrincipal principal = mcpAuthService.requireWritable(transportContext);
         mcpAuthService.assertCategoryAccessible(principal, categoryId);
-        mcpAuthService.assertCategoryAccessible(principal, parentId);
+        mcpScopeService.assertWritableCategoryAccessible(principal, parentId);
         UserAccount owner = sessionAuthService.findUserById(principal.ownerId());
         var category = noteService.updateCategory(owner, categoryId, name, parentId);
         return categoryResult(category);
@@ -105,7 +95,7 @@ public class McpNoteToolService {
                                           @McpArg(name = "categoryId", description = "分类 ID，可为空") String categoryId,
                                           McpTransportContext transportContext) {
         McpApiKeyPrincipal principal = mcpAuthService.requireWritable(transportContext);
-        mcpAuthService.assertCategoryAccessible(principal, categoryId);
+        mcpScopeService.assertWritableCategoryAccessible(principal, categoryId);
         UserAccount owner = sessionAuthService.findUserById(principal.ownerId());
         Note note = noteService.createNote(owner, title, markdownContent, categoryId);
         return noteService.toDetail(note);
@@ -121,7 +111,7 @@ public class McpNoteToolService {
         McpApiKeyPrincipal principal = mcpAuthService.requireWritable(transportContext);
         Note existing = noteService.getOwnedNote(principal.ownerId(), noteId);
         mcpAuthService.assertNoteAccessible(principal, existing.getCategory() == null ? null : existing.getCategory().getId());
-        mcpAuthService.assertCategoryAccessible(principal, categoryId);
+        mcpScopeService.assertWritableCategoryAccessible(principal, categoryId);
         UserAccount owner = sessionAuthService.findUserById(principal.ownerId());
         Note note = noteService.updateNote(owner, noteId, title, markdownContent, categoryId);
         return noteService.toDetail(note);
@@ -161,7 +151,7 @@ public class McpNoteToolService {
         }
         int safeOffset = Math.max(offset == null ? 0 : offset, 0);
         int safeLimit = Math.max(1, Math.min(limit == null ? 20 : limit, 50));
-        Set<String> allowedCategoryIds = principal.allowAllCategories() ? null : principal.accessibleCategoryIds();
+        java.util.Set<String> allowedCategoryIds = principal.allowAllCategories() ? null : principal.accessibleCategoryIds();
         List<Map<String, Object>> results = noteSearchService.search(
                 principal.ownerId(), normalizedKeyword, safeOffset, safeLimit + 1, allowedCategoryIds);
         boolean hasMore = results.size() > safeLimit;

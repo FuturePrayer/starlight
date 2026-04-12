@@ -29,7 +29,7 @@ public class CategoryAccessService {
 
     /** 查询指定用户的全部分类。 */
     public List<Category> listUserCategories(String ownerId) {
-        return categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
+        return categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(ownerId);
     }
 
     /** 按 ID 构建分类映射。 */

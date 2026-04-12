@@ -101,6 +101,15 @@ public class GitImportController {
         return ApiResponse.ok(gitImportService.syncSourceNow(userAccount.getId(), sourceId));
     }
 
+    /** 删除已保存的 Git 导入源，但不删除已导入的笔记数据。 */
+    @DeleteMapping("/sources/{sourceId}")
+    public ApiResponse<Void> deleteSource(@PathVariable String sourceId) {
+        UserAccount userAccount = sessionAuthService.requireUser();
+        log.info("删除 Git 导入源: userId={}, sourceId={}", userAccount.getId(), sourceId);
+        gitImportService.deleteSource(userAccount.getId(), sourceId);
+        return ApiResponse.okMessage("已删除保存的 Git 导入源");
+    }
+
     /** 更新自动同步设置。 */
     @PutMapping("/sources/{sourceId}/auto-sync")
     public ApiResponse<Map<String, Object>> updateAutoSync(@PathVariable String sourceId,

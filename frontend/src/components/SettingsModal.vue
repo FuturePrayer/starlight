@@ -128,7 +128,7 @@
         <div v-else-if="currentTab === 'apiKeys'" class="settings-panel">
           <div class="settings-panel__header">
             <h3>API Key / 集成权限</h3>
-            <p>创建多个 API Key，并分别配置目录访问范围与只读权限。MCP Server 必须使用 API Key 访问。</p>
+            <p>创建多个 API Key，并分别配置 MCP Server 的访问模式与目录范围。MCP Server 必须使用 API Key 访问。</p>
           </div>
 
           <div class="api-key-workspace">
@@ -166,7 +166,7 @@
               <div class="settings-section-card__header">
                 <div>
                   <h4>{{ editingKeyId ? '编辑 API Key' : '新建 API Key' }}</h4>
-                  <p>默认只读；若关闭“全部目录”，则必须至少选择一个分类。</p>
+                  <p>建议按设备、客户端或自动化任务拆分 Key，便于分别授权、停用与审计。</p>
                 </div>
                 <div v-if="editingKeyId" class="settings-actions settings-actions--inline">
                   <button class="sl-btn sl-btn--ghost sl-btn--sm" @click="startCreateApiKey">新建另一个</button>
@@ -192,28 +192,48 @@
                     <span>{{ apiKeyForm.enabledFlag ? '已启用' : '已停用' }}</span>
                   </label>
                 </div>
-                <div class="form-field settings-form-field">
-                  <label class="sl-label">访问模式</label>
-                  <label class="sl-switch-row">
-                    <input v-model="apiKeyForm.readOnlyFlag" type="checkbox" />
-                    <span>{{ apiKeyForm.readOnlyFlag ? '只读' : '可读写' }}</span>
-                  </label>
-                </div>
-                <div class="form-field settings-form-field settings-form-field--full">
-                  <label class="sl-label">目录范围</label>
-                  <label class="sl-switch-row">
-                    <input v-model="apiKeyForm.allowAllCategoriesFlag" type="checkbox" />
-                    <span>{{ apiKeyForm.allowAllCategoriesFlag ? '允许访问全部目录' : '仅允许访问选定目录及其子目录' }}</span>
-                  </label>
-                </div>
               </div>
 
-              <div v-if="!apiKeyForm.allowAllCategoriesFlag" class="scope-selector">
-                <div v-if="!categoryOptions.length" class="empty-hint empty-hint--compact">当前还没有可授权的分类目录。</div>
-                <label v-for="item in categoryOptions" :key="item.id" class="scope-selector__item">
-                  <input v-model="apiKeyForm.scopeCategoryIds" :value="item.id" type="checkbox" />
-                  <span>{{ item.label }}</span>
-                </label>
+              <div class="api-key-group-divider"></div>
+
+              <div class="settings-section-card api-key-subsection">
+                <div class="settings-section-card__header">
+                  <div>
+                    <h4>MCP Server</h4>
+                    <p>这里统一管理与 MCP 相关的访问模式、目录范围以及使用说明入口。</p>
+                  </div>
+                  <button class="sl-btn sl-btn--ghost sl-btn--sm" type="button" @click="showMcpInfoModal = true">查看说明与工具</button>
+                </div>
+
+                <div class="settings-form-grid">
+                  <div class="form-field settings-form-field">
+                    <label class="sl-label">访问模式</label>
+                    <label class="sl-switch-row">
+                      <input v-model="apiKeyForm.readOnlyFlag" type="checkbox" />
+                      <span>{{ apiKeyForm.readOnlyFlag ? '只读' : '可读写' }}</span>
+                    </label>
+                    <div class="field-hint">只读 Key 只能读取目录和笔记内容，不能创建、修改或删除数据。</div>
+                  </div>
+                  <div class="form-field settings-form-field settings-form-field--full">
+                    <label class="sl-label">目录范围</label>
+                    <label class="sl-switch-row">
+                      <input v-model="apiKeyForm.allowAllCategoriesFlag" type="checkbox" />
+                      <span>{{ apiKeyForm.allowAllCategoriesFlag ? '允许访问全部目录' : '仅允许访问选定目录及其子目录' }}</span>
+                    </label>
+                    <div class="field-hint">若关闭“全部目录”，则必须至少选择一个分类。MCP 会自动限制到所选分类及其子分类。</div>
+                  </div>
+                </div>
+
+                <div v-if="!apiKeyForm.allowAllCategoriesFlag" class="scope-selector">
+                  <DirectoryTree
+                    v-model="apiKeyForm.scopeCategoryIds"
+                    :items="categoryTreeItems"
+                    :multiple="true"
+                    title="可授权的分类目录"
+                    description="目录默认折叠。勾选某个分类后，会自动授权它及其子分类给当前 API Key。"
+                    empty-text="当前还没有可授权的分类目录"
+                  />
+                </div>
               </div>
 
               <div class="settings-actions">
@@ -259,10 +279,7 @@
               <div v-if="adminForm.passkeyEnabled && !siteUrlHttps" class="field-hint field-hint--warning">当前站点 URL 不是 HTTPS，保存时将自动关闭通行密钥。</div>
             </div>
             <div class="form-field settings-form-field">
-              <div class="settings-inline-field">
-                <label class="sl-label">MCP Server</label>
-                <button class="sl-btn sl-btn--ghost sl-btn--sm" type="button" @click="showMcpInfoModal = true">查看说明与工具</button>
-              </div>
+              <label class="sl-label">MCP Server</label>
               <label class="sl-switch-row">
                 <input v-model="adminForm.mcpEnabled" type="checkbox" />
                 <span>{{ adminForm.mcpEnabled ? '已启用' : '已关闭' }}</span>
@@ -328,7 +345,7 @@
   <PopupLayer
     v-if="showMcpInfoModal"
     title="MCP Server 说明"
-    eyebrow="管理员可见"
+    eyebrow="API Key / MCP"
     description="为桌面 AI 客户端和自动化流程提供无状态 MCP 接口。以下工具都会受到 API Key 启用状态、目录范围与只读权限控制。"
     width="min(860px, calc(100vw - 24px))"
     @close="showMcpInfoModal = false"
@@ -358,6 +375,9 @@
         <ul class="mcp-notes-list">
           <li>管理员关闭 MCP Server 后，所有 API Key 都无法访问 MCP 端点。</li>
           <li>只读 API Key 仅可调用标记为“只读可用”的工具。</li>
+          <li>当前 Spring AI MCP 服务端暂不支持按请求动态裁剪 <code>tools/list</code>，因此只读 Key 仍可能看到写工具，但服务端会严格拒绝实际写调用。</li>
+          <li><code>starlight_list_tree</code> 会额外返回 <code>rootCategoryId</code>、<code>rootCategoryName</code>、<code>virtualRoot</code> 与 <code>scopeHints</code>，用于告诉 AI 当前是否处于权限根、虚拟根或边界容器。</li>
+          <li>即使查询深度不足，目录节点仍会返回子目录基础元信息；若未继续展开，会标记 <code>childrenTruncated = true</code>，提示客户端继续下钻。</li>
           <li>可写 API Key 仍然只能访问其授权目录及其子目录中的分类和笔记。</li>
         </ul>
       </section>
@@ -391,7 +411,9 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { adminApi, apiKeyApi, authApi, base64urlToBuffer, bufferToBase64url } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import DirectoryTree from '@/components/DirectoryTree.vue'
 import { formatTime } from '@/utils/markdown'
+import { buildCategorySelectionTree } from '@/utils/directoryTree'
 import { generateQrDataUrl } from '@/utils/qrcode'
 import PopupLayer from '@/components/PopupLayer.vue'
 
@@ -426,20 +448,18 @@ const navItems = computed(() => {
   return items
 })
 
-const categoryOptions = computed(() => {
+const categoryTreeItems = computed(() => buildCategorySelectionTree(props.treeItems))
+const availableCategoryIds = computed(() => {
   const result = []
-  function walk(items, depth = 0) {
+  function walk(items) {
     for (const item of items || []) {
-      if (item.type === 'category') {
-        result.push({
-          id: item.id,
-          label: `${'　'.repeat(depth)}${depth > 0 ? '└ ' : ''}${item.name}`
-        })
-        walk(item.children, depth + 1)
+      result.push(item.id)
+      if (item.children?.length) {
+        walk(item.children)
       }
     }
   }
-  walk(props.treeItems)
+  walk(categoryTreeItems.value)
   return result
 })
 
@@ -478,8 +498,8 @@ const showMcpInfoModal = ref(false)
 const mcpTools = [
   {
     name: 'starlight_list_tree',
-    description: '查询权限范围内的分类目录和笔记树，可按起始分类与深度裁剪结果。',
-    meta: '参数：categoryId（可选）、depth（默认 2）',
+    description: '查询权限范围内的分类目录和笔记树，可按起始分类与深度裁剪，并返回权限根与继续查询提示。',
+    meta: '参数：categoryId（可选）、depth（默认 2）；返回：rootCategoryId、rootCategoryName、virtualRoot、scopeHints',
     readOnly: true
   },
   {
@@ -758,7 +778,7 @@ function fillApiKeyForm(item) {
     enabledFlag: Boolean(item.enabledFlag),
     readOnlyFlag: Boolean(item.readOnlyFlag),
     allowAllCategoriesFlag: Boolean(item.allowAllCategoriesFlag),
-    scopeCategoryIds: [...(item.scopeCategoryIds || [])]
+    scopeCategoryIds: [...(item.scopeCategoryIds || [])].filter(id => availableCategoryIds.value.includes(id))
   }
 }
 
@@ -1100,16 +1120,6 @@ function handlePromptOk() {
 .api-key-item__meta--secondary {
   color: var(--sl-text-tertiary);
 }
-.scope-selector__item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: var(--sl-radius);
-  border: 1px solid var(--sl-border);
-  background: var(--sl-card);
-  font-size: 13px;
-}
 .created-key-box {
   padding: 14px;
   border-radius: var(--sl-radius-lg);
@@ -1135,6 +1145,15 @@ function handlePromptOk() {
   font-size: 12px;
   word-break: break-all;
   cursor: pointer;
+}
+.api-key-group-divider {
+  height: 1px;
+  margin: 18px 0;
+  background: linear-gradient(90deg, transparent, var(--sl-border-strong), transparent);
+}
+.api-key-subsection {
+  margin-top: 0;
+  padding: 14px;
 }
 .empty-hint--compact {
   padding: 18px 12px;

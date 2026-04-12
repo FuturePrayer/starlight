@@ -96,7 +96,7 @@ public class PublicSiteService {
         }
 
         // 收集所有子分类（递归）
-        List<Category> allUserCategories = categoryRepository.findByOwnerIdOrderByNameAsc(owner.getId());
+        List<Category> allUserCategories = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(owner.getId());
         Set<String> descendantIds = collectDescendantIds(categoryId, allUserCategories);
         log.info("开启星迹书阁，递归子分类数量: categoryId={}, descendantCount={}", categoryId, descendantIds.size());
 
@@ -250,7 +250,7 @@ public class PublicSiteService {
      */
     @Transactional(readOnly = true)
     public Map<String, Object> getPublicSiteIndex(String token) {
-        Category category = categoryRepository.findBySiteToken(token)
+        Category category = categoryRepository.findBySiteTokenAndDeletedAtIsNull(token)
                 .orElseThrow(() -> {
                     log.warn("公开站点访问失败，令牌无效: token={}", token);
                     return new ResponseStatusException(NOT_FOUND, "站点不存在或已关闭");
@@ -260,7 +260,7 @@ public class PublicSiteService {
         Map<String, Object> theme = themeService.resolveTheme(owner.getThemeId());
 
         // 收集所有子分类 ID（递归）
-        List<Category> allUserCategories = categoryRepository.findByOwnerIdOrderByNameAsc(owner.getId());
+        List<Category> allUserCategories = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(owner.getId());
         Set<String> descendantIds = collectDescendantIds(category.getId(), allUserCategories);
         Set<String> allCategoryIds = new HashSet<>(descendantIds);
         allCategoryIds.add(category.getId());
@@ -344,7 +344,7 @@ public class PublicSiteService {
      */
     @Transactional(readOnly = true)
     public Map<String, Object> getPublicSiteNote(String token, String noteId) {
-        Category category = categoryRepository.findBySiteToken(token)
+        Category category = categoryRepository.findBySiteTokenAndDeletedAtIsNull(token)
                 .orElseThrow(() -> {
                     log.warn("公开站点笔记访问失败，令牌无效: token={}", token);
                     return new ResponseStatusException(NOT_FOUND, "站点不存在或已关闭");
@@ -357,7 +357,7 @@ public class PublicSiteService {
                 });
 
         // 收集所有子分类 ID（递归），用于验证笔记归属
-        List<Category> allUserCategories = categoryRepository.findByOwnerIdOrderByNameAsc(category.getOwner().getId());
+        List<Category> allUserCategories = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(category.getOwner().getId());
         Set<String> descendantIds = collectDescendantIds(category.getId(), allUserCategories);
         Set<String> allCategoryIds = new HashSet<>(descendantIds);
         allCategoryIds.add(category.getId());
@@ -424,7 +424,7 @@ public class PublicSiteService {
 
     /** 获取当前用户拥有的分类 */
     private Category getOwnedCategory(String ownerId, String categoryId) {
-        return categoryRepository.findByIdAndOwnerId(categoryId, ownerId)
+        return categoryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(categoryId, ownerId)
                 .orElseThrow(() -> {
                     log.warn("分类未找到或不属于该用户: categoryId={}, ownerId={}", categoryId, ownerId);
                     return new ResponseStatusException(NOT_FOUND, "分类不存在");
@@ -494,7 +494,7 @@ public class PublicSiteService {
      */
     private Category findAncestorWithSiteToken(Category category, String ownerId) {
         // 加载所有用户分类用于内存遍历，避免 N+1 查询
-        List<Category> allCategories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
+        List<Category> allCategories = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(ownerId);
         Map<String, Category> categoryMap = new HashMap<>();
         Map<String, String> parentMap = new HashMap<>();
         for (Category cat : allCategories) {

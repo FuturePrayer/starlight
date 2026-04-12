@@ -79,6 +79,13 @@ public class NoteController {
         return ApiResponse.ok(noteService.listTrashNotes(userAccount.getId()));
     }
 
+    /** 获取回收站树形结构（分类 + 笔记）。 */
+    @GetMapping("/trash/tree")
+    public ApiResponse<Map<String, Object>> trashTree() {
+        UserAccount userAccount = sessionAuthService.requireUser();
+        return ApiResponse.ok(noteService.buildTrashTree(userAccount.getId()));
+    }
+
     /** 创建分类 */
     @PostMapping("/categories")
     public ApiResponse<Map<String, Object>> createCategory(@RequestBody CategoryRequest request) {
@@ -89,6 +96,19 @@ public class NoteController {
         result.put("name", category.getName());
         result.put("parentId", category.getParent() == null ? null : category.getParent().getId());
         return ApiResponse.ok(result);
+    }
+
+    /** 将分类及其子树移入回收站。 */
+    @DeleteMapping("/categories/{id}")
+    public ApiResponse<Map<String, Object>> deleteCategory(@PathVariable String id) {
+        log.info("删除分类请求: categoryId={}, userId={}", id, sessionAuthService.getCurrentUserId());
+        UserAccount userAccount = sessionAuthService.requireUser();
+        NoteService.CategoryTrashOperationResult result = noteService.deleteCategory(userAccount.getId(), id);
+        Map<String, Object> data = new HashMap<>();
+        data.put("categoryId", result.categoryId());
+        data.put("categoryCount", result.categoryCount());
+        data.put("noteCount", result.noteCount());
+        return ApiResponse.ok(data);
     }
 
     /** 创建新笔记 */
@@ -142,6 +162,19 @@ public class NoteController {
         return ApiResponse.ok(noteService.toDetail(note));
     }
 
+    /** 恢复回收站中的分类子树。 */
+    @PostMapping("/trash/categories/{id}/restore")
+    public ApiResponse<Map<String, Object>> restoreTrashCategory(@PathVariable String id) {
+        log.info("恢复回收站分类请求: categoryId={}, userId={}", id, sessionAuthService.getCurrentUserId());
+        UserAccount userAccount = sessionAuthService.requireUser();
+        NoteService.CategoryTrashOperationResult result = noteService.restoreTrashCategory(userAccount.getId(), id);
+        Map<String, Object> data = new HashMap<>();
+        data.put("categoryId", result.categoryId());
+        data.put("categoryCount", result.categoryCount());
+        data.put("noteCount", result.noteCount());
+        return ApiResponse.ok(data);
+    }
+
     /** 彻底删除回收站中的笔记 */
     @DeleteMapping("/trash/{id}")
     public ApiResponse<Void> purgeNote(@PathVariable String id) {
@@ -149,6 +182,19 @@ public class NoteController {
         UserAccount userAccount = sessionAuthService.requireUser();
         noteService.purgeNote(userAccount.getId(), id);
         return ApiResponse.okMessage("已彻底删除");
+    }
+
+    /** 彻底删除回收站中的分类子树。 */
+    @DeleteMapping("/trash/categories/{id}")
+    public ApiResponse<Map<String, Object>> purgeTrashCategory(@PathVariable String id) {
+        log.info("彻底删除回收站分类请求: categoryId={}, userId={}", id, sessionAuthService.getCurrentUserId());
+        UserAccount userAccount = sessionAuthService.requireUser();
+        NoteService.CategoryTrashOperationResult result = noteService.purgeTrashCategory(userAccount.getId(), id);
+        Map<String, Object> data = new HashMap<>();
+        data.put("categoryId", result.categoryId());
+        data.put("categoryCount", result.categoryCount());
+        data.put("noteCount", result.noteCount());
+        return ApiResponse.ok(data);
     }
 
 

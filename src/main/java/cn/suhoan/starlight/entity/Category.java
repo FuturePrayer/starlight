@@ -7,6 +7,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+import java.time.LocalDateTime;
+
 /**
  * 笔记分类实体。
  * <p>支持树形结构，通过 parent 字段实现父子分类关系。</p>
@@ -42,6 +44,12 @@ public class Category extends BaseEntity {
     /** 站点自定义标题，为空时使用分类名称 */
     @Column(length = 200)
     private String siteTitle;
+
+    /**
+     * 放入回收站的时间。
+     * <p>非空表示该分类及其子树已进入回收站，不再出现在正常目录树中。</p>
+     */
+    private LocalDateTime deletedAt;
 
     public UserAccount getOwner() {
         return owner;
@@ -89,6 +97,14 @@ public class Category extends BaseEntity {
 
     public void setSiteTitle(String siteTitle) {
         this.siteTitle = siteTitle;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
     }
 }
 

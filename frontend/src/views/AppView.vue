@@ -95,6 +95,7 @@
               @select-category="selectedCategoryId = $event"
               @toggle-category="handleToggleCategory"
               @open-site="handleOpenSiteModal"
+              @delete-category="handleDeleteCategoryRequest"
             />
             <div
               v-if="!noteStore.tree.items?.length && !noteStore.tree.pinnedItems?.length"
@@ -147,28 +148,26 @@
                 <div class="quick-section__title">回收站</div>
                 <div class="quick-section__hint">删除后保留 30 天，可恢复或彻底删除</div>
               </div>
-              <span class="sl-badge">{{ noteStore.trashNotes.length }} 篇</span>
+              <span class="sl-badge">{{ noteStore.trashTree.totalCount || 0 }} 项</span>
             </div>
-            <div v-if="!noteStore.trashNotes.length" class="empty-hint">回收站还是空的，误删的笔记会先来到这里</div>
-            <div v-else class="trash-list">
-              <div
-                v-for="item in noteStore.trashNotes"
-                :key="item.id"
-                :class="['trash-item', { active: noteStore.currentNote?.id === item.id }]"
-                @click="handleOpenTrashNote(item.id)"
-              >
-                <div class="trash-item__main">
-                  <div class="trash-item__title">{{ item.title }}</div>
-                  <div class="trash-item__meta">
-                    <span>删除于 {{ formatTime(item.deletedAt) }}</span>
-                    <span v-if="item.purgeAt">{{ formatTime(item.purgeAt) }} 自动清理</span>
-                  </div>
-                </div>
-                <div class="trash-item__actions">
-                  <button class="sl-btn sl-btn--ghost sl-btn--sm" @click.stop="handleRestore(item.id)">恢复</button>
-                  <button class="sl-btn sl-btn--danger sl-btn--sm" @click.stop="handlePurge(item.id)">彻底删除</button>
-                </div>
-              </div>
+            <div v-if="!noteStore.trashTree.totalCount" class="empty-hint">回收站还是空的，误删的笔记和分类会先来到这里</div>
+            <div v-else class="trash-tree-wrap">
+              <TreeNode
+                v-for="item in noteStore.trashTree.items"
+                :key="`trash-${item.id}`"
+                :item="item"
+                :mode="'trash'"
+                :selected-id="isDeletedNote ? noteStore.currentNote?.id : null"
+                :selected-category-id="selectedTrashCategoryId"
+                :expanded-ids="noteStore.trashExpandedCategoryIds"
+                @select-note="handleOpenTrashNote"
+                @select-category="selectedTrashCategoryId = $event"
+                @toggle-category="handleToggleTrashCategory"
+                @restore-note="handleRestore"
+                @purge-note="handlePurge"
+                @restore-category="handleRestoreTrashCategory"
+                @purge-category="handlePurgeTrashCategoryRequest"
+              />
             </div>
           </div>
           <div v-show="sidebarTab === 'outline'" class="outline-panel">
@@ -401,6 +400,32 @@
         <button class="sl-btn sl-btn--danger" @click="confirmDeleteAction">确认</button>
       </template>
     </PopupLayer>
+    <PopupLayer
+      v-if="categoryActionState.visible"
+      :title="categoryConfirmTitle"
+      eyebrow="分类操作"
+      tone="danger"
+      width="min(480px, calc(100vw - 32px))"
+      @close="closeCategoryActionConfirm"
+    >
+      <div class="discard-confirm">
+        <div class="discard-confirm__icon discard-confirm__icon--danger">!</div>
+        <div class="discard-confirm__content">
+          <p class="discard-confirm__text">{{ categoryConfirmDescription }}</p>
+          <div class="discard-confirm__meta">
+            <span class="sl-badge">{{ categoryActionState.categoryName || '未命名分类' }}</span>
+            <span class="sl-badge">{{ categoryActionState.categoryCount }} 个分类</span>
+            <span class="sl-badge">{{ categoryActionState.noteCount }} 篇笔记</span>
+          </div>
+          <p class="discard-confirm__hint">{{ categoryConfirmHint }}</p>
+        </div>
+      </div>
+
+      <template #footer>
+        <button class="sl-btn" @click="closeCategoryActionConfirm">取消</button>
+        <button class="sl-btn sl-btn--danger" @click="confirmCategoryAction">确认</button>
+      </template>
+    </PopupLayer>
   </div>
 </template>
 
@@ -427,6 +452,7 @@ import ShareModal from '@/components/ShareModal.vue'
 import CategoryModal from '@/components/CategoryModal.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
 import SiteModal from '@/components/SiteModal.vue'
+import { findTreeNodeById, summarizeTreeSubtree } from '@/utils/directoryTree'
 
 const route = useRoute()
 const router = useRouter()
@@ -440,6 +466,7 @@ const sidebarTab = ref('tree')
 const previewVisible = ref(true)
 const mobileActionsOpen = ref(false)
 const selectedCategoryId = ref(null)
+const selectedTrashCategoryId = ref(null)
 const allThemes = ref([])
 const showShareModal = ref(false)
 const showCategoryModal = ref(false)
@@ -453,6 +480,16 @@ const showDeleteConfirm = ref(false)
 const deleteConfirmMode = ref('trash')
 const deleteTargetId = ref(null)
 const deleteTargetTitle = ref('')
+const categoryActionState = ref({
+  visible: false,
+  mode: 'trash',
+  categoryId: '',
+  categoryName: '',
+  categoryCount: 0,
+  noteCount: 0,
+  categoryIds: [],
+  noteIds: []
+})
 
 const editorTitle = ref('')
 const editorContent = ref('')
@@ -571,6 +608,29 @@ const deleteConfirmNoteLabel = computed(() => {
   const value = deleteTargetTitle.value || noteStore.currentNote?.title || ''
   return value || '未命名笔记'
 })
+
+const categoryConfirmTitle = computed(() => (categoryActionState.value.mode === 'purge'
+  ? '确认彻底删除分类子树？'
+  : '确认删除分类？'))
+
+const categoryConfirmDescription = computed(() => {
+  const { mode, noteCount, categoryCount, categoryName } = categoryActionState.value
+  const safeName = categoryName || '该分类'
+  if (mode === 'purge') {
+    if (noteCount > 0) {
+      return `“${safeName}”及其子树下共有 ${categoryCount} 个分类、${noteCount} 篇笔记，确认后会从回收站中彻底删除，且无法恢复。`
+    }
+    return `“${safeName}”及其 ${categoryCount} 个分类节点将从回收站中彻底删除，之后无法恢复。`
+  }
+  if (noteCount > 0) {
+    return `“${safeName}”及其子树下共有 ${categoryCount} 个分类、${noteCount} 篇笔记，删除后会整体移入回收站，并保留原有目录结构。`
+  }
+  return `“${safeName}”会连同其 ${categoryCount} 个分类节点一起移入回收站，并保留原有目录结构。`
+})
+
+const categoryConfirmHint = computed(() => (categoryActionState.value.mode === 'purge'
+  ? '彻底删除会同步清理该分类子树下的回收站内容，请确认这些数据已经不再需要。'
+  : '移入回收站后，仍可以在回收站目录树中按原结构查看并彻底删除。'))
 
 // Sync editor fields when note changes
 watch(() => noteStore.currentNote, (note) => {
@@ -918,6 +978,10 @@ function handleToggleCategory(id) {
   noteStore.toggleCategoryExpanded(id)
 }
 
+function handleToggleTrashCategory(id) {
+  noteStore.toggleTrashCategoryExpanded(id)
+}
+
 function toggleAutosave() {
   noteStore.setAutosaveEnabled(!noteStore.autosaveEnabled)
   toast.info(noteStore.autosaveEnabled ? '自动保存已开启' : '自动保存已暂停')
@@ -973,6 +1037,79 @@ async function handlePurge(id = noteStore.currentNote?.id) {
     ? noteStore.currentNote?.title
     : noteStore.trashNotes.find(item => item.id === id)?.title
   openDeleteConfirm('purge', id, title)
+}
+
+async function handleRestoreTrashCategory(categoryId) {
+  if (!categoryId) return
+  const summary = summarizeTreeSubtree(noteStore.trashTree.items, categoryId)
+  try {
+    await noteStore.restoreTrashCategory(categoryId)
+    toast.success('分类子树已恢复')
+    sidebarTab.value = 'tree'
+    if (selectedTrashCategoryId.value && summary.categoryIds.includes(selectedTrashCategoryId.value)) {
+      selectedTrashCategoryId.value = null
+    }
+    await syncStateAfterCategoryRestore(summary)
+  } catch (err) {
+    toast.error(err.message)
+  }
+}
+
+function handleDeleteCategoryRequest(categoryId) {
+  const node = findTreeNodeById(noteStore.tree.items, categoryId)
+  const summary = summarizeTreeSubtree(noteStore.tree.items, categoryId)
+  openCategoryActionConfirm('trash', categoryId, node?.name || node?.label || '', summary)
+}
+
+function handlePurgeTrashCategoryRequest(categoryId) {
+  const node = findTreeNodeById(noteStore.trashTree.items, categoryId)
+  const summary = summarizeTreeSubtree(noteStore.trashTree.items, categoryId)
+  openCategoryActionConfirm('purge', categoryId, node?.name || node?.label || '', summary)
+}
+
+function openCategoryActionConfirm(mode, categoryId, categoryName, summary) {
+  categoryActionState.value = {
+    visible: true,
+    mode,
+    categoryId,
+    categoryName,
+    categoryCount: summary.categoryCount,
+    noteCount: summary.noteCount,
+    categoryIds: summary.categoryIds,
+    noteIds: summary.noteIds
+  }
+}
+
+function closeCategoryActionConfirm() {
+  categoryActionState.value = {
+    visible: false,
+    mode: 'trash',
+    categoryId: '',
+    categoryName: '',
+    categoryCount: 0,
+    noteCount: 0,
+    categoryIds: [],
+    noteIds: []
+  }
+}
+
+async function confirmCategoryAction() {
+  if (!categoryActionState.value.categoryId) return
+  const action = { ...categoryActionState.value }
+  closeCategoryActionConfirm()
+  try {
+    if (action.mode === 'purge') {
+      await noteStore.purgeTrashCategory(action.categoryId)
+      toast.success('分类子树已彻底删除')
+    } else {
+      await noteStore.deleteCategory(action.categoryId)
+      toast.success('分类已移入回收站')
+      sidebarTab.value = 'trash'
+    }
+    await syncStateAfterCategoryMutation(action)
+  } catch (err) {
+    toast.error(err.message)
+  }
 }
 
 function openDeleteConfirm(mode, id, title = '') {
@@ -1138,6 +1275,7 @@ function handleSearchTabClick() {
 
 async function handleTrashTabClick() {
   sidebarTab.value = 'trash'
+  selectedTrashCategoryId.value = null
   try {
     await noteStore.refreshTrash()
   } catch (err) {
@@ -1158,6 +1296,7 @@ async function handleOpenSearchResult(id) {
 
 async function handleOpenTrashNote(id) {
   try {
+    selectedTrashCategoryId.value = null
     await noteStore.openTrashNote(id)
     await syncRouteToCurrentNote({ replace: false })
     sidebarOpen.value = false
@@ -1165,6 +1304,47 @@ async function handleOpenTrashNote(id) {
   } catch (err) {
     toast.error(err.message)
   }
+}
+
+async function syncStateAfterCategoryMutation(action) {
+  const affectedCurrentNote = Boolean(noteStore.currentNote?.id && action.noteIds.includes(noteStore.currentNote.id))
+  const affectedCurrentCategory = Boolean(noteStore.currentNote?.categoryId && action.categoryIds.includes(noteStore.currentNote.categoryId))
+
+  if (selectedCategoryId.value && action.categoryIds.includes(selectedCategoryId.value)) {
+    selectedCategoryId.value = null
+  }
+
+  if (action.mode === 'trash' && affectedCurrentNote) {
+    try {
+      await noteStore.openTrashNote(noteStore.currentNote.id)
+    } catch {
+      noteStore.clearCurrentNote()
+    }
+  } else if (affectedCurrentNote || affectedCurrentCategory) {
+    noteStore.clearCurrentNote()
+  }
+
+  await syncRouteToCurrentNote({ replace: true })
+  mobileActionsOpen.value = false
+}
+
+async function syncStateAfterCategoryRestore(summary) {
+  const restoredCurrentNote = Boolean(noteStore.currentNote?.id && summary.noteIds.includes(noteStore.currentNote.id))
+
+  if (selectedCategoryId.value && summary.categoryIds.includes(selectedCategoryId.value)) {
+    selectedCategoryId.value = null
+  }
+
+  if (restoredCurrentNote && noteStore.currentNote?.id) {
+    try {
+      await noteStore.openNote(noteStore.currentNote.id)
+    } catch {
+      noteStore.clearCurrentNote()
+    }
+  }
+
+  await syncRouteToCurrentNote({ replace: true })
+  mobileActionsOpen.value = false
 }
 
 watch(() => [route.params.noteId, route.query.trash], async () => {
@@ -1374,6 +1554,19 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.trash-panel__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 12px;
+  color: var(--sl-text-secondary);
+}
+
+.trash-tree-wrap {
+  display: flex;
+  flex-direction: column;
 }
 .trash-item {
   display: flex;

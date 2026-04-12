@@ -181,7 +181,7 @@ public class ApiKeyService {
             }
         }
         for (String categoryId : distinctCategoryIds) {
-            Category category = categoryRepository.findByIdAndOwnerId(categoryId, ownerId)
+            Category category = categoryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(categoryId, ownerId)
                     .orElseThrow(() -> new IllegalArgumentException("存在无效的分类授权范围"));
             ApiKeyScope scope = new ApiKeyScope();
             scope.setApiKey(apiKey);

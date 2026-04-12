@@ -71,7 +71,7 @@ public class NoteTransferService {
     @Transactional(readOnly = true)
     public ArchivePayload exportArchive(String ownerId) {
         log.info("开始导出笔记 ZIP: ownerId={}", ownerId);
-        List<Category> categories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
+        List<Category> categories = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(ownerId);
         List<Note> notes = noteRepository.findByOwnerIdAndDeletedAtIsNullOrderByUpdatedAtDesc(ownerId);
 
         Map<String, List<Category>> childCategories = new HashMap<>();
@@ -127,7 +127,7 @@ public class NoteTransferService {
             throw new IllegalArgumentException("ZIP 包中未找到可导入的 Markdown 文件或目录");
         }
 
-        List<Category> existingCategories = categoryRepository.findByOwnerIdOrderByNameAsc(owner.getId());
+        List<Category> existingCategories = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(owner.getId());
         Map<String, Category> categoryByRelation = new HashMap<>();
         for (Category category : existingCategories) {
             categoryByRelation.put(buildCategoryRelationKey(category.getParent(), category.getName()), category);

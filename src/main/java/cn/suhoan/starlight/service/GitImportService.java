@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
@@ -214,6 +215,20 @@ public class GitImportService {
         return toSourceMap(getOwnedSource(owner.getId(), sourceId));
     }
 
+    /**
+     * 删除已保存的 Git 导入源。
+     * <p>仅移除仓库地址、同步历史和绑定关系，不会删除已导入的笔记与分类数据。</p>
+     */
+    @Transactional
+    public void deleteSource(String ownerId, String sourceId) {
+        GitNoteSource source = getOwnedSource(ownerId, sourceId);
+        gitImportBindingRepository.deleteBySourceId(sourceId);
+        gitSyncHistoryRepository.deleteBySourceId(sourceId);
+        gitNoteSourceRepository.delete(source);
+        sourceLocks.remove(sourceId);
+        log.info("Git 导入源已删除: sourceId={}, ownerId={}, repository={}", sourceId, ownerId, source.getRepositoryName());
+    }
+
     /** 手动重导入指定导入源。 */
     public Map<String, Object> syncSourceNow(String ownerId, String sourceId) {
         ensureGitImportEnabled();
@@ -392,7 +407,7 @@ public class GitImportService {
                                                       Category targetCategory,
                                                       List<MarkdownFileEntry> files) {
         LocalDateTime startedAtUtc = utcNow();
-        List<Category> existingCategories = categoryRepository.findByOwnerIdOrderByNameAsc(owner.getId());
+        List<Category> existingCategories = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(owner.getId());
         Map<String, Category> categoryByRelation = new HashMap<>();
         for (Category category : existingCategories) {
             categoryByRelation.put(buildCategoryRelationKey(category.getParent(), category.getName()), category);
@@ -441,7 +456,7 @@ public class GitImportService {
     private Category ensureExistingTargetCategory(UserAccount owner, GitNoteSource source) {
         String targetCategoryId = source.getTargetCategoryId();
         if (hasText(targetCategoryId)) {
-            return categoryRepository.findByIdAndOwnerId(targetCategoryId, owner.getId()).orElseGet(() -> {
+            return categoryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(targetCategoryId, owner.getId()).orElseGet(() -> {
                 if (!source.isTargetCategoryCreatedBySource()) {
                     throw new IllegalArgumentException("目标分类已不存在，请重新选择导入位置");
                 }
@@ -735,7 +750,7 @@ public class GitImportService {
     }
 
     private Category ensureGitRootCategory(UserAccount owner) {
-        return categoryRepository.findByOwnerIdOrderByNameAsc(owner.getId()).stream()
+        return categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(owner.getId()).stream()
                 .filter(category -> category.getParent() == null)
                 .filter(category -> GIT_ROOT_CATEGORY_NAME.equals(category.getName()))
                 .findFirst()
@@ -743,7 +758,7 @@ public class GitImportService {
     }
 
     private String allocateUniqueChildName(String ownerId, Category parentCategory, String baseName) {
-        Set<String> siblingNames = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId).stream()
+        Set<String> siblingNames = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(ownerId).stream()
                 .filter(category -> category.getParent() != null)
                 .filter(category -> parentCategory.getId().equals(category.getParent().getId()))
                 .map(Category::getName)
@@ -1030,14 +1045,14 @@ public class GitImportService {
         if (!hasText(source.getTargetCategoryId())) {
             return true;
         }
-        return categoryRepository.findById(source.getTargetCategoryId()).isEmpty();
+        return categoryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(source.getTargetCategoryId(), source.getOwner().getId()).isEmpty();
     }
 
     private String resolveTargetCategoryName(GitNoteSource source) {
         if (!hasText(source.getTargetCategoryId())) {
             return source.getTargetCategoryName();
         }
-        return categoryRepository.findById(source.getTargetCategoryId())
+        return categoryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(source.getTargetCategoryId(), source.getOwner().getId())
                 .map(Category::getName)
                 .orElse(source.getTargetCategoryName());
     }

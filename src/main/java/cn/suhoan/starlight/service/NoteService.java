@@ -2,9 +2,12 @@ package cn.suhoan.starlight.service;
 
 import cn.suhoan.starlight.config.StarlightProperties;
 import cn.suhoan.starlight.entity.Category;
+import cn.suhoan.starlight.entity.GitNoteSource;
 import cn.suhoan.starlight.entity.Note;
 import cn.suhoan.starlight.entity.UserAccount;
+import cn.suhoan.starlight.repository.ApiKeyScopeRepository;
 import cn.suhoan.starlight.repository.CategoryRepository;
+import cn.suhoan.starlight.repository.GitNoteSourceRepository;
 import cn.suhoan.starlight.repository.NoteRepository;
 import cn.suhoan.starlight.repository.NoteShareRepository;
 import org.slf4j.Logger;
@@ -19,10 +22,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
-import java.util.LinkedHashSet;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
@@ -45,17 +49,23 @@ public class NoteService {
     private final NoteRepository noteRepository;
     private final CategoryRepository categoryRepository;
     private final NoteShareRepository noteShareRepository;
+    private final GitNoteSourceRepository gitNoteSourceRepository;
+    private final ApiKeyScopeRepository apiKeyScopeRepository;
     private final MarkdownService markdownService;
     private final StarlightProperties starlightProperties;
 
     public NoteService(NoteRepository noteRepository,
                        CategoryRepository categoryRepository,
                        NoteShareRepository noteShareRepository,
+                       GitNoteSourceRepository gitNoteSourceRepository,
+                       ApiKeyScopeRepository apiKeyScopeRepository,
                        MarkdownService markdownService,
                        StarlightProperties starlightProperties) {
         this.noteRepository = noteRepository;
         this.categoryRepository = categoryRepository;
         this.noteShareRepository = noteShareRepository;
+        this.gitNoteSourceRepository = gitNoteSourceRepository;
+        this.apiKeyScopeRepository = apiKeyScopeRepository;
         this.markdownService = markdownService;
         this.starlightProperties = starlightProperties;
     }
@@ -188,6 +198,56 @@ public class NoteService {
     }
 
     /**
+     * 构建回收站树形结构。
+     * <p>被删除的分类会继续保留父子层级；属于已删除分类的笔记会挂到对应分类下，
+     * 其余被删除笔记则仍显示在回收站根部。</p>
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> buildTrashTree(String ownerId) {
+        List<Category> allCategories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
+        List<Category> deletedCategories = allCategories.stream()
+                .filter(category -> category.getDeletedAt() != null)
+                .toList();
+        List<Note> deletedNotes = noteRepository.findByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDesc(ownerId);
+
+        Map<String, Map<String, Object>> categoryNodeMap = new HashMap<>();
+        Set<String> deletedCategoryIds = new LinkedHashSet<>();
+        for (Category category : deletedCategories) {
+            categoryNodeMap.put(category.getId(), toTrashCategoryNode(category));
+            deletedCategoryIds.add(category.getId());
+        }
+
+        List<Map<String, Object>> roots = new ArrayList<>();
+        for (Category category : deletedCategories) {
+            Map<String, Object> node = categoryNodeMap.get(category.getId());
+            Category parent = category.getParent();
+            if (parent != null && deletedCategoryIds.contains(parent.getId())) {
+                castChildren(categoryNodeMap.get(parent.getId())).add(node);
+            } else {
+                roots.add(node);
+            }
+        }
+
+        for (Note note : deletedNotes) {
+            if (note.getCategory() != null && deletedCategoryIds.contains(note.getCategory().getId())) {
+                castChildren(categoryNodeMap.get(note.getCategory().getId())).add(toTrashTreeNote(note));
+            } else {
+                roots.add(toTrashTreeNote(note));
+            }
+        }
+
+        sortTrashItems(roots);
+        decorateTrashCategoryStats(roots);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("items", roots);
+        result.put("noteCount", deletedNotes.size());
+        result.put("categoryCount", deletedCategories.size());
+        result.put("totalCount", deletedNotes.size() + deletedCategories.size());
+        return result;
+    }
+
+    /**
      * 获取笔记详情。
      *
      * @param ownerId 用户 ID
@@ -234,6 +294,9 @@ public class NoteService {
      */
     public Note restoreNote(String ownerId, String noteId) {
         Note note = getOwnedTrashNote(ownerId, noteId);
+        if (!isTrashNoteRestorable(note)) {
+            throw new IllegalArgumentException("请先处理所属分类，再恢复该笔记");
+        }
         note.setDeletedAt(null);
         Note saved = noteRepository.save(note);
         log.info("笔记已从回收站恢复: noteId={}, ownerId={}", noteId, ownerId);
@@ -249,13 +312,8 @@ public class NoteService {
      */
     public void purgeNote(String ownerId, String noteId) {
         Note note = getOwnedTrashNote(ownerId, noteId);
-        long shareCount = noteShareRepository.countByNoteId(noteId);
-        if (shareCount > 0) {
-            noteShareRepository.deleteByNoteId(noteId);
-            noteShareRepository.flush();
-        }
-        noteRepository.delete(note);
-        log.info("回收站笔记已彻底删除: noteId={}, ownerId={}, removedShareCount={}", noteId, ownerId, shareCount);
+        NotePurgeStat purgeStat = purgeDeletedNotes(List.of(note));
+        log.info("回收站笔记已彻底删除: noteId={}, ownerId={}, removedShareCount={}", noteId, ownerId, purgeStat.removedShareCount());
     }
 
     /**
@@ -305,7 +363,7 @@ public class NoteService {
                                          Set<String> accessibleCategoryIds,
                                          String rootCategoryId,
                                          Integer depth) {
-        List<Category> allCategories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
+        List<Category> allCategories = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(ownerId);
         List<Note> allNotes = noteRepository.findByOwnerIdAndDeletedAtIsNullOrderByUpdatedAtDesc(ownerId);
 
         String normalizedRootCategoryId = normalizeNullableCategoryId(rootCategoryId);
@@ -414,18 +472,31 @@ public class NoteService {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("items", roots);
         data.put("pinnedItems", pinnedItems);
-        data.put("trashCount", restricted ? 0 : noteRepository.countByOwnerIdAndDeletedAtIsNotNull(ownerId));
+        data.put("trashCount", restricted ? 0 : noteRepository.countByOwnerIdAndDeletedAtIsNotNull(ownerId)
+                + categoryRepository.countByOwnerIdAndDeletedAtIsNotNull(ownerId));
         return data;
     }
 
     /** 查询当前用户拥有的分类。 */
     @Transactional(readOnly = true)
     public Category getOwnedCategory(String ownerId, String categoryId) {
-        Category category = resolveCategory(ownerId, categoryId);
-        if (category == null) {
+        String normalizedCategoryId = normalizeNullableCategoryId(categoryId);
+        if (normalizedCategoryId == null) {
             throw new ResponseStatusException(NOT_FOUND, "分类不存在");
         }
-        return category;
+        return categoryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(normalizedCategoryId, ownerId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "分类不存在"));
+    }
+
+    /** 查询回收站中的分类。 */
+    @Transactional(readOnly = true)
+    public Category getOwnedTrashCategory(String ownerId, String categoryId) {
+        String normalizedCategoryId = normalizeNullableCategoryId(categoryId);
+        if (normalizedCategoryId == null) {
+            throw new ResponseStatusException(NOT_FOUND, "分类不存在");
+        }
+        return categoryRepository.findByIdAndOwnerIdAndDeletedAtIsNotNull(normalizedCategoryId, ownerId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "回收站中不存在该分类"));
     }
 
     /**
@@ -440,33 +511,23 @@ public class NoteService {
     /**
      * 手动触发回收站过期清理。
      *
-     * @return 清理掉的笔记数量
+     * @return 清理掉的回收站项目数量
      */
     public int cleanupExpiredTrash() {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(getRetentionDays());
-        List<Note> expiredNotes = noteRepository.findByDeletedAtBefore(cutoff);
-        if (expiredNotes.isEmpty()) {
+        int removedCategoryCount = purgeExpiredTrashCategories(cutoff);
+        List<Note> expiredNotes = noteRepository.findByDeletedAtBefore(cutoff).stream()
+                .filter(note -> note.getCategory() == null || note.getCategory().getDeletedAt() == null)
+                .toList();
+        if (expiredNotes.isEmpty() && removedCategoryCount == 0) {
             log.debug("回收站自动清理完成，本次无过期笔记: cutoff={}", cutoff);
             return 0;
         }
 
-        int removedShareCount = 0;
-        for (Note note : expiredNotes) {
-            long shareCount = noteShareRepository.countByNoteId(note.getId());
-            if (shareCount > 0) {
-                noteShareRepository.deleteByNoteId(note.getId());
-                removedShareCount += (int) shareCount;
-            }
-        }
-        if (removedShareCount > 0) {
-            noteShareRepository.flush();
-        }
-        for (Note note : expiredNotes) {
-            noteRepository.delete(note);
-        }
-        noteRepository.flush();
-        log.info("回收站自动清理完成: noteCount={}, removedShareCount={}, cutoff={}", expiredNotes.size(), removedShareCount, cutoff);
-        return expiredNotes.size();
+        NotePurgeStat notePurgeStat = purgeDeletedNotes(expiredNotes);
+        log.info("回收站自动清理完成: noteCount={}, categoryCount={}, removedShareCount={}, cutoff={}",
+                notePurgeStat.noteCount(), removedCategoryCount, notePurgeStat.removedShareCount(), cutoff);
+        return notePurgeStat.noteCount() + removedCategoryCount;
     }
 
     /**
@@ -498,7 +559,7 @@ public class NoteService {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("分类名称不能为空");
         }
-        Category category = resolveCategory(owner.getId(), categoryId);
+        Category category = getOwnedCategory(owner.getId(), categoryId);
         Category newParent = resolveCategory(owner.getId(), parentId);
         if (newParent != null) {
             if (category.getId().equals(newParent.getId())) {
@@ -518,20 +579,96 @@ public class NoteService {
     }
 
     /**
-     * 删除空分类。
-     * <p>若分类下仍存在子分类或笔记，则拒绝删除，避免误操作。</p>
+     * 将分类及其子树移入回收站。
+     * <p>分类下的活动笔记会一并进入回收站；已在回收站中的笔记会保留原删除时间。</p>
      */
-    public void deleteCategory(String ownerId, String categoryId) {
-        Category category = resolveCategory(ownerId, categoryId);
-        Set<String> descendants = collectDescendantCategoryIds(ownerId, categoryId);
-        if (descendants.size() > 1) {
-            throw new IllegalArgumentException("请先清空子分类后再删除该分类");
+    public CategoryTrashOperationResult deleteCategory(String ownerId, String categoryId) {
+        Category category = getOwnedCategory(ownerId, categoryId);
+        List<Category> allCategories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
+        Set<String> descendants = collectDescendantCategoryIds(allCategories, category.getId());
+        LocalDateTime deletedAt = LocalDateTime.now();
+
+        List<Category> categoriesToTrash = allCategories.stream()
+                .filter(item -> descendants.contains(item.getId()))
+                .filter(item -> item.getDeletedAt() == null)
+                .toList();
+        for (Category item : categoriesToTrash) {
+            item.setDeletedAt(deletedAt);
         }
-        if (noteRepository.countByCategoryIdIn(descendants) > 0) {
-            throw new IllegalArgumentException("请先移除分类下的笔记后再删除该分类");
+        if (!categoriesToTrash.isEmpty()) {
+            categoryRepository.saveAll(categoriesToTrash);
         }
-        categoryRepository.delete(category);
-        log.info("分类删除成功: categoryId={}, ownerId={}", categoryId, ownerId);
+
+        List<Note> notesToTrash = noteRepository.findByCategoryIdIn(descendants).stream()
+                .filter(note -> ownerId.equals(note.getOwner().getId()))
+                .filter(note -> note.getDeletedAt() == null)
+                .toList();
+        for (Note note : notesToTrash) {
+            note.setDeletedAt(deletedAt);
+        }
+        if (!notesToTrash.isEmpty()) {
+            noteRepository.saveAll(notesToTrash);
+        }
+        log.info("分类已移入回收站: categoryId={}, ownerId={}, categoryCount={}, noteCount={}",
+                categoryId, ownerId, categoriesToTrash.size(), notesToTrash.size());
+        return new CategoryTrashOperationResult(categoryId, categoriesToTrash.size(), notesToTrash.size());
+    }
+
+    /**
+     * 彻底删除回收站中的分类子树。
+     * <p>会一并永久删除子树中的回收站笔记，并解除 Git 导入源与 API Key 范围中的关联引用。</p>
+     */
+    public CategoryTrashOperationResult purgeTrashCategory(String ownerId, String categoryId) {
+        Category category = getOwnedTrashCategory(ownerId, categoryId);
+        return purgeTrashCategoryInternal(ownerId, category.getId(), categoryRepository.findByOwnerIdOrderByNameAsc(ownerId));
+    }
+
+    /**
+     * 恢复回收站中的分类子树。
+     * <p>仅恢复与该分类在同一轮删除中进入回收站的分类和笔记，避免误恢复原本已单独删除的数据。</p>
+     */
+    public CategoryTrashOperationResult restoreTrashCategory(String ownerId, String categoryId) {
+        Category category = getOwnedTrashCategory(ownerId, categoryId);
+        if (!isTrashCategoryRestorable(category)) {
+            throw new IllegalArgumentException("请先恢复父分类，再恢复该分类");
+        }
+
+        List<Category> allCategories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
+        Set<String> descendants = collectDescendantCategoryIds(allCategories, category.getId());
+        LocalDateTime deletedAt = category.getDeletedAt();
+
+        List<Category> categoriesToRestore = allCategories.stream()
+                .filter(item -> descendants.contains(item.getId()))
+                .filter(item -> item.getDeletedAt() != null)
+                .filter(item -> Objects.equals(item.getDeletedAt(), deletedAt))
+                .toList();
+        for (Category item : categoriesToRestore) {
+            item.setDeletedAt(null);
+        }
+        if (!categoriesToRestore.isEmpty()) {
+            categoryRepository.saveAll(categoriesToRestore);
+        }
+
+        Set<String> restoredCategoryIds = categoriesToRestore.stream()
+                .map(Category::getId)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        List<Note> notesToRestore = restoredCategoryIds.isEmpty()
+                ? List.of()
+                : noteRepository.findByCategoryIdIn(restoredCategoryIds).stream()
+                .filter(note -> ownerId.equals(note.getOwner().getId()))
+                .filter(note -> note.getDeletedAt() != null)
+                .filter(note -> Objects.equals(note.getDeletedAt(), deletedAt))
+                .toList();
+        for (Note note : notesToRestore) {
+            note.setDeletedAt(null);
+        }
+        if (!notesToRestore.isEmpty()) {
+            noteRepository.saveAll(notesToRestore);
+        }
+
+        log.info("回收站分类已恢复: categoryId={}, ownerId={}, categoryCount={}, noteCount={}",
+                categoryId, ownerId, categoriesToRestore.size(), notesToRestore.size());
+        return new CategoryTrashOperationResult(categoryId, categoriesToRestore.size(), notesToRestore.size());
     }
 
     /**
@@ -547,7 +684,7 @@ public class NoteService {
         if (normalizedCategoryId == null) {
             return null;
         }
-        return categoryRepository.findByIdAndOwnerId(normalizedCategoryId, ownerId)
+        return categoryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(normalizedCategoryId, ownerId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "分类不存在"));
     }
 
@@ -568,13 +705,18 @@ public class NoteService {
 
     /** 收集某个分类及其所有子分类 ID。 */
     private Set<String> collectDescendantCategoryIds(String ownerId, String rootCategoryId) {
-        List<Category> categories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
+        List<Category> categories = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(ownerId);
+        return collectDescendantCategoryIds(categories, rootCategoryId);
+    }
+
+    /** 基于指定分类集合收集某个分类及其所有子分类 ID。 */
+    private Set<String> collectDescendantCategoryIds(List<Category> categories, String rootCategoryId) {
         Map<String, List<String>> childrenMap = new HashMap<>();
         for (Category category : categories) {
             if (category.getParent() == null) {
                 continue;
             }
-            childrenMap.computeIfAbsent(category.getParent().getId(), key -> new ArrayList<>())
+            childrenMap.computeIfAbsent(category.getParent().getId(), ignored -> new ArrayList<>())
                     .add(category.getId());
         }
         Set<String> result = new LinkedHashSet<>();
@@ -675,6 +817,7 @@ public class NoteService {
         map.put("deletedAt", note.getDeletedAt());
         map.put("purgeAt", calculatePurgeAt(note.getDeletedAt()));
         map.put("pinnedFlag", note.isPinnedFlag());
+        map.put("restorable", isTrashNoteRestorable(note));
         return map;
     }
 
@@ -694,6 +837,29 @@ public class NoteService {
         map.put("deletedAt", note.getDeletedAt());
         map.put("purgeAt", calculatePurgeAt(note.getDeletedAt()));
         map.put("pinnedFlag", note.isPinnedFlag());
+        map.put("restorable", isTrashNoteRestorable(note));
+        return map;
+    }
+
+    /** 将回收站分类转换为树节点。 */
+    private Map<String, Object> toTrashCategoryNode(Category category) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", category.getId());
+        map.put("name", category.getName());
+        map.put("type", "category");
+        map.put("parentId", category.getParent() == null ? null : category.getParent().getId());
+        map.put("deletedAt", category.getDeletedAt());
+        map.put("purgeAt", calculatePurgeAt(category.getDeletedAt()));
+        map.put("restorable", isTrashCategoryRestorable(category));
+        map.put("children", new ArrayList<Map<String, Object>>());
+        return map;
+    }
+
+    /** 将回收站中的笔记转换为树节点。 */
+    private Map<String, Object> toTrashTreeNote(Note note) {
+        Map<String, Object> map = new LinkedHashMap<>(toSummary(note));
+        map.put("name", note.getTitle());
+        map.put("type", "note");
         return map;
     }
 
@@ -715,6 +881,171 @@ public class NoteService {
             return null;
         }
         return deletedAt.plusDays(getRetentionDays());
+    }
+
+    /** 判断回收站笔记当前是否允许直接恢复。 */
+    private boolean isTrashNoteRestorable(Note note) {
+        if (note == null || note.getDeletedAt() == null) {
+            return false;
+        }
+        return note.getCategory() == null || note.getCategory().getDeletedAt() == null;
+    }
+
+    /** 判断回收站分类当前是否允许直接恢复。 */
+    private boolean isTrashCategoryRestorable(Category category) {
+        if (category == null || category.getDeletedAt() == null) {
+            return false;
+        }
+        return category.getParent() == null || category.getParent().getDeletedAt() == null;
+    }
+
+    /** 对回收站树做稳定排序：分类在前、笔记在后，并递归处理子节点。 */
+    private void sortTrashItems(List<Map<String, Object>> items) {
+        for (Map<String, Object> item : items) {
+            if ("category".equals(item.get("type"))) {
+                sortTrashItems(castChildren(item));
+            }
+        }
+        items.sort((left, right) -> {
+            int typeOrder = Boolean.compare(
+                    !"category".equals(left.get("type")),
+                    !"category".equals(right.get("type"))
+            );
+            if (typeOrder != 0) {
+                return typeOrder;
+            }
+            return String.valueOf(left.get("name")).compareToIgnoreCase(String.valueOf(right.get("name")));
+        });
+    }
+
+    /** 为回收站分类节点补充直接子项统计信息。 */
+    private void decorateTrashCategoryStats(List<Map<String, Object>> items) {
+        for (Map<String, Object> item : items) {
+            if (!"category".equals(item.get("type"))) {
+                continue;
+            }
+            List<Map<String, Object>> children = castChildren(item);
+            long childCategoryCount = children.stream().filter(child -> "category".equals(child.get("type"))).count();
+            long childNoteCount = children.stream().filter(child -> "note".equals(child.get("type"))).count();
+            item.put("childCategoryCount", childCategoryCount);
+            item.put("childNoteCount", childNoteCount);
+            item.put("hasChildren", !children.isEmpty());
+            decorateTrashCategoryStats(children);
+        }
+    }
+
+    /** 永久删除一组已进入回收站的笔记，并顺带清理分享记录。 */
+    private NotePurgeStat purgeDeletedNotes(List<Note> notes) {
+        if (notes == null || notes.isEmpty()) {
+            return new NotePurgeStat(0, 0);
+        }
+        int removedShareCount = 0;
+        for (Note note : notes) {
+            long shareCount = noteShareRepository.countByNoteId(note.getId());
+            if (shareCount > 0) {
+                noteShareRepository.deleteByNoteId(note.getId());
+                removedShareCount += (int) shareCount;
+            }
+        }
+        if (removedShareCount > 0) {
+            noteShareRepository.flush();
+        }
+        noteRepository.deleteAll(notes);
+        noteRepository.flush();
+        return new NotePurgeStat(notes.size(), removedShareCount);
+    }
+
+    /** 彻底删除分类子树，并同步清理外部引用。 */
+    private CategoryTrashOperationResult purgeTrashCategoryInternal(String ownerId,
+                                                                    String categoryId,
+                                                                    List<Category> allCategories) {
+        Set<String> descendants = collectDescendantCategoryIds(allCategories, categoryId);
+        List<Category> categoriesToPurge = allCategories.stream()
+                .filter(item -> descendants.contains(item.getId()))
+                .filter(item -> item.getDeletedAt() != null)
+                .toList();
+        if (categoriesToPurge.isEmpty()) {
+            throw new ResponseStatusException(NOT_FOUND, "回收站中不存在该分类");
+        }
+        Set<String> categoryIdsToPurge = categoriesToPurge.stream()
+                .map(Category::getId)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+
+        List<Note> notesToPurge = noteRepository.findByCategoryIdIn(categoryIdsToPurge).stream()
+                .filter(note -> ownerId.equals(note.getOwner().getId()))
+                .filter(note -> note.getDeletedAt() != null)
+                .toList();
+        NotePurgeStat notePurgeStat = purgeDeletedNotes(notesToPurge);
+
+        List<GitNoteSource> affectedSources = gitNoteSourceRepository.findByTargetCategoryIdIn(categoryIdsToPurge);
+        for (GitNoteSource source : affectedSources) {
+            source.setTargetCategoryId(null);
+        }
+        if (!affectedSources.isEmpty()) {
+            gitNoteSourceRepository.saveAll(affectedSources);
+        }
+        apiKeyScopeRepository.deleteByCategoryIdIn(categoryIdsToPurge);
+
+        List<Category> sortedCategories = new ArrayList<>(categoriesToPurge);
+        sortedCategories.sort(Comparator.comparingInt(this::categoryDepth).reversed());
+        for (Category item : sortedCategories) {
+            categoryRepository.delete(item);
+        }
+        categoryRepository.flush();
+
+        log.info("回收站分类已彻底删除: categoryId={}, ownerId={}, categoryCount={}, noteCount={}, removedShareCount={}",
+                categoryId, ownerId, categoriesToPurge.size(), notePurgeStat.noteCount(), notePurgeStat.removedShareCount());
+        return new CategoryTrashOperationResult(categoryId, categoriesToPurge.size(), notePurgeStat.noteCount());
+    }
+
+    /** 清理超过保留期的分类回收站数据。 */
+    private int purgeExpiredTrashCategories(LocalDateTime cutoff) {
+        List<Category> expiredCategories = categoryRepository.findByDeletedAtBefore(cutoff).stream()
+                .filter(category -> category.getDeletedAt() != null)
+                .toList();
+        if (expiredCategories.isEmpty()) {
+            return 0;
+        }
+
+        Map<String, List<Category>> expiredByOwner = new LinkedHashMap<>();
+        for (Category category : expiredCategories) {
+            expiredByOwner.computeIfAbsent(category.getOwner().getId(), ignored -> new ArrayList<>()).add(category);
+        }
+
+        int removedCategoryCount = 0;
+        for (Map.Entry<String, List<Category>> entry : expiredByOwner.entrySet()) {
+            String ownerId = entry.getKey();
+            List<Category> allCategories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
+            Set<String> expiredIds = entry.getValue().stream()
+                    .map(Category::getId)
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+            for (Category category : entry.getValue()) {
+                if (category.getParent() != null && expiredIds.contains(category.getParent().getId())) {
+                    continue;
+                }
+                removedCategoryCount += purgeTrashCategoryInternal(ownerId, category.getId(), allCategories).categoryCount();
+            }
+        }
+        return removedCategoryCount;
+    }
+
+    /** 计算分类在树中的深度，根分类深度为 0。 */
+    private int categoryDepth(Category category) {
+        int depth = 0;
+        Category current = category == null ? null : category.getParent();
+        while (current != null) {
+            depth++;
+            current = current.getParent();
+        }
+        return depth;
+    }
+
+    /** 删除分类结果。 */
+    public record CategoryTrashOperationResult(String categoryId, int categoryCount, int noteCount) {
+    }
+
+    /** 删除笔记时带回分享清理统计。 */
+    private record NotePurgeStat(int noteCount, int removedShareCount) {
     }
 
     /** 获取回收站保留天数，至少为 1 天。 */

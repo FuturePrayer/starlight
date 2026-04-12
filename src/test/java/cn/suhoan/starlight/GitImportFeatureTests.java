@@ -225,6 +225,45 @@ class GitImportFeatureTests {
         assertEquals(7, updated.get("scheduleDayOfWeek"));
     }
 
+    @Test
+    void deletingSavedGitSourceShouldKeepImportedNotes() throws Exception {
+        UserAccount user = authService.register("git-delete-source@example.com", "123456");
+        settingsService.setGitImportEnabled(true);
+
+        Path repository = createRepository(Map.of(
+                "README.md", "# README\n\nkept",
+                "docs/guide.md", "# Guide\n\nstill-kept"
+        ));
+        fakeGitRepositoryClient.useRepository(repository, List.of("main"), "dddddddddddddddddddddddddddddddddddddddd");
+
+        Map<String, Object> preview = gitImportService.createPreview(user, "https://example.com/delete-source.git", "main");
+        Map<String, Object> imported = gitImportService.importFromPreview(user,
+                new GitImportService.GitImportRequest(
+                        preview.get("previewToken").toString(),
+                        "",
+                        null,
+                        "delete-source-demo",
+                        false,
+                        "MANUAL_ONLY",
+                        "Asia/Shanghai",
+                        null,
+                        null,
+                        null
+                ));
+
+        String sourceId = ((Map<String, Object>) imported.get("source")).get("id").toString();
+        assertEquals(2, noteService.listUserNotes(user.getId()).size());
+        assertEquals(1, gitImportService.listSources(user.getId()).size());
+
+        gitImportService.deleteSource(user.getId(), sourceId);
+
+        assertTrue(gitImportService.listSources(user.getId()).isEmpty());
+        List<Map<String, Object>> remainingNotes = noteService.listUserNotes(user.getId());
+        assertEquals(2, remainingNotes.size());
+        assertTrue(remainingNotes.stream().anyMatch(item -> "README".equals(item.get("title"))));
+        assertTrue(remainingNotes.stream().anyMatch(item -> "guide".equals(item.get("title"))));
+    }
+
     private Path createRepository(Map<String, String> files) throws IOException {
         Path root = Files.createTempDirectory("starlight-git-fixture-");
         tempRepositories.add(root);

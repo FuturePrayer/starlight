@@ -63,20 +63,34 @@
       </div>
 
       <div class="git-form-grid">
-        <div class="form-field settings-form-field">
+        <div class="form-field settings-form-field settings-form-field--full git-tree-field">
           <label class="sl-label">仓库目录</label>
-          <select v-model="importForm.sourcePath" class="sl-input" :disabled="importing">
-            <option v-for="item in preview.directories" :key="item.path || '/'" :value="item.path">{{ item.label }}（{{ item.markdownFileCount }} 个 Markdown 文件）</option>
-          </select>
+          <DirectoryTree
+            v-model="importForm.sourcePath"
+            :items="directoryTreeItems"
+            title="仓库目录树"
+            description="目录默认折叠。点击左侧箭头可展开子目录，也可以使用右侧按钮全部展开或全部收起。"
+            empty-text="当前仓库预览没有可导入的目录"
+          />
+          <div class="git-tree-summary">当前导入目录：{{ selectedDirectoryLabel }}</div>
           <div class="field-hint">只会导入该目录下的 Markdown 文件以及包含 Markdown 文件的目录结构。</div>
         </div>
 
-        <div class="form-field settings-form-field">
+        <div class="form-field settings-form-field settings-form-field--full git-tree-field">
           <label class="sl-label">目标分类</label>
-          <select v-model="importForm.existingTargetCategoryId" class="sl-input" :disabled="importing">
-            <option value="">自动创建到「来自git」下</option>
-            <option v-for="item in categoryOptions" :key="item.id" :value="item.id">{{ item.label }}</option>
-          </select>
+          <div class="settings-inline-field">
+            <div class="field-hint" style="margin-top: 0;">当前：{{ selectedTargetCategoryLabel }}</div>
+            <button class="sl-btn sl-btn--ghost sl-btn--sm" type="button" :disabled="importing" @click="importForm.existingTargetCategoryId = ''">
+              使用自动创建规则
+            </button>
+          </div>
+          <DirectoryTree
+            v-model="importForm.existingTargetCategoryId"
+            :items="categoryTreeItems"
+            title="已有分类目录"
+            description="选择后会导入到该分类及其子目录范围内；留空则自动创建到“来自git”下。"
+            empty-text="当前还没有可选的目标分类"
+          />
           <div class="field-hint">留空时默认会在 <code>来自git</code> 分类下创建仓库同名分类；若重名会自动追加中文全角序号后缀。</div>
         </div>
 
@@ -189,6 +203,13 @@
               </button>
               <button class="sl-btn" :disabled="syncingSourceId === source.id" @click="confirmSyncSourceId = ''">取消</button>
             </template>
+            <button
+              class="sl-btn sl-btn--danger"
+              :disabled="syncingSourceId === source.id || savingSourceId === source.id"
+              @click="openDeleteSourceConfirm(source)"
+            >
+              删除导入源
+            </button>
           </div>
 
           <div class="git-source-schedule">
@@ -249,13 +270,36 @@
       </div>
     </div>
   </section>
+
+  <PopupLayer
+    v-if="deleteSourceState.visible"
+    title="确认删除已保存的 Git 导入源？"
+    eyebrow="Git 导入"
+    tone="danger"
+    width="min(460px, calc(100vw - 32px))"
+    @close="closeDeleteSourceConfirm"
+  >
+    <div class="transfer-alert transfer-alert--warning">
+      <strong>{{ deleteSourceState.repositoryName || '该导入源' }}</strong> 的仓库地址、同步历史和自动同步配置会被删除，但已经导入的笔记与分类数据会保留，不会被连带删除。
+    </div>
+    <div class="field-hint git-source-delete-hint">如果之后还需要重新同步这个仓库，需要再次填写仓库地址并重新保存导入源。</div>
+    <template #footer>
+      <button class="sl-btn" @click="closeDeleteSourceConfirm">取消</button>
+      <button class="sl-btn sl-btn--danger" :disabled="deletingSource" @click="handleDeleteSourceConfirmed">
+        {{ deletingSource ? '删除中…' : '确认删除导入源' }}
+      </button>
+    </template>
+  </PopupLayer>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { gitApi } from '@/api'
+import DirectoryTree from '@/components/DirectoryTree.vue'
+import PopupLayer from '@/components/PopupLayer.vue'
 import { useNoteStore } from '@/stores/note'
 import { useToastStore } from '@/stores/toast'
+import { buildCategorySelectionTree, buildGitDirectoryTree, findTreeNodeById } from '@/utils/directoryTree'
 
 const props = defineProps({
   treeItems: {
@@ -278,6 +322,12 @@ const confirmSyncSourceId = ref('')
 const preview = ref(null)
 const sources = ref([])
 const sourceDrafts = ref({})
+const deletingSource = ref(false)
+const deleteSourceState = ref({
+  visible: false,
+  sourceId: '',
+  repositoryName: ''
+})
 
 const scheduleTypeOptions = [
   { value: 'EVERY_30_MINUTES', label: '每 30 分钟' },
@@ -298,27 +348,27 @@ const weekDayOptions = [
 
 const importForm = ref(createImportForm())
 
-const categoryOptions = computed(() => {
-  const result = []
-  function walk(items, depth = 0) {
-    for (const item of items || []) {
-      if (item.type === 'category') {
-        result.push({
-          id: item.id,
-          label: `${'　'.repeat(depth)}${depth > 0 ? '└ ' : ''}${item.name}`
-        })
-        walk(item.children, depth + 1)
-      }
-    }
-  }
-  walk(props.treeItems)
-  return result
-})
+const categoryTreeItems = computed(() => buildCategorySelectionTree(props.treeItems))
+
+const directoryTreeItems = computed(() => buildGitDirectoryTree(preview.value?.directories || []))
 
 const selectedDirectory = computed(() => {
   return preview.value?.directories?.find(item => item.path === importForm.value.sourcePath)
     || preview.value?.directories?.[0]
     || null
+})
+
+const selectedDirectoryLabel = computed(() => {
+  if (!selectedDirectory.value) return '未选择'
+  return `${selectedDirectory.value.label || (selectedDirectory.value.path || '/') }（${selectedDirectory.value.markdownFileCount} 个 Markdown 文件）`
+})
+
+const selectedTargetCategoryLabel = computed(() => {
+  if (!importForm.value.existingTargetCategoryId) {
+    return '自动创建到「来自git」下'
+  }
+  const targetNode = findTreeNodeById(categoryTreeItems.value, importForm.value.existingTargetCategoryId)
+  return targetNode?.label || '自动创建到「来自git」下'
 })
 
 onMounted(async () => {
@@ -428,7 +478,7 @@ async function handleCreatePreview() {
     }
     preview.value = await gitApi.createPreview(importForm.value.repositoryUrl.trim(), importForm.value.branchName)
     importForm.value.repositoryName = preview.value.repositoryName || importForm.value.repositoryName
-    importForm.value.sourcePath = ''
+    importForm.value.sourcePath = preview.value?.directories?.[0]?.path ?? ''
     if (!importForm.value.targetCategoryName) {
       importForm.value.targetCategoryName = preview.value.defaultTargetCategoryName || preview.value.repositoryName || ''
     }
@@ -516,6 +566,38 @@ async function handleSaveSourceSchedule(source) {
     toast.error(err.message)
   } finally {
     savingSourceId.value = ''
+  }
+}
+
+function openDeleteSourceConfirm(source) {
+  deleteSourceState.value = {
+    visible: true,
+    sourceId: source.id,
+    repositoryName: source.repositoryName || ''
+  }
+}
+
+function closeDeleteSourceConfirm() {
+  deleteSourceState.value = {
+    visible: false,
+    sourceId: '',
+    repositoryName: ''
+  }
+}
+
+async function handleDeleteSourceConfirmed() {
+  if (!deleteSourceState.value.sourceId) return
+  deletingSource.value = true
+  try {
+    await gitApi.deleteSource(deleteSourceState.value.sourceId)
+    confirmSyncSourceId.value = ''
+    await loadSources()
+    toast.success('已删除保存的 Git 导入源，已导入的笔记数据仍然保留')
+    closeDeleteSourceConfirm()
+  } catch (err) {
+    toast.error(err.message)
+  } finally {
+    deletingSource.value = false
   }
 }
 
@@ -671,6 +753,15 @@ function formatDateTime(value) {
   gap: 14px;
 }
 
+.git-tree-field {
+  gap: 10px;
+}
+
+.git-tree-summary {
+  font-size: 12px;
+  color: var(--sl-text-secondary);
+}
+
 .git-preview-card__actions,
 .git-source-actions {
   display: flex;
@@ -769,6 +860,10 @@ function formatDateTime(value) {
 
 .git-inline-warning {
   width: 100%;
+}
+
+.git-source-delete-hint {
+  margin-top: 10px;
 }
 
 .transfer-alert--warning {

@@ -15,6 +15,12 @@ public interface ApiKeyScopeRepository extends JpaRepository<ApiKeyScope, String
 
     List<ApiKeyScope> findByApiKeyIdIn(Collection<String> apiKeyIds);
 
+    /** 查询引用了指定分类的授权范围。 */
+    List<ApiKeyScope> findByCategoryIdIn(Collection<String> categoryIds);
+
     void deleteByApiKeyId(String apiKeyId);
+
+    /** 删除引用指定分类集合的授权范围。 */
+    void deleteByCategoryIdIn(Collection<String> categoryIds);
 }
 

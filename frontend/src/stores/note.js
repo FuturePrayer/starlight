@@ -5,12 +5,14 @@ import { noteApi, categoryApi } from '@/api'
 export const useNoteStore = defineStore('note', () => {
   const tree = ref({ items: [], pinnedItems: [], trashCount: 0 })
   const trashNotes = ref([])
+  const trashTree = ref({ items: [], noteCount: 0, categoryCount: 0, totalCount: 0 })
   const currentNote = ref(null)
   const editMode = ref(false)
   const dirty = ref(false)
   const autosaveEnabled = ref(true)
   const lastSavedAt = ref(null)
   const expandedCategoryIds = ref([])
+  const trashExpandedCategoryIds = ref([])
   const editSnapshot = ref(null)
 
   function cloneNote(note) {
@@ -45,6 +47,10 @@ export const useNoteStore = defineStore('note', () => {
     return expandedCategoryIds.value.includes(id)
   }
 
+  function hasExpandedTrashCategory(id) {
+    return trashExpandedCategoryIds.value.includes(id)
+  }
+
   function setCategoryExpanded(id, expanded) {
     if (!id) return
     const next = expandedCategoryIds.value.filter(itemId => itemId !== id)
@@ -54,6 +60,17 @@ export const useNoteStore = defineStore('note', () => {
 
   function toggleCategoryExpanded(id) {
     setCategoryExpanded(id, !hasExpandedCategory(id))
+  }
+
+  function setTrashCategoryExpanded(id, expanded) {
+    if (id === undefined || id === null) return
+    const next = trashExpandedCategoryIds.value.filter(itemId => itemId !== id)
+    if (expanded) next.push(id)
+    trashExpandedCategoryIds.value = next
+  }
+
+  function toggleTrashCategoryExpanded(id) {
+    setTrashCategoryExpanded(id, !hasExpandedTrashCategory(id))
   }
 
   async function refreshTree() {
@@ -67,7 +84,18 @@ export const useNoteStore = defineStore('note', () => {
   }
 
   async function refreshTrash() {
-    trashNotes.value = await noteApi.trash()
+    const [notes, nextTrashTree] = await Promise.all([
+      noteApi.trash(),
+      noteApi.trashTree()
+    ])
+    trashNotes.value = notes
+    trashTree.value = {
+      ...nextTrashTree,
+      items: nextTrashTree?.items || [],
+      noteCount: Number(nextTrashTree?.noteCount || 0),
+      categoryCount: Number(nextTrashTree?.categoryCount || 0),
+      totalCount: Number(nextTrashTree?.totalCount || 0)
+    }
   }
 
   async function openNote(id) {
@@ -150,6 +178,35 @@ export const useNoteStore = defineStore('note', () => {
     return cat
   }
 
+  async function deleteCategory(id) {
+    const result = await categoryApi.delete(id)
+    if (currentNote.value?.categoryId === id) {
+      currentNote.value = null
+      resetEditSession()
+    }
+    await refreshTree()
+    await refreshTrash()
+    return result
+  }
+
+  async function purgeTrashCategory(id) {
+    const result = await categoryApi.purgeTrash(id)
+    if (currentNote.value?.categoryId === id) {
+      currentNote.value = null
+      resetEditSession()
+    }
+    await refreshTree()
+    await refreshTrash()
+    return result
+  }
+
+  async function restoreTrashCategory(id) {
+    const result = await categoryApi.restoreTrash(id)
+    await refreshTree()
+    await refreshTrash()
+    return result
+  }
+
   async function exportArchive() {
     return noteApi.exportArchive()
   }
@@ -229,11 +286,13 @@ export const useNoteStore = defineStore('note', () => {
   })
 
   return {
-    tree, trashNotes, currentNote, editMode, dirty, autosaveEnabled, lastSavedAt, expandedCategoryIds,
+    tree, trashNotes, trashTree, currentNote, editMode, dirty, autosaveEnabled, lastSavedAt, expandedCategoryIds, trashExpandedCategoryIds,
     refreshTree, refreshTrash, openNote, openTrashNote, clearCurrentNote, saveNote, deleteNote, restoreNote, purgeNote, setPinned,
-    createCategory, exportArchive, importArchive,
+    createCategory, deleteCategory, restoreTrashCategory, purgeTrashCategory, exportArchive, importArchive,
     startNewNote, enterEditMode, discardEdit, finishEditing,
-    setEditMode, setAutosaveEnabled, hasExpandedCategory, setCategoryExpanded, toggleCategoryExpanded,
+    setEditMode, setAutosaveEnabled,
+    hasExpandedCategory, setCategoryExpanded, toggleCategoryExpanded,
+    hasExpandedTrashCategory, setTrashCategoryExpanded, toggleTrashCategoryExpanded,
     allNotes
   }
 })

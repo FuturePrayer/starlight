@@ -18,6 +18,7 @@ import cn.suhoan.starlight.service.ApiKeyService;
 import cn.suhoan.starlight.service.AuthService;
 import cn.suhoan.starlight.service.McpAuthService;
 import cn.suhoan.starlight.service.McpNoteToolService;
+import cn.suhoan.starlight.service.McpScopeService;
 import cn.suhoan.starlight.service.NoteService;
 import cn.suhoan.starlight.service.NoteTransferService;
 import cn.suhoan.starlight.service.SettingsService;
@@ -386,6 +387,7 @@ class StarlightFeatureTests {
         Category child = noteService.createCategory(owner, "周报", root.getId());
         Category secret = noteService.createCategory(owner, "私密", null);
         Note visibleNote = noteService.createNote(owner, "周报总结", "本周进展一切顺利", child.getId());
+        noteService.createNote(owner, "根目录泄漏测试", "不应暴露给受限 key", null);
         noteService.createNote(owner, "私密备忘", "只允许在私密目录内访问", secret.getId());
 
         Map<String, Object> createdKey = apiKeyService.createKey(owner, "只读周报 Key", true, false, List.of(root.getId()));
@@ -402,9 +404,19 @@ class StarlightFeatureTests {
         ));
 
         Map<String, Object> tree = mcpNoteToolService.listTree(null, null, transportContext);
+        assertEquals(McpScopeService.VIRTUAL_ROOT_CATEGORY_ID, tree.get("rootCategoryId"));
+        assertEquals(true, tree.get("virtualRoot"));
+        Map<String, Object> treeScopeHints = scopeHints(tree);
+        assertEquals("virtual_root", treeScopeHints.get("rootMode"));
+        assertEquals("root", treeScopeHints.get("currentView"));
+        assertEquals(true, treeScopeHints.get("currentNodeVirtualRoot"));
+        assertEquals(true, treeScopeHints.get("scopeBoundaryContainer"));
+        assertEquals("query_child_category", treeScopeHints.get("recommendedNextAction"));
+        assertEquals(List.of(root.getId()), treeScopeHints.get("nextQueryCategoryIds"));
         String treeText = tree.toString();
         assertTrue(treeText.contains("工作"));
         assertTrue(treeText.contains("周报总结"));
+        assertFalse(treeText.contains("根目录泄漏测试"));
         assertFalse(treeText.contains("私密"));
         assertFalse(treeText.contains("私密备忘"));
 
@@ -414,6 +426,82 @@ class StarlightFeatureTests {
         assertTrue(items.getFirst().toString().contains(visibleNote.getId()));
 
         assertThrows(RuntimeException.class, () -> mcpNoteToolService.createNote("新建", "内容", child.getId(), transportContext));
+    }
+
+    @Test
+    void mcpScopedRootShouldUseParentOrVirtualRootAndForbidWritingToRealRoot() {
+        UserAccount owner = authService.register("mcp-scoped-root@example.com", "123456");
+        Category a = noteService.createCategory(owner, "A", null);
+        Category b = noteService.createCategory(owner, "B", a.getId());
+        Category c = noteService.createCategory(owner, "C", b.getId());
+        Category d = noteService.createCategory(owner, "D", b.getId());
+        Category e = noteService.createCategory(owner, "E", a.getId());
+        Category f = noteService.createCategory(owner, "F", e.getId());
+        Note cNote = noteService.createNote(owner, "C 笔记", "仅 C 可见", c.getId());
+        noteService.createNote(owner, "D 笔记", "不应暴露", d.getId());
+        noteService.createNote(owner, "F 笔记", "仅 F 可见", f.getId());
+        noteService.createNote(owner, "根目录笔记", "不应暴露", null);
+
+        Map<String, Object> createdKey = apiKeyService.createKey(owner, "多目录作用域 Key", false, false, List.of(c.getId(), f.getId()));
+        var principal = apiKeyService.authenticate(createdKey.get("apiKey").toString());
+        McpTransportContext transportContext = McpTransportContext.create(Map.of(
+                McpAuthService.TRANSPORT_PRINCIPAL_KEY, principal
+        ));
+
+        Map<String, Object> rootTree = mcpNoteToolService.listTree(null, 0, transportContext);
+        assertEquals(McpScopeService.VIRTUAL_ROOT_CATEGORY_ID, rootTree.get("categoryId"));
+        assertEquals(McpScopeService.VIRTUAL_ROOT_CATEGORY_ID, rootTree.get("rootCategoryId"));
+        assertEquals(true, rootTree.get("virtualRoot"));
+        Map<String, Object> virtualRootHints = scopeHints(rootTree);
+        assertEquals("virtual_root", virtualRootHints.get("rootMode"));
+        assertEquals(true, virtualRootHints.get("currentNodeVirtualRoot"));
+        assertEquals(true, virtualRootHints.get("scopeBoundaryContainer"));
+        assertEquals(List.of(c.getId(), f.getId()), virtualRootHints.get("nextQueryCategoryIds"));
+        String rootTreeText = rootTree.toString();
+        assertTrue(rootTreeText.contains("C"));
+        assertTrue(rootTreeText.contains("F"));
+        assertFalse(rootTreeText.contains("D 笔记"));
+        assertFalse(rootTreeText.contains("根目录笔记"));
+
+        Map<String, Object> childTree = mcpNoteToolService.listTree(c.getId(), 0, transportContext);
+        assertEquals(c.getId(), childTree.get("categoryId"));
+        assertEquals(McpScopeService.VIRTUAL_ROOT_CATEGORY_ID, childTree.get("rootCategoryId"));
+        Map<String, Object> childTreeHints = scopeHints(childTree);
+        assertEquals("category", childTreeHints.get("currentView"));
+        assertEquals(false, childTreeHints.get("currentNodeVirtualRoot"));
+        assertEquals(false, childTreeHints.get("scopeBoundaryContainer"));
+        assertEquals("read_note_or_search", childTreeHints.get("recommendedNextAction"));
+        assertTrue(childTree.toString().contains("C 笔记"));
+
+        assertThrows(RuntimeException.class, () -> mcpNoteToolService.createCategory("越权目录", null, transportContext));
+        assertThrows(RuntimeException.class, () -> mcpNoteToolService.createNote("越权笔记", "内容", null, transportContext));
+        assertThrows(RuntimeException.class, () -> mcpNoteToolService.updateNote(cNote.getId(), "越权移动", "内容", null, transportContext));
+        assertThrows(RuntimeException.class, () -> mcpNoteToolService.listTree(a.getId(), 0, transportContext));
+
+        Map<String, Object> singleScopeKey = apiKeyService.createKey(owner, "单目录作用域 Key", true, false, List.of(c.getId()));
+        var singleScopePrincipal = apiKeyService.authenticate(singleScopeKey.get("apiKey").toString());
+        McpTransportContext singleScopeContext = McpTransportContext.create(Map.of(
+                McpAuthService.TRANSPORT_PRINCIPAL_KEY, singleScopePrincipal
+        ));
+        Map<String, Object> singleScopeTree = mcpNoteToolService.listTree(null, 0, singleScopeContext);
+        assertEquals(b.getId(), singleScopeTree.get("categoryId"));
+        assertEquals(b.getId(), singleScopeTree.get("rootCategoryId"));
+        assertEquals(false, singleScopeTree.get("virtualRoot"));
+        Map<String, Object> singleScopeHints = scopeHints(singleScopeTree);
+        assertEquals("shared_parent", singleScopeHints.get("rootMode"));
+        assertEquals(false, singleScopeHints.get("currentNodeVirtualRoot"));
+        assertEquals(true, singleScopeHints.get("scopeBoundaryContainer"));
+        assertEquals(List.of(c.getId()), singleScopeHints.get("nextQueryCategoryIds"));
+        String singleScopeTreeText = singleScopeTree.toString();
+        assertTrue(singleScopeTreeText.contains("C"));
+        assertFalse(singleScopeTreeText.contains("D"));
+        assertFalse(singleScopeTreeText.contains("根目录笔记"));
+
+        Map<String, Object> sharedParentTree = mcpNoteToolService.listTree(b.getId(), 0, singleScopeContext);
+        Map<String, Object> sharedParentHints = scopeHints(sharedParentTree);
+        assertEquals("category", sharedParentHints.get("currentView"));
+        assertEquals(true, sharedParentHints.get("scopeBoundaryContainer"));
+        assertEquals(List.of(c.getId()), sharedParentHints.get("nextQueryCategoryIds"));
     }
 
     @Test
@@ -476,17 +564,79 @@ class StarlightFeatureTests {
         Map<String, Object> tree = mcpNoteToolService.listTree(root.getId(), 1, transportContext);
         assertEquals(root.getId(), tree.get("categoryId"));
         assertEquals(1, tree.get("depth"));
+        Map<String, Object> treeScopeHints = scopeHints(tree);
+        assertEquals("real_root", treeScopeHints.get("rootMode"));
+        assertEquals(false, treeScopeHints.get("scopeBoundaryContainer"));
+        assertEquals(List.of(child.getId()), treeScopeHints.get("nextQueryCategoryIds"));
         String treeText = tree.toString();
         assertTrue(treeText.contains("项目"));
         assertTrue(treeText.contains("模块A"));
         assertTrue(treeText.contains("模块A说明"));
-        assertFalse(treeText.contains("深层目录"));
+        assertTrue(treeText.contains("深层目录"));
         assertFalse(treeText.contains("深层笔记"));
 
         Map<String, Object> noteContent = mcpNoteToolService.getNoteContent(childNote.getId(), transportContext);
         assertEquals(childNote.getId(), noteContent.get("id"));
         assertEquals("# 模块A说明\n\n这里是 Markdown 原文", noteContent.get("markdownContent"));
         assertFalse(noteContent.containsKey("renderedHtml"));
+    }
+
+    @Test
+    void deletingCategoryShouldMoveSubtreeToTrashAndPreserveTreeStructure() {
+        UserAccount owner = authService.register("category-trash@example.com", "123456");
+        Category project = noteService.createCategory(owner, "项目", null);
+        Category docs = noteService.createCategory(owner, "文档", project.getId());
+        Note intro = noteService.createNote(owner, "项目简介", "# 项目简介", project.getId());
+        Note guide = noteService.createNote(owner, "使用指南", "# 使用指南", docs.getId());
+
+        NoteService.CategoryTrashOperationResult deleteResult = noteService.deleteCategory(owner.getId(), project.getId());
+        assertEquals(2, deleteResult.categoryCount());
+        assertEquals(2, deleteResult.noteCount());
+
+        String activeTreeText = noteService.buildTree(owner.getId()).toString();
+        assertFalse(activeTreeText.contains("项目"));
+        assertFalse(activeTreeText.contains("文档"));
+        assertFalse(activeTreeText.contains("项目简介"));
+        assertFalse(activeTreeText.contains("使用指南"));
+
+        Map<String, Object> trashTree = noteService.buildTrashTree(owner.getId());
+        assertEquals(2, trashTree.get("categoryCount"));
+        assertEquals(2, trashTree.get("noteCount"));
+        String trashTreeText = trashTree.toString();
+        assertTrue(trashTreeText.contains("项目"));
+        assertTrue(trashTreeText.contains("文档"));
+        assertTrue(trashTreeText.contains("项目简介"));
+        assertTrue(trashTreeText.contains("使用指南"));
+
+        Map<String, Object> trashedGuide = noteService.getTrashNoteDetail(owner.getId(), guide.getId());
+        assertEquals(false, trashedGuide.get("restorable"));
+        assertThrows(IllegalArgumentException.class, () -> noteService.restoreNote(owner.getId(), guide.getId()));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> trashItemsBeforeRestore = (List<Map<String, Object>>) trashTree.get("items");
+        Map<String, Object> trashedProject = findTreeItemById(trashItemsBeforeRestore, project.getId());
+        assertEquals(true, trashedProject.get("restorable"));
+
+        NoteService.CategoryTrashOperationResult restoreResult = noteService.restoreTrashCategory(owner.getId(), project.getId());
+        assertEquals(2, restoreResult.categoryCount());
+        assertEquals(2, restoreResult.noteCount());
+
+        String restoredTreeText = noteService.buildTree(owner.getId()).toString();
+        assertTrue(restoredTreeText.contains("项目"));
+        assertTrue(restoredTreeText.contains("文档"));
+        assertTrue(restoredTreeText.contains("项目简介"));
+        assertTrue(restoredTreeText.contains("使用指南"));
+        assertEquals(0, ((Number) noteService.buildTrashTree(owner.getId()).get("totalCount")).intValue());
+
+        NoteService.CategoryTrashOperationResult deleteAgainResult = noteService.deleteCategory(owner.getId(), project.getId());
+        assertEquals(2, deleteAgainResult.categoryCount());
+        assertEquals(2, deleteAgainResult.noteCount());
+
+        NoteService.CategoryTrashOperationResult purgeResult = noteService.purgeTrashCategory(owner.getId(), project.getId());
+        assertEquals(2, purgeResult.categoryCount());
+        assertEquals(2, purgeResult.noteCount());
+        assertEquals(0, ((Number) noteService.buildTrashTree(owner.getId()).get("totalCount")).intValue());
+        assertThrows(RuntimeException.class, () -> noteService.getTrashNoteDetail(owner.getId(), intro.getId()));
     }
 
     private byte[] createZipWithEntry(String entryName, String content) throws IOException {
@@ -498,5 +648,27 @@ class StarlightFeatureTests {
             zipOutputStream.finish();
             return outputStream.toByteArray();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> scopeHints(Map<String, Object> tree) {
+        return (Map<String, Object>) tree.get("scopeHints");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> findTreeItemById(List<Map<String, Object>> items, String id) {
+        for (Map<String, Object> item : items) {
+            if (id.equals(item.get("id"))) {
+                return item;
+            }
+            Object children = item.get("children");
+            if (children instanceof List<?> childList) {
+                Map<String, Object> found = findTreeItemById((List<Map<String, Object>>) childList, id);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 }

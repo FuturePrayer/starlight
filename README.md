@@ -170,6 +170,55 @@ Starlight 内置 **Stateless Streamable HTTP MCP Server**，默认端点为：
 - 只读 Key 只能使用查询类工具，不能执行增删改
 - 后端会记录每个 Key 的最近使用时间，便于在设置中心审计
 
+### `starlight_list_tree` 的根目录语义
+
+当 MCP 客户端把 `categoryId` 省略、传 `null`，或传字符串 `"null"` / `"undefined"` 时，`starlight_list_tree` 会查询当前 API Key 的 **MCP 权限根目录**，而不是一律暴露真实根目录。
+
+返回结果会额外包含：
+
+- `rootCategoryId`
+- `rootCategoryName`
+- `virtualRoot`
+- `scopeHints`
+
+常见场景如下：
+
+| API Key 范围 | MCP 根目录表现 |
+| --- | --- |
+| 允许全部目录 | `rootCategoryId = null`，表示真实根目录 |
+| 单一路径且共享父目录，例如只允许 `/a/b/c` | MCP 根目录映射为 `/a/b`；根查询返回 `categoryId = b`、`rootCategoryId = b`，根下只展示被授权入口 `c`，不会暴露同级未授权目录 |
+| 多个分散路径，例如 `/a/b/c` 与 `/a/e/f` | MCP 会返回虚拟根：`rootCategoryId = "__mcp_virtual_root__"`、`categoryId = "__mcp_virtual_root__"`、`virtualRoot = true`；根下只展示 `c` 和 `f` |
+
+### `scopeHints` 字段说明
+
+`scopeHints` 用于帮助 AI 客户端判断当前视图是不是权限容器、下一步应该继续查询哪个分类：
+
+| 字段 | 说明 |
+| --- | --- |
+| `rootMode` | 根模式：`real_root` / `shared_parent` / `virtual_root` |
+| `currentView` | 当前返回的是根视图还是分类视图：`root` / `category` |
+| `currentNodeVirtualRoot` | 当前节点是否就是虚拟根 |
+| `scopeBoundaryContainer` | 当前节点是否只是“权限边界容器”，即它本身不是授权写入目标，只用于承载被授权入口 |
+| `scopeBoundaryType` | 边界容器类型：`virtual_root` / `shared_parent` / `none` |
+| `recommendedNextAction` | 推荐下一步：`query_child_category` 或 `read_note_or_search` |
+| `nextQueryCategoryIds` | 推荐继续调用 `starlight_list_tree` 时使用的下一层分类 ID 列表 |
+
+如果 `recommendedNextAction = query_child_category`，通常表示应该从 `nextQueryCategoryIds` 中选择一个分类，再次调用 `starlight_list_tree(categoryId=..., depth=...)` 继续下钻。
+
+### 低深度查询与 `childrenTruncated`
+
+即使 `depth` 不足以展开下一层内容，`starlight_list_tree` 仍会返回当前层子目录的基础元信息，例如：
+
+- `id`
+- `name`
+- `type = category`
+- `parentId`
+- `childCategoryCount`
+- `childNoteCount`
+- `hasChildren`
+
+如果某个分类因为深度限制没有继续展开，会额外带上 `childrenTruncated = true`。这可以帮助 AI 判断：当前节点并不是“没有子目录”，而是“还可以继续查询”。
+
 ### 当前提供的工具
 
 | 工具名 | 说明 | 只读 Key 可用 |
@@ -191,6 +240,7 @@ Starlight 内置 **Stateless Streamable HTTP MCP Server**，默认端点为：
   - `Authorization: Bearer <api-key>`
   - `X-API-Key: <api-key>`
 - 若模型会把空分类传成字符串 `"null"` 或 `"undefined"`，服务端已兼容为“根目录”
+- 当前 Spring AI MCP 注解式服务端暂不支持按请求动态裁剪 `tools/list`；只读 Key 仍可能看到写工具，但服务端会严格拒绝实际写调用
 
 ## 镜像与发布
 
