@@ -33,6 +33,10 @@ public class SettingsService {
     public static final String PASSKEY_ENABLED_KEY = "passkey.enabled";
     /** 配置项：是否启用 MCP Server */
     public static final String MCP_ENABLED_KEY = "mcp.enabled";
+    /** 配置项：是否启用 Git 导入 */
+    public static final String GIT_IMPORT_ENABLED_KEY = "git.import.enabled";
+    /** 配置项：Git 导入最大并发数，0 或负数表示不限制 */
+    public static final String GIT_IMPORT_MAX_CONCURRENT_KEY = "git.import.max-concurrent";
 
     private final AppSettingRepository appSettingRepository;
     private final UserAccountRepository userAccountRepository;
@@ -139,6 +143,37 @@ public class SettingsService {
     public void setMcpServerEnabled(boolean enabled) {
         log.info("设置 MCP Server 开关: enabled={}", enabled);
         saveValue(MCP_ENABLED_KEY, Boolean.toString(enabled));
+    }
+
+    /** 查询 Git 导入功能是否已启用。 */
+    @Transactional(readOnly = true)
+    public boolean isGitImportEnabled() {
+        return Boolean.parseBoolean(getValue(GIT_IMPORT_ENABLED_KEY, "false"));
+    }
+
+    /** 设置 Git 导入功能开关。 */
+    public void setGitImportEnabled(boolean enabled) {
+        log.info("设置 Git 导入开关: enabled={}", enabled);
+        saveValue(GIT_IMPORT_ENABLED_KEY, Boolean.toString(enabled));
+    }
+
+    /** 获取 Git 导入最大并发数。 */
+    @Transactional(readOnly = true)
+    public int getGitImportMaxConcurrent() {
+        try {
+            return Integer.parseInt(getValue(GIT_IMPORT_MAX_CONCURRENT_KEY, "2").trim());
+        } catch (Exception exception) {
+            return 2;
+        }
+    }
+
+    /** 设置 Git 导入最大并发数，0 或负数表示不限制。 */
+    public void setGitImportMaxConcurrent(int limit) {
+        if (limit > 1000) {
+            throw new IllegalArgumentException("Git 导入最大并发数不能超过 1000");
+        }
+        log.info("设置 Git 导入最大并发数: limit={}", limit);
+        saveValue(GIT_IMPORT_MAX_CONCURRENT_KEY, Integer.toString(limit));
     }
 
     @Transactional(readOnly = true)

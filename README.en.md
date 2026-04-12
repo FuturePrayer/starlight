@@ -19,6 +19,7 @@ Starlight is a **Spring Boot 4 + Vue 3** Markdown note-taking application with c
 - 🌲 Unlimited category tree, root-level notes, pinning, and trash
 - 🔎 Full-text search across titles and note content
 - 📦 ZIP import / export with Markdown + folder structure
+- 🧬 Git repository import with branch selection, directory filtering, overwrite reimport, auto-sync, and sync history
 - 🔗 Public share links, password-protected shares, expiration, and QR codes
 - 🌌 Starlight Site: publish a category as a read-only public website
 - 🎨 Built-in and external themes
@@ -31,6 +32,14 @@ Starlight is a **Spring Boot 4 + Vue 3** Markdown note-taking application with c
 - **Frontend:** Vue 3, Vite, Pinia, Vue Router
 - **Database:** H2 by default, plus PostgreSQL and MySQL
 - **Packaging:** combined image, split frontend/backend images, Spring Boot JAR, GraalVM Native Image
+
+## Git Import Notes
+
+- Git import is disabled by default. An administrator must enable it manually in Settings and can also set the maximum number of concurrent import tasks.
+- Only `http://` and `https://` repository URLs are supported. Private repositories can embed credentials in the URL, for example `https://token@github.com/...`.
+- The first import resolves remote branches and performs a shallow clone into a temporary working directory. Users can then choose both the repository subdirectory to import and the target category. The temporary directory is deleted after the import finishes.
+- Reimport always clones the latest content, overwrites previously imported notes even if the user edited them, and hard-deletes old imported data, including related notes that are already in trash.
+- Auto-sync uses a structured UI instead of raw Cron expressions. The backend stores the latest 5 sync records, and one failed run does not block later scheduled runs.
 
 ## Deployment
 
@@ -66,6 +75,7 @@ First-start notes:
 - the first registered user automatically becomes the administrator
 - public registration is disabled by default and can be enabled later by the admin
 - the MCP Server is disabled by default and must be enabled by an administrator
+- Git import is disabled by default and must be enabled by an administrator
 
 ### Option 2: Run a single container
 

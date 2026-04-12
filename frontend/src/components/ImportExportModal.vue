@@ -1,9 +1,9 @@
 <template>
   <PopupLayer
     title="导入 / 导出笔记"
-    description="将全部笔记导出为纯 Markdown + 文件夹结构 ZIP，或导入同类 ZIP 包重建分类与笔记。"
-    eyebrow="Markdown ZIP"
-    width="min(620px, calc(100vw - 32px))"
+    description="支持 ZIP 批量迁移，也支持通过 Git 仓库导入 Markdown 笔记并保留目录结构。"
+    eyebrow="Markdown ZIP / Git"
+    width="min(1080px, calc(100vw - 24px))"
     @close="emit('close')"
   >
     <div class="transfer-layout">
@@ -62,15 +62,27 @@
           {{ importing ? '正在导入…' : '开始导入' }}
         </button>
       </section>
+
+      <section class="transfer-card transfer-card--git transfer-card--full">
+        <GitImportPanel :tree-items="treeItems" />
+      </section>
     </div>
   </PopupLayer>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue'
+import GitImportPanel from '@/components/GitImportPanel.vue'
 import PopupLayer from '@/components/PopupLayer.vue'
 import { useNoteStore } from '@/stores/note'
 import { useToastStore } from '@/stores/toast'
+
+defineProps({
+  treeItems: {
+    type: Array,
+    default: () => []
+  }
+})
 
 const emit = defineEmits(['close'])
 const noteStore = useNoteStore()
@@ -175,6 +187,16 @@ async function handleImport() {
   background:
     linear-gradient(180deg, var(--sl-hover-bg) 0, transparent 140px),
     var(--sl-panel, var(--sl-card));
+}
+
+.transfer-card--git {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--sl-primary) 8%, transparent) 0, transparent 160px),
+    var(--sl-panel, var(--sl-card));
+}
+
+.transfer-card--full {
+  grid-column: 1 / -1;
 }
 
 .transfer-card__header {

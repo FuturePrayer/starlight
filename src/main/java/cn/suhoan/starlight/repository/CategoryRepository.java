@@ -26,5 +26,8 @@ public interface CategoryRepository extends JpaRepository<Category, String> {
 
     /** 根据父分类 ID 查询直接子分类 */
     List<Category> findByParentId(String parentId);
+
+    /** 根据多个 ID 批量查询分类。 */
+    List<Category> findByIdIn(List<String> ids);
 }
 

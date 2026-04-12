@@ -45,6 +45,8 @@ public class AdminController {
         data.put("passkeyEnabled", settingsService.isPasskeyEnabled());
         data.put("siteUrlHttps", settingsService.isSiteUrlHttps());
         data.put("mcpEnabled", settingsService.isMcpServerEnabled());
+        data.put("gitImportEnabled", settingsService.isGitImportEnabled());
+        data.put("gitImportMaxConcurrent", settingsService.getGitImportMaxConcurrent());
         return ApiResponse.ok(data);
     }
 
@@ -67,6 +69,8 @@ public class AdminController {
             settingsService.setPasskeyEnabled(false);
         }
         settingsService.setMcpServerEnabled(request.mcpEnabled());
+        settingsService.setGitImportEnabled(request.gitImportEnabled());
+        settingsService.setGitImportMaxConcurrent(request.gitImportMaxConcurrent());
         Map<String, Object> data = new HashMap<>();
         data.put("registrationEnabled", settingsService.isRegistrationEnabled());
         data.put("shareBaseUrl", settingsService.getShareBaseUrl());
@@ -74,11 +78,15 @@ public class AdminController {
         data.put("passkeyEnabled", settingsService.isPasskeyEnabled());
         data.put("siteUrlHttps", settingsService.isSiteUrlHttps());
         data.put("mcpEnabled", settingsService.isMcpServerEnabled());
+        data.put("gitImportEnabled", settingsService.isGitImportEnabled());
+        data.put("gitImportMaxConcurrent", settingsService.getGitImportMaxConcurrent());
         return ApiResponse.ok(data);
     }
 
     /** 管理员设置请求体 */
     public record AdminSettingsRequest(boolean registrationEnabled, String shareBaseUrl,
                                        boolean totpEnabled, boolean passkeyEnabled,
-                                       boolean mcpEnabled) {}
+                                       boolean mcpEnabled,
+                                       boolean gitImportEnabled,
+                                       int gitImportMaxConcurrent) {}
 }

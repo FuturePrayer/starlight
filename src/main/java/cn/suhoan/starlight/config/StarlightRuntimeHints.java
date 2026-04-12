@@ -32,6 +32,12 @@ public class StarlightRuntimeHints implements RuntimeHintsRegistrar {
         hints.resources().registerPattern("cert/*.pem");
         try {
             registerFlywayConfigurationExtensionHints(hints, resolver);
+
+            hints.reflection().registerType(TypeReference.of("cn.suhoan.starlight.service.MarkdownService$OutlineItem"),
+                    builder -> builder.withMembers(
+                            MemberCategory.INVOKE_DECLARED_CONSTRUCTORS,
+                            MemberCategory.INVOKE_DECLARED_METHODS
+                    ));
         } catch (IOException ex) {
             throw new IllegalStateException("Failed to register native runtime hints", ex);
         }

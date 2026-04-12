@@ -228,7 +228,7 @@
         <div v-else-if="currentTab === 'admin'" class="settings-panel">
           <div class="settings-panel__header">
             <h3>管理员设置</h3>
-            <p>管理注册开关、登录安全能力以及 MCP Server 全局状态。</p>
+            <p>管理注册开关、登录安全能力、MCP Server 以及 Git 导入全局状态。</p>
           </div>
           <div class="settings-form-grid">
             <div class="form-field settings-form-field settings-form-field--full">
@@ -268,6 +268,19 @@
                 <span>{{ adminForm.mcpEnabled ? '已启用' : '已关闭' }}</span>
               </label>
               <div class="field-hint">默认端点为 <code>/api/mcp</code>。仅支持 API Key 访问，并同时受目录范围与只读/可写权限约束。</div>
+            </div>
+            <div class="form-field settings-form-field">
+              <label class="sl-label">Git 导入</label>
+              <label class="sl-switch-row">
+                <input v-model="adminForm.gitImportEnabled" type="checkbox" />
+                <span>{{ adminForm.gitImportEnabled ? '已开启' : '已关闭' }}</span>
+              </label>
+              <div class="field-hint">新项目默认关闭。开启后用户才可以通过 Git 仓库导入笔记、保存仓库地址并设置自动同步。</div>
+            </div>
+            <div class="form-field settings-form-field">
+              <label class="sl-label">Git 导入并发数</label>
+              <input v-model.number="adminForm.gitImportMaxConcurrent" class="sl-input" type="number" />
+              <div class="field-hint">0 或负数表示不限制。建议根据服务器性能设置一个较小值，防止恶意导入造成压力。</div>
             </div>
           </div>
           <div class="settings-actions">
@@ -408,7 +421,7 @@ const navItems = computed(() => {
     { id: 'apiKeys', title: 'API Key', desc: '集成权限与目录范围' }
   ]
   if (authStore.isAdmin) {
-    items.push({ id: 'admin', title: '管理员', desc: '注册、MCP、全局功能' })
+    items.push({ id: 'admin', title: '管理员', desc: '注册、MCP、Git 导入' })
   }
   return items
 })
@@ -456,7 +469,9 @@ const adminForm = ref({
   shareBaseUrl: '',
   totpEnabled: false,
   passkeyEnabled: false,
-  mcpEnabled: false
+  mcpEnabled: false,
+  gitImportEnabled: false,
+  gitImportMaxConcurrent: 2
 })
 const showMcpInfoModal = ref(false)
 
@@ -584,7 +599,9 @@ async function loadAdminSettings() {
       shareBaseUrl: settings.shareBaseUrl || '',
       totpEnabled: Boolean(settings.totpEnabled),
       passkeyEnabled: Boolean(settings.passkeyEnabled),
-      mcpEnabled: Boolean(settings.mcpEnabled)
+      mcpEnabled: Boolean(settings.mcpEnabled),
+      gitImportEnabled: Boolean(settings.gitImportEnabled),
+      gitImportMaxConcurrent: Number(settings.gitImportMaxConcurrent ?? 2)
     }
     siteUrlHttps.value = Boolean(settings.siteUrlHttps)
     totpGlobalEnabled.value = Boolean(settings.totpEnabled)
@@ -828,7 +845,9 @@ async function handleAdminSave() {
       shareBaseUrl: saved.shareBaseUrl || '',
       totpEnabled: Boolean(saved.totpEnabled),
       passkeyEnabled: Boolean(saved.passkeyEnabled),
-      mcpEnabled: Boolean(saved.mcpEnabled)
+      mcpEnabled: Boolean(saved.mcpEnabled),
+      gitImportEnabled: Boolean(saved.gitImportEnabled),
+      gitImportMaxConcurrent: Number(saved.gitImportMaxConcurrent ?? 2)
     }
     siteUrlHttps.value = Boolean(saved.siteUrlHttps)
     passkeyGlobalEnabled.value = Boolean(saved.passkeyEnabled)

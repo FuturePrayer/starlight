@@ -10,7 +10,7 @@
     </parent>
     <groupId>cn.suhoan</groupId>
     <artifactId>starlight</artifactId>
-    <version>0.3.0</version>
+    <version>0.3.1</version>
     <name>starlight</name>
     <description>starlight</description>
     <url/>
@@ -96,6 +96,11 @@
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jgit</groupId>
+            <artifactId>org.eclipse.jgit</artifactId>
+            <version>7.6.0.202603022253-r</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

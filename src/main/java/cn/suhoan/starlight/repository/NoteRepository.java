@@ -30,6 +30,12 @@ public interface NoteRepository extends JpaRepository<Note, String> {
 
     List<Note> findByDeletedAtBefore(LocalDateTime cutoff);
 
+    /** 查询多个 ID 对应的笔记（包含回收站）。 */
+    List<Note> findByIdIn(Collection<String> ids);
+
+    /** 查询多个分类下的全部笔记（包含回收站），用于 Git 重导入硬删除。 */
+    List<Note> findByCategoryIdIn(Collection<String> categoryIds);
+
     /** 查询指定分类下未删除的笔记，按置顶优先、更新时间倒序排列 */
     List<Note> findByCategoryIdAndDeletedAtIsNullOrderByPinnedFlagDescUpdatedAtDesc(String categoryId);
     /** 查询指定分类下未删除的笔记，按置顶优先、标题正序排列 */

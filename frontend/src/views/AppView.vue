@@ -341,6 +341,7 @@
     />
     <ImportExportModal
       v-if="showImportExportModal"
+      :tree-items="noteStore.tree.items"
       @close="showImportExportModal = false"
     />
     <SiteModal
