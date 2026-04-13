@@ -131,6 +131,12 @@
             <p>创建多个 API Key，并分别配置 MCP Server 的访问模式与目录范围。MCP Server 必须使用 API Key 访问。</p>
           </div>
 
+          <div v-if="createdApiKey" class="created-key-box">
+            <div class="created-key-box__title">新 API Key 已生成</div>
+            <div class="created-key-box__desc">该明文只会展示一次，请立即复制保存。</div>
+            <div class="created-key-box__value" @click="copyText(createdApiKey)">{{ createdApiKey }}</div>
+          </div>
+
           <div class="api-key-workspace">
             <div class="api-key-list-card settings-section-card">
               <div class="settings-section-card__header">
@@ -158,87 +164,6 @@
                     <span>{{ item.allowAllCategoriesFlag ? '全部目录' : `指定目录 ${item.scopeCategoryIds?.length || 0} 个` }}</span>
                     <span>{{ item.lastUsedAt ? `最近使用 ${formatTime(item.lastUsedAt)}` : '尚未使用' }}</span>
                   </span>
-                </button>
-              </div>
-            </div>
-
-            <div class="api-key-form-card settings-section-card">
-              <div class="settings-section-card__header">
-                <div>
-                  <h4>{{ editingKeyId ? '编辑 API Key' : '新建 API Key' }}</h4>
-                  <p>建议按设备、客户端或自动化任务拆分 Key，便于分别授权、停用与审计。</p>
-                </div>
-                <div v-if="editingKeyId" class="settings-actions settings-actions--inline">
-                  <button class="sl-btn sl-btn--ghost sl-btn--sm" @click="startCreateApiKey">新建另一个</button>
-                  <button class="sl-btn sl-btn--danger sl-btn--sm" @click="handleDeleteApiKey(editingKeyId)">删除</button>
-                </div>
-              </div>
-
-              <div v-if="createdApiKey" class="created-key-box">
-                <div class="created-key-box__title">新 API Key 已生成</div>
-                <div class="created-key-box__desc">该明文只会展示一次，请立即复制保存。</div>
-                <div class="created-key-box__value" @click="copyText(createdApiKey)">{{ createdApiKey }}</div>
-              </div>
-
-              <div class="settings-form-grid">
-                <div class="form-field settings-form-field settings-form-field--full">
-                  <label class="sl-label">名称 / 备注</label>
-                  <input v-model="apiKeyForm.name" class="sl-input" placeholder="例如：Claude Desktop / 手机自动化" />
-                </div>
-                <div class="form-field settings-form-field">
-                  <label class="sl-label">启用状态</label>
-                  <label class="sl-switch-row">
-                    <input v-model="apiKeyForm.enabledFlag" type="checkbox" :disabled="!editingKeyId" />
-                    <span>{{ apiKeyForm.enabledFlag ? '已启用' : '已停用' }}</span>
-                  </label>
-                </div>
-              </div>
-
-              <div class="api-key-group-divider"></div>
-
-              <div class="settings-section-card api-key-subsection">
-                <div class="settings-section-card__header">
-                  <div>
-                    <h4>MCP Server</h4>
-                    <p>这里统一管理与 MCP 相关的访问模式、目录范围以及使用说明入口。</p>
-                  </div>
-                  <button class="sl-btn sl-btn--ghost sl-btn--sm" type="button" @click="showMcpInfoModal = true">查看说明与工具</button>
-                </div>
-
-                <div class="settings-form-grid">
-                  <div class="form-field settings-form-field">
-                    <label class="sl-label">访问模式</label>
-                    <label class="sl-switch-row">
-                      <input v-model="apiKeyForm.readOnlyFlag" type="checkbox" />
-                      <span>{{ apiKeyForm.readOnlyFlag ? '只读' : '可读写' }}</span>
-                    </label>
-                    <div class="field-hint">只读 Key 只能读取目录和笔记内容，不能创建、修改或删除数据。</div>
-                  </div>
-                  <div class="form-field settings-form-field settings-form-field--full">
-                    <label class="sl-label">目录范围</label>
-                    <label class="sl-switch-row">
-                      <input v-model="apiKeyForm.allowAllCategoriesFlag" type="checkbox" />
-                      <span>{{ apiKeyForm.allowAllCategoriesFlag ? '允许访问全部目录' : '仅允许访问选定目录及其子目录' }}</span>
-                    </label>
-                    <div class="field-hint">若关闭“全部目录”，则必须至少选择一个分类。MCP 会自动限制到所选分类及其子分类。</div>
-                  </div>
-                </div>
-
-                <div v-if="!apiKeyForm.allowAllCategoriesFlag" class="scope-selector">
-                  <DirectoryTree
-                    v-model="apiKeyForm.scopeCategoryIds"
-                    :items="categoryTreeItems"
-                    :multiple="true"
-                    title="可授权的分类目录"
-                    description="目录默认折叠。勾选某个分类后，会自动授权它及其子分类给当前 API Key。"
-                    empty-text="当前还没有可授权的分类目录"
-                  />
-                </div>
-              </div>
-
-              <div class="settings-actions">
-                <button class="sl-btn sl-btn--primary" :disabled="apiKeySaving" @click="handleSaveApiKey">
-                  {{ apiKeySaving ? '保存中...' : (editingKeyId ? '保存修改' : '创建 API Key') }}
                 </button>
               </div>
             </div>
@@ -308,6 +233,102 @@
         </div>
       </section>
     </div>
+  </PopupLayer>
+
+  <PopupLayer
+    v-if="showApiKeyEditor"
+    :title="editingKeyId ? '编辑 API Key' : '新建 API Key'"
+    eyebrow="API Key / MCP"
+    description="建议按设备、客户端或自动化任务拆分 Key，便于分别授权、停用与审计。"
+    width="min(820px, calc(100vw - 24px))"
+    @close="closeApiKeyEditor"
+  >
+    <div class="api-key-editor-layout">
+      <div class="settings-form-grid">
+        <div class="form-field settings-form-field settings-form-field--full">
+          <label class="sl-label">名称 / 备注</label>
+          <input v-model="apiKeyForm.name" class="sl-input" placeholder="例如：Claude Desktop / 手机自动化" />
+        </div>
+        <div class="form-field settings-form-field">
+          <label class="sl-label">启用状态</label>
+          <label class="sl-switch-row">
+            <input v-model="apiKeyForm.enabledFlag" type="checkbox" :disabled="!editingKeyId" />
+            <span>{{ apiKeyForm.enabledFlag ? '已启用' : '已停用' }}</span>
+          </label>
+          <div v-if="!editingKeyId" class="field-hint">新建后默认启用，如需停用可在保存后再次打开修改。</div>
+        </div>
+      </div>
+
+      <div class="api-key-group-divider"></div>
+
+      <div class="settings-section-card api-key-subsection">
+        <div class="settings-section-card__header api-key-subsection__header">
+          <div>
+            <h4>MCP Server</h4>
+            <p>这里统一管理与 MCP 相关的访问模式、目录范围以及使用说明入口。</p>
+          </div>
+          <div class="api-key-subsection__actions">
+            <button class="sl-btn sl-btn--ghost sl-btn--sm" type="button" @click="showMcpInfoModal = true">查看说明与工具</button>
+            <button
+              class="sl-btn sl-btn--ghost sl-btn--sm api-key-section-toggle"
+              type="button"
+              :title="mcpSectionExpanded ? '收起 MCP Server 区域' : '展开 MCP Server 区域'"
+              :aria-label="mcpSectionExpanded ? '收起 MCP Server 区域' : '展开 MCP Server 区域'"
+              :aria-expanded="mcpSectionExpanded"
+              @click="mcpSectionExpanded = !mcpSectionExpanded"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline :points="mcpSectionExpanded ? '18 15 12 9 6 15' : '9 18 15 12 9 6'"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div v-if="mcpSectionExpanded" class="api-key-subsection__body">
+          <div class="settings-form-grid">
+            <div class="form-field settings-form-field">
+              <label class="sl-label">访问模式</label>
+              <label class="sl-switch-row">
+                <input v-model="apiKeyForm.readOnlyFlag" type="checkbox" />
+                <span>{{ apiKeyForm.readOnlyFlag ? '只读' : '可读写' }}</span>
+              </label>
+              <div class="field-hint">只读 Key 只能读取目录和笔记内容，不能创建、修改或删除数据。</div>
+            </div>
+            <div class="form-field settings-form-field settings-form-field--full">
+              <label class="sl-label">目录范围</label>
+              <label class="sl-switch-row">
+                <input v-model="apiKeyForm.allowAllCategoriesFlag" type="checkbox" />
+                <span>{{ apiKeyForm.allowAllCategoriesFlag ? '允许访问全部目录' : '仅允许访问选定目录及其子目录' }}</span>
+              </label>
+              <div class="field-hint">若关闭“全部目录”，则必须至少选择一个分类。MCP 会自动限制到所选分类及其子分类。</div>
+            </div>
+          </div>
+
+          <div v-if="!apiKeyForm.allowAllCategoriesFlag" class="scope-selector">
+            <DirectoryTree
+              v-model="apiKeyForm.scopeCategoryIds"
+              :items="categoryTreeItems"
+              :multiple="true"
+              title="可授权的分类目录"
+              description="目录默认折叠。勾选某个分类后，会自动授权它及其子分类给当前 API Key。"
+              empty-text="当前还没有可授权的分类目录"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <template #footer>
+      <div class="api-key-editor-footer">
+        <button v-if="editingKeyId" class="sl-btn sl-btn--danger api-key-editor-footer__danger" :disabled="apiKeySaving" @click="handleDeleteApiKey(editingKeyId)">删除</button>
+        <div class="api-key-editor-footer__actions">
+          <button class="sl-btn" :disabled="apiKeySaving" @click="closeApiKeyEditor">关闭</button>
+          <button class="sl-btn sl-btn--primary" :disabled="apiKeySaving" @click="handleSaveApiKey">
+            {{ apiKeySaving ? '保存中...' : '保存' }}
+          </button>
+        </div>
+      </div>
+    </template>
   </PopupLayer>
 
   <PopupLayer
@@ -482,6 +503,8 @@ const editingKeyId = ref(null)
 const apiKeySaving = ref(false)
 const createdApiKey = ref('')
 const apiKeyForm = ref(createApiKeyForm())
+const showApiKeyEditor = ref(false)
+const mcpSectionExpanded = ref(false)
 
 const adminSaving = ref(false)
 const adminForm = ref({
@@ -770,6 +793,8 @@ function startCreateApiKey() {
   editingKeyId.value = null
   createdApiKey.value = ''
   apiKeyForm.value = createApiKeyForm()
+  mcpSectionExpanded.value = false
+  showApiKeyEditor.value = true
 }
 
 function fillApiKeyForm(item) {
@@ -786,6 +811,12 @@ function selectApiKey(item) {
   editingKeyId.value = item.id
   createdApiKey.value = ''
   fillApiKeyForm(item)
+  mcpSectionExpanded.value = false
+  showApiKeyEditor.value = true
+}
+
+function closeApiKeyEditor() {
+  showApiKeyEditor.value = false
 }
 
 async function handleSaveApiKey() {
@@ -800,7 +831,7 @@ async function handleSaveApiKey() {
   apiKeySaving.value = true
   try {
     if (editingKeyId.value) {
-      const saved = await apiKeyApi.update(editingKeyId.value, {
+      await apiKeyApi.update(editingKeyId.value, {
         name: apiKeyForm.value.name,
         enabledFlag: apiKeyForm.value.enabledFlag,
         readOnlyFlag: apiKeyForm.value.readOnlyFlag,
@@ -809,7 +840,7 @@ async function handleSaveApiKey() {
       })
       toast.success('API Key 已更新')
       await loadApiKeys()
-      selectApiKey(saved)
+      closeApiKeyEditor()
     } else {
       const created = await apiKeyApi.create({
         name: apiKeyForm.value.name,
@@ -820,8 +851,7 @@ async function handleSaveApiKey() {
       createdApiKey.value = created.apiKey || ''
       editingKeyId.value = created.id
       await loadApiKeys()
-      selectApiKey(created)
-      createdApiKey.value = created.apiKey || ''
+      closeApiKeyEditor()
       toast.success('API Key 已创建')
     }
   } catch (err) {
@@ -839,7 +869,9 @@ function handleDeleteApiKey(id) {
       try {
         await apiKeyApi.delete(id)
         if (editingKeyId.value === id) {
-          startCreateApiKey()
+          editingKeyId.value = null
+          apiKeyForm.value = createApiKeyForm()
+          closeApiKeyEditor()
         }
         await loadApiKeys()
         toast.success('API Key 已删除')
@@ -1077,15 +1109,22 @@ function handlePromptOk() {
   color: var(--sl-danger);
 }
 .api-key-workspace {
-  display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 16px;
+  display: block;
+}
+.api-key-list-card {
+  width: 100%;
 }
 .api-key-list,
 .scope-selector {
+  gap: 8px;
+}
+.api-key-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.scope-selector {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 .api-key-item {
   width: 100%;
@@ -1151,9 +1190,49 @@ function handlePromptOk() {
   margin: 18px 0;
   background: linear-gradient(90deg, transparent, var(--sl-border-strong), transparent);
 }
+.api-key-editor-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 .api-key-subsection {
   margin-top: 0;
   padding: 14px;
+}
+.api-key-subsection__header {
+  margin-bottom: 0;
+}
+.api-key-subsection__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.api-key-section-toggle {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+}
+.api-key-subsection__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+.api-key-editor-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.api-key-editor-footer__danger {
+  margin-right: auto;
+}
+.api-key-editor-footer__actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
 }
 .empty-hint--compact {
   padding: 18px 12px;
@@ -1261,21 +1340,33 @@ function handlePromptOk() {
 }
 
 @media (max-width: 640px) {
+  .api-key-list,
   .settings-form-grid {
     grid-template-columns: 1fr;
   }
   .settings-inline-field,
   .passkey-item,
-  .settings-section-card__header {
+  .settings-section-card__header,
+  .api-key-editor-footer,
+  .api-key-editor-footer__actions,
+  .api-key-subsection__actions {
     flex-direction: column;
     align-items: stretch;
   }
   .settings-actions {
     flex-direction: column;
   }
-  .settings-actions .sl-btn {
+  .settings-actions .sl-btn,
+  .api-key-editor-footer .sl-btn,
+  .api-key-editor-footer__actions .sl-btn,
+  .api-key-subsection__actions .sl-btn {
     width: 100%;
     justify-content: center;
+  }
+  .api-key-editor-footer__danger,
+  .api-key-editor-footer__actions {
+    margin-left: 0;
+    margin-right: 0;
   }
 }
 </style>

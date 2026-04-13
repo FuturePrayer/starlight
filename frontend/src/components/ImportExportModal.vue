@@ -6,65 +6,95 @@
     width="min(1080px, calc(100vw - 24px))"
     @close="emit('close')"
   >
-    <div class="transfer-layout">
-      <section class="transfer-card">
-        <div class="transfer-card__header">
-          <div>
-            <h4 class="transfer-card__title">批量导出</h4>
-            <p class="transfer-card__desc">导出当前账号下的全部分类与笔记，分类会保留为文件夹，笔记会保存为 `.md` 文件。</p>
+    <div class="transfer-shell">
+      <aside class="transfer-nav" aria-label="导入导出导航">
+        <button
+          v-for="item in navItems"
+          :key="item.id"
+          class="transfer-nav__item"
+          :data-active="currentTab === item.id ? 'true' : 'false'"
+          type="button"
+          @click="currentTab = item.id"
+        >
+          <span class="transfer-nav__title">{{ item.title }}</span>
+          <span class="transfer-nav__desc">{{ item.desc }}</span>
+        </button>
+      </aside>
+
+      <section class="transfer-content">
+        <div v-show="currentTab === 'zip'" class="transfer-panel">
+          <div class="transfer-panel__header">
+            <h3>ZIP 导入 / 导出</h3>
+            <p>适合一次性批量迁移 Markdown 文件；会尽量保留目录结构与笔记文件名。</p>
           </div>
-          <span class="sl-badge">ZIP</span>
-        </div>
 
-        <div v-if="hasUnsavedChanges" class="transfer-alert">
-          <strong>提示：</strong> 当前存在未保存内容，导出只会包含已经保存到服务器的版本。
-        </div>
+          <div class="transfer-layout">
+            <section class="transfer-card">
+              <div class="transfer-card__header">
+                <div>
+                  <h4 class="transfer-card__title">批量导出</h4>
+                  <p class="transfer-card__desc">导出当前账号下的全部分类与笔记，分类会保留为文件夹，笔记会保存为 `.md` 文件。</p>
+                </div>
+                <span class="sl-badge">ZIP</span>
+              </div>
 
-        <button class="sl-btn sl-btn--primary transfer-action-btn" :disabled="exporting || importing" @click="handleExport">
-          {{ exporting ? '正在打包…' : '导出 ZIP' }}
-        </button>
-      </section>
+              <div v-if="hasUnsavedChanges" class="transfer-alert">
+                <strong>提示：</strong> 当前存在未保存内容，导出只会包含已经保存到服务器的版本。
+              </div>
 
-      <section class="transfer-card transfer-card--import">
-        <div class="transfer-card__header">
-          <div>
-            <h4 class="transfer-card__title">批量导入</h4>
-            <p class="transfer-card__desc">选择 ZIP 文件后，将按文件夹结构创建分类，并把其中的 Markdown 文件导入为笔记。</p>
+              <button class="sl-btn sl-btn--primary transfer-action-btn" :disabled="exporting || importing" @click="handleExport">
+                {{ exporting ? '正在打包…' : '导出 ZIP' }}
+              </button>
+            </section>
+
+            <section class="transfer-card transfer-card--import">
+              <div class="transfer-card__header">
+                <div>
+                  <h4 class="transfer-card__title">批量导入</h4>
+                  <p class="transfer-card__desc">选择 ZIP 文件后，将按文件夹结构创建分类，并把其中的 Markdown 文件导入为笔记。</p>
+                </div>
+                <span class="sl-badge">导入</span>
+              </div>
+
+              <input
+                ref="fileInputRef"
+                class="transfer-file-input"
+                type="file"
+                accept=".zip,application/zip"
+                @change="handleFileChange"
+              />
+
+              <button class="transfer-dropzone" type="button" :disabled="importing || exporting" @click="openFilePicker">
+                <span class="transfer-dropzone__icon">⇪</span>
+                <span class="transfer-dropzone__content">
+                  <span class="transfer-dropzone__title">{{ selectedFile ? selectedFile.name : '选择 ZIP 文件' }}</span>
+                  <span class="transfer-dropzone__desc">
+                    {{ selectedFile ? formatFileSize(selectedFile.size) : '支持 UTF-8 文件名；会忽略非 Markdown 文件。' }}
+                  </span>
+                </span>
+                <span class="transfer-dropzone__action">浏览</span>
+              </button>
+
+              <div class="transfer-hints">
+                <p>· 目录会导入为分类，空目录也会被保留。</p>
+                <p>· `.md` / `.markdown` 文件会导入为笔记，文件名会作为笔记标题。</p>
+              </div>
+
+              <button class="sl-btn sl-btn--primary transfer-action-btn" :disabled="!selectedFile || importing || exporting" @click="handleImport">
+                {{ importing ? '正在导入…' : '开始导入' }}
+              </button>
+            </section>
           </div>
-          <span class="sl-badge">导入</span>
         </div>
 
-        <input
-          ref="fileInputRef"
-          class="transfer-file-input"
-          type="file"
-          accept=".zip,application/zip"
-          @change="handleFileChange"
-        />
+        <div v-show="currentTab === 'git'" class="transfer-panel">
+          <div class="transfer-panel__header">
+            <h3>Git 仓库导入</h3>
+            <p>适合持续同步 Markdown 仓库，支持分支选择、目录筛选、重新导入和自动同步。</p>
+          </div>
 
-        <button class="transfer-dropzone" type="button" :disabled="importing || exporting" @click="openFilePicker">
-          <span class="transfer-dropzone__icon">⇪</span>
-          <span class="transfer-dropzone__content">
-            <span class="transfer-dropzone__title">{{ selectedFile ? selectedFile.name : '选择 ZIP 文件' }}</span>
-            <span class="transfer-dropzone__desc">
-              {{ selectedFile ? formatFileSize(selectedFile.size) : '支持 UTF-8 文件名；会忽略非 Markdown 文件。' }}
-            </span>
-          </span>
-          <span class="transfer-dropzone__action">浏览</span>
-        </button>
-
-        <div class="transfer-hints">
-          <p>· 目录会导入为分类，空目录也会被保留。</p>
-          <p>· `.md` / `.markdown` 文件会导入为笔记，文件名会作为笔记标题。</p>
+          <GitImportPanel :tree-items="treeItems" />
         </div>
-
-        <button class="sl-btn sl-btn--primary transfer-action-btn" :disabled="!selectedFile || importing || exporting" @click="handleImport">
-          {{ importing ? '正在导入…' : '开始导入' }}
-        </button>
-      </section>
-
-      <section class="transfer-card transfer-card--git transfer-card--full">
-        <GitImportPanel :tree-items="treeItems" />
       </section>
     </div>
   </PopupLayer>
@@ -92,8 +122,13 @@ const fileInputRef = ref(null)
 const selectedFile = ref(null)
 const exporting = ref(false)
 const importing = ref(false)
+const currentTab = ref('zip')
 
 const hasUnsavedChanges = computed(() => noteStore.editMode && noteStore.dirty)
+const navItems = [
+  { id: 'zip', title: 'ZIP', desc: '批量导入与导出' },
+  { id: 'git', title: 'Git', desc: '仓库导入与自动同步' }
+]
 
 function openFilePicker() {
   fileInputRef.value?.click()
@@ -164,6 +199,75 @@ async function handleImport() {
 </script>
 
 <style scoped>
+.transfer-shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 16px;
+  min-height: 60vh;
+}
+
+.transfer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.transfer-nav__item {
+  border: 1px solid var(--sl-border);
+  background: var(--sl-card);
+  border-radius: var(--sl-radius-lg);
+  padding: 12px;
+  text-align: left;
+  color: var(--sl-text);
+  cursor: pointer;
+  transition: border-color .15s, background .15s, transform .15s;
+}
+
+.transfer-nav__item:hover {
+  background: var(--sl-card-hover);
+  border-color: var(--sl-border-strong);
+}
+
+.transfer-nav__item[data-active='true'] {
+  border-color: var(--sl-primary);
+  background: var(--sl-selection);
+}
+
+.transfer-nav__title {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.transfer-nav__desc {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--sl-text-tertiary);
+}
+
+.transfer-content {
+  min-width: 0;
+}
+
+.transfer-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.transfer-panel__header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.transfer-panel__header p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--sl-text-secondary);
+}
+
 .transfer-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -187,36 +291,6 @@ async function handleImport() {
   background:
     linear-gradient(180deg, var(--sl-hover-bg) 0, transparent 140px),
     var(--sl-panel, var(--sl-card));
-}
-
-.transfer-card--git {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--sl-primary) 8%, transparent) 0, transparent 160px),
-    var(--sl-panel, var(--sl-card));
-}
-
-.transfer-card--full {
-  grid-column: 1 / -1;
-}
-
-.transfer-card__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.transfer-card__title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--sl-text);
-}
-
-.transfer-card__desc {
-  margin-top: 6px;
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--sl-text-secondary);
 }
 
 .transfer-alert {
@@ -267,7 +341,6 @@ async function handleImport() {
   width: 42px;
   height: 42px;
   border-radius: 14px;
-  display: flex;
   align-items: center;
   justify-content: center;
   background: var(--sl-primary-light);
@@ -327,9 +400,20 @@ async function handleImport() {
 }
 
 @media (max-width: 768px) {
+  .transfer-shell,
   .transfer-layout {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+
+  .transfer-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .transfer-nav__item {
+    min-width: 150px;
   }
 
   .transfer-card {
@@ -346,6 +430,4 @@ async function handleImport() {
   }
 }
 </style>
-
-
 
