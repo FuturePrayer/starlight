@@ -2,6 +2,8 @@
   <div class="tree-node">
     <div
       :class="['tree-row', { active: isSelected, category: isCategory }]"
+      :style="rowStyle"
+      :title="item.name"
       @click="handleClick"
     >
       <span class="tree-icon">
@@ -29,6 +31,7 @@
         :item="child"
         :selected-id="selectedId"
         :expanded-ids="expandedIds"
+        :depth="depth + 1"
         @select-note="$emit('select-note', $event)"
         @toggle-category="$emit('toggle-category', $event)"
       />
@@ -42,13 +45,20 @@ import { computed } from 'vue'
 const props = defineProps({
   item: { type: Object, required: true },
   selectedId: { type: String, default: null },
-  expandedIds: { type: Array, default: () => [] }
+  expandedIds: { type: Array, default: () => [] },
+  depth: { type: Number, default: 0 }
 })
 const emit = defineEmits(['select-note', 'toggle-category'])
 
 const isCategory = computed(() => props.item.type === 'category')
 const isSelected = computed(() => props.item.id === props.selectedId)
 const expanded = computed(() => props.expandedIds.includes(props.item.id))
+const rowStyle = computed(() => {
+  const visualDepth = Math.min(Math.max(Number(props.depth) || 0, 0), 4)
+  return {
+    paddingLeft: `${10 + (visualDepth * 12)}px`
+  }
+})
 
 function handleClick() {
   if (isCategory.value) {
@@ -90,6 +100,6 @@ function handleClick() {
 .tree-expand { padding: 0 4px; }
 .chevron { transition: transform 0.15s; }
 .chevron.open { transform: rotate(90deg); }
-.tree-children { margin-left: 14px; padding-left: 10px; border-left: 1px solid var(--sl-border); }
+.tree-children { display: flex; flex-direction: column; gap: 2px; }
 </style>
 

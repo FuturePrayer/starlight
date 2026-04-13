@@ -47,6 +47,10 @@ function sortTree(items = []) {
     .sort(compareByLabel)
 }
 
+export function getTreeNodeLabel(item) {
+  return String(item?.label || item?.name || item?.title || '').trim()
+}
+
 export function buildCategorySelectionTree(items = []) {
   return sortTree(
     (items || [])
@@ -123,6 +127,41 @@ export function findTreeNodeById(items = [], targetId) {
     }
   }
   return null
+}
+
+export function getTreeItemsAtPath(items = [], pathIds = []) {
+  let currentItems = items || []
+  for (const id of pathIds || []) {
+    const nextCategory = currentItems.find(item => item?.type === 'category' && item.id === id)
+    if (!nextCategory) {
+      return items || []
+    }
+    currentItems = nextCategory.children || []
+  }
+  return currentItems
+}
+
+export function findTreePathById(items = [], targetId, { includeTargetCategory = false } = {}) {
+  function walk(nodes, categoryPath = []) {
+    for (const item of nodes || []) {
+      if (item?.id === targetId) {
+        if (item?.type === 'category' && includeTargetCategory) {
+          return [...categoryPath, item.id]
+        }
+        return categoryPath
+      }
+
+      if (item?.type === 'category' && item.children?.length) {
+        const result = walk(item.children, [...categoryPath, item.id])
+        if (result) {
+          return result
+        }
+      }
+    }
+    return null
+  }
+
+  return walk(items || [], []) || []
 }
 
 export function summarizeTreeSubtree(source, targetId = undefined) {

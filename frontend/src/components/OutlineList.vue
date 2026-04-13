@@ -4,11 +4,12 @@
       v-for="(item, i) in items"
       :key="i"
       class="outline-item"
-      :style="{ paddingLeft: (item.level - 2) * 16 + 'px' }"
+      :style="{ paddingLeft: Math.max(Math.min(item.level - 2, 4), 0) * 14 + 'px' }"
     >
       <a
         :href="'#' + item.anchor"
         :class="['outline-link', { active: item.anchor === activeAnchor }]"
+        :title="item.title"
         @click.prevent="emit('select', item)"
       >
         {{ item.title }}

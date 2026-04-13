@@ -2,6 +2,8 @@
   <div class="tree-node">
     <div
       :class="['tree-row', { active: isSelected, category: isCategory }]"
+      :style="rowStyle"
+      :title="item.name"
       @click="handleClick"
     >
       <span class="tree-icon">
@@ -83,6 +85,7 @@
         :selected-category-id="selectedCategoryId"
         :expanded-ids="expandedIds"
         :mode="mode"
+        :depth="depth + 1"
         @select-note="$emit('select-note', $event)"
         @select-category="$emit('select-category', $event)"
         @toggle-category="$emit('toggle-category', $event)"
@@ -105,7 +108,8 @@ const props = defineProps({
   selectedId: { type: String, default: null },
   selectedCategoryId: { type: String, default: null },
   expandedIds: { type: Array, default: () => [] },
-  mode: { type: String, default: 'tree' }
+  mode: { type: String, default: 'tree' },
+  depth: { type: Number, default: 0 }
 })
 const emit = defineEmits([
   'select-note', 'select-category', 'toggle-category', 'open-site', 'delete-category',
@@ -117,6 +121,12 @@ const isSelected = computed(() => (isCategory.value ? props.item.id === props.se
 const expanded = computed(() => props.expandedIds.includes(props.item.id))
 const showSiteFlag = computed(() => props.mode === 'tree')
 const showPinnedFlag = computed(() => props.mode === 'tree')
+const rowStyle = computed(() => {
+  const visualDepth = Math.min(Math.max(Number(props.depth) || 0, 0), 4)
+  return {
+    paddingLeft: `${10 + (visualDepth * 12)}px`
+  }
+})
 
 function handleClick() {
   if (isCategory.value) {
@@ -189,6 +199,6 @@ function handleClick() {
 .tree-action-btn:hover { opacity: 1 !important; }
 .chevron { transition: transform 0.15s; }
 .chevron.open { transform: rotate(90deg); }
-.tree-children { margin-left: 14px; padding-left: 10px; border-left: 1px solid var(--sl-border); }
+.tree-children { display: flex; flex-direction: column; gap: 2px; }
 </style>
 

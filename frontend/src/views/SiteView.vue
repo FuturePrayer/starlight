@@ -6,8 +6,17 @@
     </button>
 
     <!-- Sidebar -->
-    <aside :class="['site-sidebar', { open: sidebarOpen }]" @click.self="sidebarOpen = false">
+    <aside :class="['site-sidebar', { open: sidebarOpen, resizing: isSidebarResizing }]" :style="sidebarStyle" @click.self="sidebarOpen = false">
       <div class="site-sidebar-inner">
+        <div v-if="isMobile" class="site-sidebar-mobile-chrome sl-card">
+          <div>
+            <div class="site-sidebar-mobile-chrome__title">{{ mobileSidebarTitle }}</div>
+            <div class="site-sidebar-mobile-chrome__meta">{{ siteTitle }} · {{ noteCount }} 篇文章</div>
+          </div>
+          <button class="sl-btn sl-btn--ghost sl-btn--sm" type="button" @click="sidebarOpen = false" title="关闭侧边栏">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
         <div class="site-sidebar-header">
           <div class="site-badge">星迹书阁</div>
           <h2 class="site-title">{{ siteTitle }}</h2>
@@ -24,40 +33,53 @@
         <div class="sidebar-scroll">
           <!-- Tree panel -->
           <div v-show="sidebarTab === 'tree'" class="tree-panel">
-            <!-- Pinned section -->
-            <section v-if="siteTree.pinnedItems?.length" class="quick-section">
-              <div class="quick-section__header">
-                <span class="quick-section__title">置顶</span>
-                <span class="quick-section__hint">目录最上方</span>
-              </div>
-              <div class="quick-section__list">
-                <SiteTreeNode
-                  v-for="item in siteTree.pinnedItems"
-                  :key="`pinned-${item.id}`"
-                  :item="item"
-                  :selected-id="currentNoteId"
-                  :expanded-ids="expandedCats"
-                  @select-note="handleSelectNote"
-                  @toggle-category="toggleCatExpand"
-                />
-              </div>
-            </section>
-            <!-- Main tree -->
-            <SiteTreeNode
-              v-for="item in siteTree.items"
-              :key="item.id"
-              :item="item"
+            <MobileTreeBrowser
+              v-if="isMobile"
+              :items="siteTree.items"
+              :pinned-items="siteTree.pinnedItems"
+              :path="mobileTreePath"
               :selected-id="currentNoteId"
-              :expanded-ids="expandedCats"
+              root-title="全部文章"
+              empty-text="暂无文章"
+              @navigate="handleMobileSiteNavigate"
               @select-note="handleSelectNote"
-              @toggle-category="toggleCatExpand"
             />
-            <div
-              v-if="!siteTree.items?.length && !siteTree.pinnedItems?.length && loaded"
-              class="empty-hint"
-            >
-              暂无文章
-            </div>
+            <template v-else>
+              <!-- Pinned section -->
+              <section v-if="siteTree.pinnedItems?.length" class="quick-section">
+                <div class="quick-section__header">
+                  <span class="quick-section__title">置顶</span>
+                  <span class="quick-section__hint">目录最上方</span>
+                </div>
+                <div class="quick-section__list">
+                  <SiteTreeNode
+                    v-for="item in siteTree.pinnedItems"
+                    :key="`pinned-${item.id}`"
+                    :item="item"
+                    :selected-id="currentNoteId"
+                    :expanded-ids="expandedCats"
+                    @select-note="handleSelectNote"
+                    @toggle-category="toggleCatExpand"
+                  />
+                </div>
+              </section>
+              <!-- Main tree -->
+              <SiteTreeNode
+                v-for="item in siteTree.items"
+                :key="item.id"
+                :item="item"
+                :selected-id="currentNoteId"
+                :expanded-ids="expandedCats"
+                @select-note="handleSelectNote"
+                @toggle-category="toggleCatExpand"
+              />
+              <div
+                v-if="!siteTree.items?.length && !siteTree.pinnedItems?.length && loaded"
+                class="empty-hint"
+              >
+                暂无文章
+              </div>
+            </template>
           </div>
 
           <!-- Outline panel -->
@@ -73,6 +95,7 @@
         </div>
       </div>
     </aside>
+    <div v-if="!isMobile" class="site-sidebar-resize-handle" @pointerdown="startSidebarResize" @dblclick="resetSidebarWidth" />
 
     <!-- Main -->
     <main class="site-main">
@@ -208,8 +231,11 @@ import {
   scrollMarkdownContainerToHash,
   detectActiveHeadingAnchor
 } from '@/utils/markdownEnhance'
+import MobileTreeBrowser from '@/components/MobileTreeBrowser.vue'
 import OutlineList from '@/components/OutlineList.vue'
 import SiteTreeNode from '@/components/SiteTreeNode.vue'
+import { findTreeNodeById, findTreePathById } from '@/utils/directoryTree'
+import { useSidebarWidth } from '@/utils/sidebarLayout'
 
 const route = useRoute()
 const router = useRouter()
@@ -228,10 +254,23 @@ const currentNote = ref(null)
 const sidebarOpen = ref(false)
 const sidebarTab = ref('tree')
 const isMobile = ref(window.innerWidth <= 768)
+const mobileTreePath = ref([])
 const expandedCats = ref([])
 const siteContentRef = ref(null)
 const siteMarkdownRef = ref(null)
 const activeOutlineAnchor = ref('')
+const {
+  sidebarStyle,
+  isResizing: isSidebarResizing,
+  startResize: startSidebarResize,
+  resetWidth: resetSidebarWidth,
+  syncSidebarWidth
+} = useSidebarWidth({
+  storageKey: 'starlight:site-sidebar-width',
+  defaultWidth: 360,
+  minWidth: 280,
+  maxWidth: 460
+})
 
 function normalizeHash(value) {
   return decodeURIComponent(String(value || '').replace(/^#/, '').trim())
@@ -239,6 +278,7 @@ function normalizeHash(value) {
 
 const currentNoteId = computed(() => currentNote.value?.id || route.params.noteId || null)
 const currentNoteMarkdown = computed(() => currentNote.value?.markdownContent || '')
+const mobileSidebarTitle = computed(() => (sidebarTab.value === 'outline' ? '文章大纲' : '文章目录'))
 const renderedHtml = computed(() => renderMarkdown(currentNoteMarkdown.value))
 
 async function enhanceSiteContent() {
@@ -273,7 +313,15 @@ async function handleOutlineSelect(item) {
 }
 
 function handleResize() {
+  const wasMobile = isMobile.value
   isMobile.value = window.innerWidth <= 768
+  syncSidebarWidth()
+  if (wasMobile !== isMobile.value) {
+    sidebarOpen.value = false
+  }
+  if (isMobile.value) {
+    syncMobileTreePathFromSelection()
+  }
 }
 
 function handleContentScroll() {
@@ -338,6 +386,33 @@ function toggleCatExpand(catId) {
   } else {
     expandedCats.value.push(catId)
   }
+}
+
+function expandSitePath(path) {
+  const next = new Set(expandedCats.value)
+  for (const id of path || []) {
+    next.add(id)
+  }
+  expandedCats.value = [...next]
+}
+
+function syncMobileTreePathFromSelection() {
+  if (!isMobile.value) return
+  if (currentNoteId.value) {
+    mobileTreePath.value = findTreePathById(siteTree.value.items, currentNoteId.value)
+    expandSitePath(mobileTreePath.value)
+    return
+  }
+
+  const isPathValid = mobileTreePath.value.every(id => Boolean(findTreeNodeById(siteTree.value.items, id)))
+  if (!isPathValid) {
+    mobileTreePath.value = []
+  }
+}
+
+function handleMobileSiteNavigate(path) {
+  mobileTreePath.value = [...path]
+  expandSitePath(path)
 }
 
 /** 加载站点首页数据 */
@@ -412,10 +487,19 @@ watch(() => route.params.noteId, async (noteId) => {
   if (noteId) {
     await loadNote(noteId)
     await enhanceSiteContent()
+    syncMobileTreePathFromSelection()
   } else {
     currentNote.value = null
   }
 }, { immediate: false })
+
+watch(
+  [() => siteTree.value.items, currentNoteId, isMobile],
+  () => {
+    syncMobileTreePathFromSelection()
+  },
+  { deep: true }
+)
 
 watch([renderedHtml, () => themeStore.currentId], async () => {
   await enhanceSiteContent()
@@ -430,6 +514,7 @@ watch(() => route.hash, async hash => {
 onMounted(async () => {
   themeStore.loadCached()
   activeOutlineAnchor.value = normalizeHash(route.hash)
+  handleResize()
   window.addEventListener('resize', handleResize)
   await loadSiteIndex()
   if (route.params.noteId) {
@@ -445,6 +530,7 @@ onUnmounted(() => {
 
 <style scoped>
 .site-page {
+  --sl-sidebar-width: 340px;
   display: flex;
   height: 100vh;
   overflow: hidden;
@@ -453,14 +539,17 @@ onUnmounted(() => {
 
 /* ──── Sidebar ──── */
 .site-sidebar {
-  width: 300px;
-  min-width: 300px;
+  width: var(--sl-sidebar-width);
+  min-width: var(--sl-sidebar-width);
+  max-width: var(--sl-sidebar-width);
   background: var(--sl-sidebar-bg);
   border-right: 1px solid var(--sl-border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex-shrink: 0;
 }
+.site-sidebar.resizing { transition: none; }
 .site-sidebar-inner {
   display: flex;
   flex-direction: column;
@@ -468,6 +557,27 @@ onUnmounted(() => {
   padding: 20px 16px 0;
   gap: 16px;
   overflow: hidden;
+}
+.site-sidebar-mobile-chrome {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--sl-radius-lg);
+  border: 1px solid var(--sl-border);
+  background: linear-gradient(180deg, var(--sl-card) 0%, color-mix(in srgb, var(--sl-card) 70%, var(--sl-hover-bg)) 100%);
+  box-shadow: var(--sl-shadow-card);
+}
+.site-sidebar-mobile-chrome__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--sl-text);
+}
+.site-sidebar-mobile-chrome__meta {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--sl-text-tertiary);
 }
 .site-sidebar-header {}
 .site-badge {
@@ -526,6 +636,35 @@ onUnmounted(() => {
   overflow-y: auto;
   overflow-x: hidden;
   padding-bottom: 16px;
+}
+.site-sidebar-resize-handle {
+  position: relative;
+  width: 10px;
+  margin-left: -1px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+.site-sidebar-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: var(--sl-border);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.site-sidebar-resize-handle:hover::before {
+  background: var(--sl-primary);
+  box-shadow: 0 0 0 3px var(--sl-primary-light);
+}
+.site-sidebar-resize-handle:active::before {
+  background: var(--sl-primary);
+  box-shadow: 0 0 0 4px var(--sl-primary-light);
 }
 .tree-panel,
 .outline-panel {
@@ -697,8 +836,9 @@ onUnmounted(() => {
   height: 36px;
   border-radius: var(--sl-radius);
   border: 1px solid var(--sl-border);
-  background: var(--sl-card);
+  background: color-mix(in srgb, var(--sl-card) 88%, transparent);
   box-shadow: var(--sl-shadow-card);
+  backdrop-filter: saturate(1.08) blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -712,20 +852,51 @@ onUnmounted(() => {
     position: fixed;
     inset: 0;
     z-index: 55;
-    width: 100%;
+    width: 100vw;
     min-width: unset;
-    background: var(--sl-backdrop);
+    max-width: none;
+    background: color-mix(in srgb, var(--sl-sidebar-bg) 94%, var(--sl-bg-secondary));
+    backdrop-filter: saturate(1.08) blur(18px);
     border-right: none;
     transform: translateX(-100%);
-    transition: transform 0.25s ease;
+    transition: transform 0.28s ease;
   }
   .site-sidebar.open { transform: translateX(0); }
-  .site-sidebar.open .site-sidebar-inner {
-    width: 300px;
-    max-width: 85vw;
-    background: var(--sl-sidebar-bg);
+  .site-sidebar-inner {
+    width: 100%;
     height: 100%;
-    box-shadow: var(--sl-shadow-flyout);
+    padding: calc(env(safe-area-inset-top, 0px) + 14px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+    gap: 12px;
+  }
+  .site-sidebar.open .site-sidebar-inner {
+    max-width: 100vw;
+    background: transparent;
+    box-shadow: none;
+  }
+  .site-sidebar-mobile-chrome {
+    display: flex;
+  }
+  .site-sidebar-header,
+  .sidebar-tabs,
+  .tree-panel,
+  .outline-panel {
+    border-radius: var(--sl-radius-lg);
+  }
+  .site-sidebar-header,
+  .sidebar-tabs {
+    padding: 12px;
+    background: color-mix(in srgb, var(--sl-card) 92%, transparent);
+    border: 1px solid var(--sl-border);
+    box-shadow: var(--sl-shadow-card);
+  }
+  .sidebar-tabs {
+    padding: 4px;
+  }
+  .sidebar-scroll {
+    padding-right: 2px;
+  }
+  .site-sidebar-resize-handle {
+    display: none;
   }
   .site-topbar { padding: 16px 16px 16px 56px; }
   .site-content { padding: 16px; }

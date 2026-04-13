@@ -6,8 +6,17 @@
     </button>
 
     <!-- Sidebar -->
-    <aside :class="['sidebar', { open: sidebarOpen }]" @click.self="sidebarOpen = false">
+    <aside :class="['sidebar', { open: sidebarOpen, resizing: isSidebarResizing }]" :style="sidebarStyle" @click.self="sidebarOpen = false">
       <div class="sidebar-inner">
+        <div v-if="isMobile" class="sidebar-mobile-chrome sl-card">
+          <div>
+            <div class="sidebar-mobile-chrome__title">{{ mobileSidebarTitle }}</div>
+            <div class="sidebar-mobile-chrome__meta">目录、回收站与当前大纲</div>
+          </div>
+          <button class="sl-btn sl-btn--ghost sl-btn--sm" type="button" @click="sidebarOpen = false" title="关闭侧边栏">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
         <!-- Profile section -->
         <div class="sidebar-profile">
           <div class="profile-info" style="cursor:pointer" @click="openSettings('profile')" title="打开设置中心">
@@ -72,40 +81,66 @@
         <!-- Tree / Trash / Outline panels -->
         <div class="sidebar-scroll">
           <div v-show="sidebarTab === 'tree'" class="tree-panel">
-            <section v-if="noteStore.tree.pinnedItems?.length" class="quick-section">
-              <div class="quick-section__header">
-                <span class="quick-section__title">置顶</span>
-                <span class="quick-section__hint">目录最上方</span>
-              </div>
-              <div class="quick-section__list">
-                <TreeNode
-                  v-for="item in noteStore.tree.pinnedItems"
-                  :key="`pinned-${item.id}`"
-                  :item="item"
-                  :selected-id="noteStore.currentNote?.id"
-                  :expanded-ids="noteStore.expandedCategoryIds"
-                  @select-note="handleOpenNote"
-                />
-              </div>
-            </section>
-            <TreeNode
-              v-for="item in noteStore.tree.items"
-              :key="item.id"
-              :item="item"
+            <MobileTreeBrowser
+              v-if="isMobile"
+              :items="noteStore.tree.items"
+              :pinned-items="noteStore.tree.pinnedItems"
+              :path="mobileTreePath"
               :selected-id="noteStore.currentNote?.id"
-              :expanded-ids="noteStore.expandedCategoryIds"
+              :selected-category-id="selectedCategoryId"
+              root-title="全部笔记"
+              empty-text="还没有笔记，点击上方按钮创建"
+              @navigate="handleMobileTreeNavigate"
               @select-note="handleOpenNote"
-              @select-category="selectedCategoryId = $event"
-              @toggle-category="handleToggleCategory"
-              @open-site="handleOpenSiteModal"
-              @delete-category="handleDeleteCategoryRequest"
-            />
-            <div
-              v-if="!noteStore.tree.items?.length && !noteStore.tree.pinnedItems?.length"
-              class="empty-hint"
+              @select-category="handleMobileTreeSelectCategory"
             >
-              还没有笔记，点击上方按钮创建
-            </div>
+              <template #actions="{ item, isCategory }">
+                <template v-if="isCategory">
+                  <button class="sl-btn sl-btn--ghost sl-btn--sm" type="button" @click.stop="handleOpenSiteModal(item.id)" title="星迹书阁设置">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                  </button>
+                  <button class="sl-btn sl-btn--ghost sl-btn--sm mobile-tree-action--danger" type="button" @click.stop="handleDeleteCategoryRequest(item.id)" title="删除分类">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                  </button>
+                </template>
+              </template>
+            </MobileTreeBrowser>
+            <template v-else>
+              <section v-if="noteStore.tree.pinnedItems?.length" class="quick-section">
+                <div class="quick-section__header">
+                  <span class="quick-section__title">置顶</span>
+                  <span class="quick-section__hint">目录最上方</span>
+                </div>
+                <div class="quick-section__list">
+                  <TreeNode
+                    v-for="item in noteStore.tree.pinnedItems"
+                    :key="`pinned-${item.id}`"
+                    :item="item"
+                    :selected-id="noteStore.currentNote?.id"
+                    :expanded-ids="noteStore.expandedCategoryIds"
+                    @select-note="handleOpenNote"
+                  />
+                </div>
+              </section>
+              <TreeNode
+                v-for="item in noteStore.tree.items"
+                :key="item.id"
+                :item="item"
+                :selected-id="noteStore.currentNote?.id"
+                :expanded-ids="noteStore.expandedCategoryIds"
+                @select-note="handleOpenNote"
+                @select-category="selectedCategoryId = $event"
+                @toggle-category="handleToggleCategory"
+                @open-site="handleOpenSiteModal"
+                @delete-category="handleDeleteCategoryRequest"
+              />
+              <div
+                v-if="!noteStore.tree.items?.length && !noteStore.tree.pinnedItems?.length"
+                class="empty-hint"
+              >
+                还没有笔记，点击上方按钮创建
+              </div>
+            </template>
           </div>
 
           <div v-show="sidebarTab === 'trash'" class="trash-panel">
@@ -116,7 +151,60 @@
               </div>
               <span class="sl-badge">{{ noteStore.trashTree.totalCount || 0 }} 项</span>
             </div>
-            <div v-if="!noteStore.trashTree.totalCount" class="empty-hint">回收站还是空的，误删的笔记和分类会先来到这里</div>
+            <MobileTreeBrowser
+              v-if="isMobile && noteStore.trashTree.totalCount"
+              :items="noteStore.trashTree.items"
+              :path="mobileTrashPath"
+              :selected-id="isDeletedNote ? noteStore.currentNote?.id : null"
+              :selected-category-id="selectedTrashCategoryId"
+              root-title="回收站"
+              empty-text="回收站还是空的，误删的笔记和分类会先来到这里"
+              @navigate="handleMobileTrashNavigate"
+              @select-note="handleOpenTrashNote"
+              @select-category="handleMobileTrashSelectCategory"
+            >
+              <template #actions="{ item, isCategory }">
+                <button
+                  v-if="!isCategory"
+                  class="sl-btn sl-btn--ghost sl-btn--sm"
+                  type="button"
+                  :disabled="item.restorable === false"
+                  @click.stop="handleRestore(item.id)"
+                  title="恢复笔记"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                </button>
+                <button
+                  v-if="isCategory"
+                  class="sl-btn sl-btn--ghost sl-btn--sm"
+                  type="button"
+                  :disabled="item.restorable === false"
+                  @click.stop="handleRestoreTrashCategory(item.id)"
+                  title="恢复分类"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                </button>
+                <button
+                  v-if="!isCategory"
+                  class="sl-btn sl-btn--ghost sl-btn--sm mobile-tree-action--danger"
+                  type="button"
+                  @click.stop="handlePurge(item.id)"
+                  title="彻底删除笔记"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                </button>
+                <button
+                  v-if="isCategory"
+                  class="sl-btn sl-btn--ghost sl-btn--sm mobile-tree-action--danger"
+                  type="button"
+                  @click.stop="handlePurgeTrashCategoryRequest(item.id)"
+                  title="彻底删除分类"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                </button>
+              </template>
+            </MobileTreeBrowser>
+            <div v-else-if="!noteStore.trashTree.totalCount" class="empty-hint">回收站还是空的，误删的笔记和分类会先来到这里</div>
             <div v-else class="trash-tree-wrap">
               <TreeNode
                 v-for="item in noteStore.trashTree.items"
@@ -146,6 +234,7 @@
         </div>
       </div>
     </aside>
+    <div v-if="!isMobile" class="sidebar-resize-handle" @pointerdown="startSidebarResize" @dblclick="resetSidebarWidth" />
 
     <!-- Main content -->
     <main class="main-content">
@@ -425,7 +514,9 @@ import CategoryModal from '@/components/CategoryModal.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
 import SiteModal from '@/components/SiteModal.vue'
 import SearchModal from '@/components/SearchModal.vue'
-import { findTreeNodeById, summarizeTreeSubtree } from '@/utils/directoryTree'
+import MobileTreeBrowser from '@/components/MobileTreeBrowser.vue'
+import { findTreeNodeById, findTreePathById, summarizeTreeSubtree } from '@/utils/directoryTree'
+import { useSidebarWidth } from '@/utils/sidebarLayout'
 
 const route = useRoute()
 const router = useRouter()
@@ -438,6 +529,8 @@ const sidebarOpen = ref(false)
 const sidebarTab = ref('tree')
 const previewVisible = ref(true)
 const mobileActionsOpen = ref(false)
+const mobileTreePath = ref([])
+const mobileTrashPath = ref([])
 const selectedCategoryId = ref(null)
 const selectedTrashCategoryId = ref(null)
 const allThemes = ref([])
@@ -479,6 +572,18 @@ const activeOutlineAnchor = ref('')
 const appReady = ref(false)
 
 const isMobile = ref(window.innerWidth <= 768)
+const {
+  sidebarStyle,
+  isResizing: isSidebarResizing,
+  startResize: startSidebarResize,
+  resetWidth: resetSidebarWidth,
+  syncSidebarWidth
+} = useSidebarWidth({
+  storageKey: 'starlight:app-sidebar-width',
+  defaultWidth: 360,
+  minWidth: 280,
+  maxWidth: 480
+})
 let autosaveTimer = null
 let clockTimer = null
 let editorScrollSyncTimer = null
@@ -513,6 +618,12 @@ const saveStateText = computed(() => {
   if (noteStore.dirty) return '有未保存更改'
   if (noteStore.lastSavedAt) return '内容已保存'
   return '等待首次保存'
+})
+
+const mobileSidebarTitle = computed(() => {
+  if (sidebarTab.value === 'trash') return '回收站'
+  if (sidebarTab.value === 'outline') return '当前大纲'
+  return '笔记目录'
 })
 
 const renderedHtml = computed(() => {
@@ -946,6 +1057,66 @@ function handleToggleTrashCategory(id) {
   noteStore.toggleTrashCategoryExpanded(id)
 }
 
+function expandCategoryPath(path, mode = 'tree') {
+  for (const id of path || []) {
+    if (mode === 'trash') {
+      noteStore.setTrashCategoryExpanded(id, true)
+    } else {
+      noteStore.setCategoryExpanded(id, true)
+    }
+  }
+}
+
+function syncMobileTreePathFromSelection() {
+  if (!isMobile.value) return
+  if (selectedCategoryId.value) {
+    mobileTreePath.value = findTreePathById(noteStore.tree.items, selectedCategoryId.value, { includeTargetCategory: true })
+    expandCategoryPath(mobileTreePath.value, 'tree')
+    return
+  }
+  if (noteStore.currentNote?.id && !isDeletedNote.value) {
+    mobileTreePath.value = findTreePathById(noteStore.tree.items, noteStore.currentNote.id)
+    expandCategoryPath(mobileTreePath.value, 'tree')
+    return
+  }
+  mobileTreePath.value = []
+}
+
+function syncMobileTrashPathFromSelection() {
+  if (!isMobile.value) return
+  if (selectedTrashCategoryId.value) {
+    mobileTrashPath.value = findTreePathById(noteStore.trashTree.items, selectedTrashCategoryId.value, { includeTargetCategory: true })
+    expandCategoryPath(mobileTrashPath.value, 'trash')
+    return
+  }
+  if (isDeletedNote.value && noteStore.currentNote?.id) {
+    mobileTrashPath.value = findTreePathById(noteStore.trashTree.items, noteStore.currentNote.id)
+    expandCategoryPath(mobileTrashPath.value, 'trash')
+    return
+  }
+  mobileTrashPath.value = []
+}
+
+function handleMobileTreeNavigate(path) {
+  mobileTreePath.value = [...path]
+  selectedCategoryId.value = path[path.length - 1] || null
+  expandCategoryPath(path, 'tree')
+}
+
+function handleMobileTrashNavigate(path) {
+  mobileTrashPath.value = [...path]
+  selectedTrashCategoryId.value = path[path.length - 1] || null
+  expandCategoryPath(path, 'trash')
+}
+
+function handleMobileTreeSelectCategory(categoryId) {
+  selectedCategoryId.value = categoryId || null
+}
+
+function handleMobileTrashSelectCategory(categoryId) {
+  selectedTrashCategoryId.value = categoryId || null
+}
+
 function toggleAutosave() {
   noteStore.setAutosaveEnabled(!noteStore.autosaveEnabled)
   toast.info(noteStore.autosaveEnabled ? '自动保存已开启' : '自动保存已暂停')
@@ -1174,9 +1345,18 @@ async function handleLogout() {
 }
 
 function handleResize() {
+  const wasMobile = isMobile.value
   isMobile.value = window.innerWidth <= 768
+  syncSidebarWidth()
+  if (wasMobile !== isMobile.value) {
+    sidebarOpen.value = false
+  }
   if (!isMobile.value) previewVisible.value = true
   if (!isMobile.value) mobileActionsOpen.value = false
+  if (isMobile.value) {
+    syncMobileTreePathFromSelection()
+    syncMobileTrashPathFromSelection()
+  }
 }
 
 function handleGlobalKeydown(e) {
@@ -1255,6 +1435,22 @@ watch(() => [route.params.noteId, route.query.trash], async () => {
   await syncNoteFromRoute()
 })
 
+watch(
+  [() => noteStore.tree.items, () => noteStore.currentNote?.id, selectedCategoryId, isDeletedNote, isMobile],
+  () => {
+    syncMobileTreePathFromSelection()
+  },
+  { deep: true }
+)
+
+watch(
+  [() => noteStore.trashTree.items, () => noteStore.currentNote?.id, selectedTrashCategoryId, isDeletedNote, isMobile],
+  () => {
+    syncMobileTrashPathFromSelection()
+  },
+  { deep: true }
+)
+
 watch(() => route.hash, async hash => {
   activeOutlineAnchor.value = normalizeHash(hash)
   await nextTick()
@@ -1280,6 +1476,7 @@ watch([() => noteStore.editMode, previewVisible], async () => {
 
 onMounted(async () => {
   themeStore.loadCached()
+  handleResize()
   window.addEventListener('resize', handleResize)
   window.addEventListener('keydown', handleGlobalKeydown)
 
@@ -1319,6 +1516,7 @@ onUnmounted(() => {
 
 <style scoped>
 .app-shell {
+  --sl-sidebar-width: 340px;
   display: flex;
   height: 100vh;
   overflow: hidden;
@@ -1327,14 +1525,17 @@ onUnmounted(() => {
 
 /* --- Sidebar --- */
 .sidebar {
-  width: 280px;
-  min-width: 280px;
+  width: var(--sl-sidebar-width);
+  min-width: var(--sl-sidebar-width);
+  max-width: var(--sl-sidebar-width);
   background: var(--sl-sidebar-bg);
   border-right: 1px solid var(--sl-border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex-shrink: 0;
 }
+.sidebar.resizing { transition: none; }
 .sidebar-inner {
   display: flex;
   flex-direction: column;
@@ -1366,6 +1567,27 @@ onUnmounted(() => {
 .profile-name { font-size: 13px; font-weight: 600; }
 .profile-role { font-size: 11px; color: var(--sl-text-tertiary); }
 .profile-actions { display: flex; gap: 2px; }
+.sidebar-mobile-chrome {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--sl-radius-lg);
+  border: 1px solid var(--sl-border);
+  background: linear-gradient(180deg, var(--sl-card) 0%, color-mix(in srgb, var(--sl-card) 70%, var(--sl-hover-bg)) 100%);
+  box-shadow: var(--sl-shadow-card);
+}
+.sidebar-mobile-chrome__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--sl-text);
+}
+.sidebar-mobile-chrome__meta {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--sl-text-tertiary);
+}
 
 .sidebar-section { display: flex; flex-direction: column; }
 .sidebar-actions { display: flex; gap: 6px; }
@@ -1418,6 +1640,35 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+}
+.sidebar-resize-handle {
+  position: relative;
+  width: 10px;
+  margin-left: -1px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+.sidebar-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: var(--sl-border);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.sidebar-resize-handle:hover::before {
+  background: var(--sl-primary);
+  box-shadow: 0 0 0 3px var(--sl-primary-light);
+}
+.sidebar-resize-handle:active::before {
+  background: var(--sl-primary);
+  box-shadow: 0 0 0 4px var(--sl-primary-light);
 }
 .empty-hint {
   padding: 32px 16px;
@@ -1473,6 +1724,12 @@ onUnmounted(() => {
 .trash-tree-wrap {
   display: flex;
   flex-direction: column;
+}
+.mobile-tree-action--danger {
+  color: var(--sl-danger);
+}
+.mobile-tree-action--danger:hover {
+  color: var(--sl-danger);
 }
 .trash-item {
   display: flex;
@@ -1688,8 +1945,9 @@ onUnmounted(() => {
   height: 36px;
   border-radius: var(--sl-radius);
   border: 1px solid var(--sl-border);
-  background: var(--sl-card);
+  background: color-mix(in srgb, var(--sl-card) 88%, transparent);
   box-shadow: var(--sl-shadow-card);
+  backdrop-filter: saturate(1.08) blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1762,20 +2020,61 @@ onUnmounted(() => {
     position: fixed;
     inset: 0;
     z-index: 55;
-    width: 100%;
+    width: 100vw;
     min-width: unset;
-    background: var(--sl-backdrop);
+    max-width: none;
+    background: color-mix(in srgb, var(--sl-sidebar-bg) 94%, var(--sl-bg-secondary));
+    backdrop-filter: saturate(1.08) blur(18px);
     border-right: none;
     transform: translateX(-100%);
-    transition: transform 0.25s ease;
+    transition: transform 0.28s ease;
   }
   .sidebar.open { transform: translateX(0); }
-  .sidebar.open .sidebar-inner {
-    width: 300px;
-    max-width: 85vw;
-    background: var(--sl-sidebar-bg);
+  .sidebar-inner {
+    width: 100%;
     height: 100%;
-    box-shadow: var(--sl-shadow-flyout);
+    padding: calc(env(safe-area-inset-top, 0px) + 14px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+    gap: 12px;
+  }
+  .sidebar.open .sidebar-inner {
+    max-width: 100vw;
+    background: transparent;
+    box-shadow: none;
+  }
+  .sidebar-mobile-chrome {
+    display: flex;
+  }
+  .sidebar-profile,
+  .sidebar-section,
+  .sidebar-actions,
+  .sidebar-tools,
+  .sidebar-tabs,
+  .trash-panel__header,
+  .quick-section,
+  .outline-panel,
+  .tree-panel,
+  .trash-panel {
+    border-radius: var(--sl-radius-lg);
+  }
+  .sidebar-profile,
+  .sidebar-section,
+  .sidebar-actions,
+  .sidebar-tools,
+  .sidebar-tabs,
+  .trash-panel__header {
+    padding: 12px;
+    background: color-mix(in srgb, var(--sl-card) 92%, transparent);
+    border: 1px solid var(--sl-border);
+    box-shadow: var(--sl-shadow-card);
+  }
+  .sidebar-tabs {
+    padding: 4px;
+  }
+  .sidebar-scroll {
+    padding-right: 2px;
+  }
+  .sidebar-resize-handle {
+    display: none;
   }
   .topbar {
     padding: 16px 16px 16px 56px;
