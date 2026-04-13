@@ -1,7 +1,16 @@
 <template>
   <div class="directory-tree-node">
     <div
-      :class="['directory-tree-row', `depth-${Math.min(depth, 6)}`, { active: isSelected, 'is-selectable': isSelectable }]"
+      :class="[
+        'directory-tree-row',
+        `depth-${Math.min(depth, 6)}`,
+        {
+          active: isVisuallySelected,
+          'is-selectable': isSelectable && !isSelectionInherited,
+          'is-inherited': isSelectionInherited,
+          'is-partial': isPartiallySelected
+        }
+      ]"
       @click="handleRowClick"
     >
       <button
@@ -37,10 +46,19 @@
       </span>
 
       <label v-if="multiple && isSelectable" class="directory-tree-row__selector" @click.stop>
-        <input :checked="isSelected" type="checkbox" @change="handleSelectOnly" />
+        <input
+          :checked="isVisuallySelected"
+          :disabled="isSelectionInherited"
+          :indeterminate.prop="isPartiallySelected"
+          type="checkbox"
+          @change="handleSelectOnly"
+        />
       </label>
+      <span v-else-if="multiple && (isVisuallySelected || isPartiallySelected)" class="directory-tree-row__selector directory-tree-row__selector--readonly">
+        <input :checked="isVisuallySelected" :indeterminate.prop="isPartiallySelected" type="checkbox" disabled />
+      </span>
       <span v-else-if="!multiple && isSelectable" class="directory-tree-row__selected-mark" aria-hidden="true">
-        <span v-if="isSelected" class="directory-tree-row__selected-dot"></span>
+        <span v-if="isExplicitlySelected" class="directory-tree-row__selected-dot"></span>
       </span>
 
       <div v-if="visibleActions.length" class="directory-tree-row__actions" @click.stop>
@@ -68,6 +86,9 @@
         :expanded-ids="expandedIds"
         :selectable-types="selectableTypes"
         :node-actions="nodeActions"
+        :visual-selected-ids="visualSelectedIds"
+        :partial-selected-ids="partialSelectedIds"
+        :inherited-selected-ids="inheritedSelectedIds"
         @toggle-expand="emit('toggle-expand', $event)"
         @select="emit('select', $event)"
         @action="emit('action', $event)"
@@ -109,6 +130,18 @@ const props = defineProps({
   nodeActions: {
     type: Object,
     default: () => ({})
+  },
+  visualSelectedIds: {
+    type: Array,
+    default: () => []
+  },
+  partialSelectedIds: {
+    type: Array,
+    default: () => []
+  },
+  inheritedSelectedIds: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -117,12 +150,17 @@ const emit = defineEmits(['toggle-expand', 'select', 'action'])
 const expandable = computed(() => Array.isArray(props.item?.children) && props.item.children.length > 0)
 const expanded = computed(() => props.expandedIds.includes(props.item?.id))
 const isSelectable = computed(() => props.selectableTypes.includes(props.item?.type))
-const isSelected = computed(() => {
+const isExplicitlySelected = computed(() => {
   if (props.multiple) {
     return Array.isArray(props.modelValue) && props.modelValue.includes(props.item?.id)
   }
   return props.modelValue === props.item?.id
 })
+const isVisuallySelected = computed(() => (props.multiple
+  ? props.visualSelectedIds.includes(props.item?.id)
+  : isExplicitlySelected.value))
+const isPartiallySelected = computed(() => props.multiple && props.partialSelectedIds.includes(props.item?.id))
+const isSelectionInherited = computed(() => props.multiple && props.inheritedSelectedIds.includes(props.item?.id))
 const visibleActions = computed(() => {
   const actions = props.nodeActions?.[props.item?.type] || []
   return actions.filter(action => !(typeof action.hidden === 'function' && action.hidden(props.item)))
@@ -133,11 +171,14 @@ function isActionDisabled(action) {
 }
 
 function handleSelectOnly() {
-  if (!isSelectable.value) return
+  if (!isSelectable.value || isSelectionInherited.value) return
   emit('select', props.item)
 }
 
 function handleRowClick() {
+  if (isSelectionInherited.value) {
+    return
+  }
   if (isSelectable.value) {
     emit('select', props.item)
     return
@@ -176,6 +217,15 @@ function handleRowClick() {
 .directory-tree-row.active {
   background: var(--sl-selection);
   color: var(--sl-primary);
+}
+
+.directory-tree-row.is-inherited {
+  color: var(--sl-text);
+}
+
+.directory-tree-row.is-partial {
+  background: color-mix(in srgb, var(--sl-primary) 5%, var(--sl-card));
+  color: var(--sl-text);
 }
 
 .directory-tree-row__toggle {
@@ -255,6 +305,15 @@ function handleRowClick() {
   width: 22px;
   min-width: 22px;
   flex-shrink: 0;
+}
+
+.directory-tree-row__selector input {
+  margin: 0;
+  accent-color: var(--sl-primary);
+}
+
+.directory-tree-row__selector--readonly input {
+  pointer-events: none;
 }
 
 .directory-tree-row__selected-dot {

@@ -28,11 +28,14 @@
         v-for="item in items"
         :key="item.id ?? `${item.type}-${item.label || item.name}`"
         :item="item"
-        :model-value="modelValue"
+        :model-value="normalizedModelValue"
         :multiple="multiple"
         :expanded-ids="currentExpandedIds"
         :selectable-types="selectableTypes"
         :node-actions="nodeActions"
+        :visual-selected-ids="visualSelectedIds"
+        :partial-selected-ids="partialSelectedIds"
+        :inherited-selected-ids="inheritedSelectedIds"
         @toggle-expand="toggleExpand"
         @select="handleSelect"
         @action="emit('action', $event)"
@@ -66,6 +69,11 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  /** 多选模式下，勾选父级分类时是否自动级联勾选所有子级 */
+  cascadeChildren: {
+    type: Boolean,
+    default: false
+  },
   selectableTypes: {
     type: Array,
     default: () => ['category', 'note']
@@ -93,10 +101,17 @@ const emit = defineEmits(['update:modelValue', 'update:expandedIds', 'select', '
 const internalExpandedIds = ref([])
 
 const currentExpandedIds = computed(() => Array.isArray(props.expandedIds) ? props.expandedIds : internalExpandedIds.value)
+const normalizedMultipleValue = computed(() => normalizeMultipleSelection(props.modelValue))
+const normalizedModelValue = computed(() => (props.multiple ? normalizedMultipleValue.value : props.modelValue))
+
+const selectionState = computed(() => buildVisualSelectionState(props.items, normalizedMultipleValue.value))
+const visualSelectedIds = computed(() => selectionState.value.visualSelectedIds)
+const partialSelectedIds = computed(() => selectionState.value.partialSelectedIds)
+const inheritedSelectedIds = computed(() => selectionState.value.inheritedSelectedIds)
 
 const selectionSummary = computed(() => {
   if (props.multiple) {
-    const count = Array.isArray(props.modelValue) ? props.modelValue.length : 0
+    const count = normalizedMultipleValue.value.length
     return count ? `已选择 ${count} 项` : ''
   }
   if (props.modelValue === '' || props.modelValue === 0 || props.modelValue) {
@@ -107,10 +122,10 @@ const selectionSummary = computed(() => {
 })
 
 watch(
-  () => [props.items, props.modelValue],
+  () => [props.items, normalizedModelValue.value],
   () => {
     const selectedIds = props.multiple
-      ? (Array.isArray(props.modelValue) ? props.modelValue : [])
+      ? normalizedMultipleValue.value
       : ((props.modelValue === '' || props.modelValue === 0 || props.modelValue) ? [props.modelValue] : [])
 
     if (!selectedIds.length) {
@@ -158,17 +173,89 @@ function handleSelect(item) {
   if (!props.selectableTypes.includes(item?.type)) return
 
   if (props.multiple) {
-    const next = new Set(Array.isArray(props.modelValue) ? props.modelValue : [])
-    if (next.has(item.id)) {
+    const next = new Set(normalizedMultipleValue.value)
+    const isCurrentlySelected = next.has(item.id)
+
+    if (isCurrentlySelected) {
       next.delete(item.id)
     } else {
       next.add(item.id)
     }
-    emit('update:modelValue', [...next])
+    emit('update:modelValue', normalizeMultipleSelection([...next]))
   } else {
     emit('update:modelValue', item.id)
   }
   emit('select', item)
+}
+
+function normalizeMultipleSelection(value) {
+  const uniqueIds = Array.from(new Set(Array.isArray(value) ? value : []))
+    .filter(id => id !== undefined && id !== null && id !== '')
+
+  if (!props.cascadeChildren || !uniqueIds.length) {
+    return uniqueIds
+  }
+
+  const selectedIdSet = new Set(uniqueIds)
+  return uniqueIds.filter(id => !findAncestorIds(props.items, id).some(ancestorId => selectedIdSet.has(ancestorId)))
+}
+
+function buildVisualSelectionState(items = [], explicitIds = []) {
+  const visualIdSet = new Set(explicitIds)
+  const inheritedIdSet = new Set()
+
+  if (props.cascadeChildren) {
+    for (const selectedId of explicitIds) {
+      const node = findNodeById(items, selectedId)
+      if (node?.type !== 'category') continue
+      collectDescendantIds(node.children, descendantId => {
+        if (!visualIdSet.has(descendantId)) {
+          inheritedIdSet.add(descendantId)
+        }
+        visualIdSet.add(descendantId)
+      })
+    }
+  }
+
+  const partialIdSet = new Set()
+
+  function walk(nodes = []) {
+    let subtreeHasSelection = false
+
+    for (const node of nodes) {
+      const selfSelected = visualIdSet.has(node?.id)
+      const childHasSelection = node?.children?.length ? walk(node.children) : false
+
+      if (!selfSelected && childHasSelection && node?.type === 'category') {
+        partialIdSet.add(node.id)
+      }
+
+      if (selfSelected || childHasSelection) {
+        subtreeHasSelection = true
+      }
+    }
+
+    return subtreeHasSelection
+  }
+
+  walk(items)
+
+  return {
+    visualSelectedIds: [...visualIdSet],
+    partialSelectedIds: [...partialIdSet],
+    inheritedSelectedIds: [...inheritedIdSet]
+  }
+}
+
+function collectDescendantIds(items = [], onVisit) {
+  for (const item of items || []) {
+    if (item?.id !== undefined && item?.id !== null) {
+      onVisit(item.id, item)
+    }
+    if (item?.children?.length) {
+      collectDescendantIds(item.children, onVisit)
+    }
+  }
 }
 
 function collectExpandableIds(items = [], collector = []) {

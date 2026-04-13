@@ -4,6 +4,7 @@ import cn.suhoan.starlight.dto.ApiResponse;
 import cn.suhoan.starlight.entity.Category;
 import cn.suhoan.starlight.entity.Note;
 import cn.suhoan.starlight.entity.UserAccount;
+import cn.suhoan.starlight.service.CategoryAccessService;
 import cn.suhoan.starlight.service.NoteService;
 import cn.suhoan.starlight.service.NoteTransferService;
 import cn.suhoan.starlight.service.SessionAuthService;
@@ -27,9 +28,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 笔记管理控制器。
@@ -47,15 +51,18 @@ public class NoteController {
     private final NoteService noteService;
     private final NoteTransferService noteTransferService;
     private final NoteSearchService noteSearchService;
+    private final CategoryAccessService categoryAccessService;
 
     public NoteController(SessionAuthService sessionAuthService,
                           NoteService noteService,
                           NoteTransferService noteTransferService,
-                          NoteSearchService noteSearchService) {
+                          NoteSearchService noteSearchService,
+                          CategoryAccessService categoryAccessService) {
         this.sessionAuthService = sessionAuthService;
         this.noteService = noteService;
         this.noteTransferService = noteTransferService;
         this.noteSearchService = noteSearchService;
+        this.categoryAccessService = categoryAccessService;
     }
 
     /** 获取笔记树形结构（分类 + 笔记） */
@@ -241,26 +248,68 @@ public class NoteController {
 
     /**
      * 全文搜索笔记。
-     * <p>支持分页查询，多取一条用于判断是否有下一页。</p>
+     * <p>支持多关键词（空格分隔）搜索与评分排序。
+     * 支持搜索范围：all（所有笔记）、categories（指定分类）、current（当前笔记）。</p>
      *
-     * @param q      搜索关键词
-     * @param offset 偏移量
-     * @param limit  每页数量（最大50）
+     * @param q           搜索关键词（支持空格分隔多个关键词）
+     * @param offset      偏移量
+     * @param limit       每页数量（最大50）
+     * @param scope       搜索范围：all / categories / current
+     * @param categoryIds 指定分类 ID（scope=categories 时必填，逗号分隔，后端会展开子分类）
+     * @param noteId      笔记 ID（scope=current 时必填）
      */
     @GetMapping("/notes/search")
     public ApiResponse<Map<String, Object>> searchNotes(
             @RequestParam String q,
             @RequestParam(defaultValue = "0") int offset,
-            @RequestParam(defaultValue = "20") int limit) {
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "all") String scope,
+            @RequestParam(required = false) String categoryIds,
+            @RequestParam(required = false) String noteId) {
         if (q == null || q.isBlank()) {
             return ApiResponse.ok(Map.of("items", List.of(), "hasMore", false));
         }
         int safeLimit = Math.clamp(limit, 1, 50);
         int safeOffset = Math.max(offset, 0);
         UserAccount userAccount = sessionAuthService.requireUser();
-        // 多取一条用于判断是否有下一页
-        List<Map<String, Object>> results = noteSearchService.search(
-                userAccount.getId(), q.trim(), safeOffset, safeLimit + 1);
+        String trimmedQuery = q.trim();
+
+        List<Map<String, Object>> results;
+
+        switch (scope) {
+            case "current" -> {
+                // 搜索当前笔记
+                if (noteId == null || noteId.isBlank()) {
+                    return ApiResponse.ok(Map.of("items", List.of(), "hasMore", false));
+                }
+                results = noteSearchService.searchInNote(userAccount.getId(), noteId.trim(), trimmedQuery);
+                return ApiResponse.ok(Map.of("items", results, "hasMore", false));
+            }
+            case "categories" -> {
+                // 搜索指定分类（后端展开子分类）
+                if (categoryIds == null || categoryIds.isBlank()) {
+                    return ApiResponse.ok(Map.of("items", List.of(), "hasMore", false));
+                }
+                List<String> rootIds = Arrays.stream(categoryIds.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .toList();
+                if (rootIds.isEmpty()) {
+                    return ApiResponse.ok(Map.of("items", List.of(), "hasMore", false));
+                }
+                // 展开父分类为包含所有后代的完整集合
+                Set<String> expandedIds = categoryAccessService.expandAuthorizedCategoryIds(
+                        userAccount.getId(), rootIds);
+                results = noteSearchService.search(
+                        userAccount.getId(), trimmedQuery, safeOffset, safeLimit + 1, expandedIds);
+            }
+            default -> {
+                // 搜索所有笔记
+                results = noteSearchService.search(
+                        userAccount.getId(), trimmedQuery, safeOffset, safeLimit + 1);
+            }
+        }
+
         boolean hasMore = results.size() > safeLimit;
         List<Map<String, Object>> page = hasMore ? results.subList(0, safeLimit) : results;
         return ApiResponse.ok(Map.of("items", page, "hasMore", hasMore));

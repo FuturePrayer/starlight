@@ -49,6 +49,10 @@
           </button>
         </div>
         <div class="sidebar-tools">
+          <button class="sl-btn sidebar-tools__btn" @click="showSearchModal = true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            搜索
+          </button>
           <button class="sl-btn sidebar-tools__btn" @click="showImportExportModal = true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             导入 / 导出
@@ -58,7 +62,6 @@
         <!-- Sidebar tabs -->
         <div class="sidebar-tabs">
           <button :class="['tab-btn', { active: sidebarTab === 'tree' }]" @click="sidebarTab = 'tree'">目录</button>
-          <button :class="['tab-btn', { active: sidebarTab === 'search' }]" @click="handleSearchTabClick">搜索</button>
           <button :class="['tab-btn', { active: sidebarTab === 'trash' }]" @click="handleTrashTabClick">
             回收站
             <span v-if="noteStore.tree.trashCount" class="tab-count">{{ noteStore.tree.trashCount }}</span>
@@ -66,7 +69,7 @@
           <button :class="['tab-btn', { active: sidebarTab === 'outline' }]" @click="sidebarTab = 'outline'">大纲</button>
         </div>
 
-        <!-- Tree / Search / Outline panels -->
+        <!-- Tree / Trash / Outline panels -->
         <div class="sidebar-scroll">
           <div v-show="sidebarTab === 'tree'" class="tree-panel">
             <section v-if="noteStore.tree.pinnedItems?.length" class="quick-section">
@@ -104,44 +107,7 @@
               还没有笔记，点击上方按钮创建
             </div>
           </div>
-          <div v-show="sidebarTab === 'search'" class="search-panel">
-            <div class="search-input-wrap">
-              <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input
-                ref="searchInputRef"
-                v-model="searchQuery"
-                class="sl-input search-input"
-                placeholder="搜索笔记标题与内容…"
-                @input="handleSearchInput"
-              />
-              <button v-if="searchQuery" class="search-clear sl-btn sl-btn--ghost sl-btn--sm" @click="clearSearch">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-            <div v-if="searchLoading && !searchResults.length" class="empty-hint">搜索中…</div>
-            <div v-else-if="searchQuery && !searchLoading && !searchResults.length && searchQueried" class="empty-hint">未找到匹配的笔记</div>
-            <div v-else-if="!searchQuery" class="empty-hint">输入关键词搜索笔记</div>
-            <div v-else class="search-results">
-              <div
-                v-for="item in searchResults"
-                :key="item.id"
-                :class="['search-result-item', { active: noteStore.currentNote?.id === item.id }]"
-                @click="handleOpenSearchResult(item.id)"
-              >
-                <div class="search-result-title" v-html="item.title"></div>
-                <div class="search-result-snippet" v-html="item.snippet"></div>
-                <div class="search-result-meta">{{ formatTime(item.updatedAt) }}</div>
-              </div>
-              <button
-                v-if="searchHasMore"
-                class="sl-btn sl-btn--sm search-load-more"
-                :disabled="searchLoading"
-                @click="loadMoreSearch"
-              >
-                {{ searchLoading ? '加载中…' : '加载更多' }}
-              </button>
-            </div>
-          </div>
+
           <div v-show="sidebarTab === 'trash'" class="trash-panel">
             <div class="trash-panel__header">
               <div>
@@ -350,6 +316,13 @@
       @close="showSiteModal = false"
       @updated="handleSiteUpdated"
     />
+    <SearchModal
+      v-if="showSearchModal"
+      :current-note-id="noteStore.currentNote?.id"
+      :tree-items="noteStore.tree.items"
+      @close="showSearchModal = false"
+      @open-note="handleOpenNote"
+    />
     <PopupLayer
       v-if="showDiscardConfirm"
       title="确认不保存退出？"
@@ -443,7 +416,6 @@ import {
   detectActiveHeadingAnchor,
   detectActiveOutlineAnchorByEditor
 } from '@/utils/markdownEnhance'
-import { noteApi } from '@/api'
 import TreeNode from '@/components/TreeNode.vue'
 import OutlineList from '@/components/OutlineList.vue'
 import ImportExportModal from '@/components/ImportExportModal.vue'
@@ -452,6 +424,7 @@ import ShareModal from '@/components/ShareModal.vue'
 import CategoryModal from '@/components/CategoryModal.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
 import SiteModal from '@/components/SiteModal.vue'
+import SearchModal from '@/components/SearchModal.vue'
 import { findTreeNodeById, summarizeTreeSubtree } from '@/utils/directoryTree'
 
 const route = useRoute()
@@ -473,6 +446,7 @@ const showCategoryModal = ref(false)
 const showSettingsModal = ref(false)
 const settingsInitialTab = ref('profile')
 const showImportExportModal = ref(false)
+const showSearchModal = ref(false)
 const showSiteModal = ref(false)
 const selectedCategoryName = ref('')
 const showDiscardConfirm = ref(false)
@@ -507,21 +481,11 @@ const appReady = ref(false)
 const isMobile = ref(window.innerWidth <= 768)
 let autosaveTimer = null
 let clockTimer = null
-let searchDebounceTimer = null
 let editorScrollSyncTimer = null
 let previewScrollSyncTimer = null
 let syncFromEditor = false
 let syncFromPreview = false
 
-// Search state
-const searchInputRef = ref(null)
-const searchQuery = ref('')
-const searchResults = ref([])
-const searchHasMore = ref(false)
-const searchLoading = ref(false)
-const searchQueried = ref(false)
-const searchOffset = ref(0)
-const SEARCH_PAGE_SIZE = 20
 
 const topbarTitle = computed(() => {
   if (noteStore.editMode) {
@@ -1215,80 +1179,20 @@ function handleResize() {
   if (!isMobile.value) mobileActionsOpen.value = false
 }
 
-// ── Search ──
-
-function handleSearchInput() {
-  clearTimeout(searchDebounceTimer)
-  searchDebounceTimer = setTimeout(() => {
-    executeSearch(true)
-  }, 300)
-}
-
-async function executeSearch(reset) {
-  const q = searchQuery.value.trim()
-  if (!q) {
-    searchResults.value = []
-    searchHasMore.value = false
-    searchQueried.value = false
-    searchOffset.value = 0
-    return
-  }
-  if (reset) {
-    searchOffset.value = 0
-    searchResults.value = []
-  }
-  searchLoading.value = true
-  try {
-    const data = await noteApi.search(q, searchOffset.value, SEARCH_PAGE_SIZE)
-    if (reset) {
-      searchResults.value = data.items
-    } else {
-      searchResults.value = [...searchResults.value, ...data.items]
-    }
-    searchHasMore.value = data.hasMore
-    searchOffset.value = searchOffset.value + data.items.length
-    searchQueried.value = true
-  } catch (err) {
-    toast.error(err.message)
-  } finally {
-    searchLoading.value = false
+function handleGlobalKeydown(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault()
+    showSearchModal.value = true
   }
 }
 
-function loadMoreSearch() {
-  executeSearch(false)
-}
-
-function clearSearch() {
-  searchQuery.value = ''
-  searchResults.value = []
-  searchHasMore.value = false
-  searchQueried.value = false
-  searchOffset.value = 0
-}
-
-function handleSearchTabClick() {
-  sidebarTab.value = 'search'
-  // Auto-focus the search input
-  nextTick(() => searchInputRef.value?.focus())
-}
+// ── Trash ──
 
 async function handleTrashTabClick() {
   sidebarTab.value = 'trash'
   selectedTrashCategoryId.value = null
   try {
     await noteStore.refreshTrash()
-  } catch (err) {
-    toast.error(err.message)
-  }
-}
-
-async function handleOpenSearchResult(id) {
-  try {
-    await noteStore.openNote(id)
-    await syncRouteToCurrentNote({ replace: false })
-    sidebarOpen.value = false
-    mobileActionsOpen.value = false
   } catch (err) {
     toast.error(err.message)
   }
@@ -1377,6 +1281,7 @@ watch([() => noteStore.editMode, previewVisible], async () => {
 onMounted(async () => {
   themeStore.loadCached()
   window.addEventListener('resize', handleResize)
+  window.addEventListener('keydown', handleGlobalKeydown)
 
   try {
     await authStore.fetchMe()
@@ -1404,9 +1309,9 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  window.removeEventListener('keydown', handleGlobalKeydown)
   clearInterval(autosaveTimer)
   clearInterval(clockTimer)
-  clearTimeout(searchDebounceTimer)
   clearTimeout(editorScrollSyncTimer)
   clearTimeout(previewScrollSyncTimer)
 })
@@ -1466,6 +1371,7 @@ onUnmounted(() => {
 .sidebar-actions { display: flex; gap: 6px; }
 .sidebar-tools {
   display: flex;
+  gap: 6px;
 }
 .sidebar-tools__btn {
   width: 100%;
@@ -1614,79 +1520,6 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-/* --- Search Panel --- */
-.search-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.search-input-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.search-icon {
-  position: absolute;
-  left: 10px;
-  color: var(--sl-text-tertiary);
-  pointer-events: none;
-}
-.search-input {
-  padding-left: 32px;
-  padding-right: 32px;
-  height: 32px;
-  font-size: 13px;
-}
-.search-clear {
-  position: absolute;
-  right: 2px;
-  padding: 0 6px;
-  height: 28px;
-}
-.search-results {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.search-result-item {
-  padding: 8px 10px;
-  border-radius: var(--sl-radius);
-  cursor: pointer;
-  transition: background 0.1s;
-}
-.search-result-item:hover {
-  background: var(--sl-hover-bg);
-}
-.search-result-item.active {
-  background: var(--sl-selection);
-}
-.search-result-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--sl-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.search-result-snippet {
-  font-size: 12px;
-  color: var(--sl-text-secondary);
-  line-height: 1.5;
-  margin-top: 2px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.search-result-meta {
-  font-size: 11px;
-  color: var(--sl-text-tertiary);
-  margin-top: 4px;
-}
-.search-load-more {
-  align-self: center;
-  margin: 8px 0;
-}
 
 /* --- Main --- */
 .main-content {
