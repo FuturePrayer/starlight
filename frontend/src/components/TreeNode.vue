@@ -32,15 +32,15 @@
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5"/><path d="M5 6V3h14v3l-4 4v3l2 2v1H7v-1l2-2v-3z"/></svg>
         </span>
       </span>
-      <button v-if="mode === 'tree' && isCategory" class="tree-edit-btn sl-btn sl-btn--ghost sl-btn--sm" @click.stop="emit('edit-category', item.id)" title="重命名分类">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 113 3L7 19l-4 1 1-4z"/></svg>
-      </button>
-      <button v-if="mode === 'tree' && isCategory" class="tree-site-btn sl-btn sl-btn--ghost sl-btn--sm" @click.stop="emit('open-site', item.id)" title="星迹书阁设置">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-      </button>
-      <button v-if="mode === 'tree' && isCategory" class="tree-delete-btn sl-btn sl-btn--ghost sl-btn--sm" @click.stop="emit('delete-category', item.id)" title="删除分类">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-      </button>
+
+      <CategoryActionMenu
+        v-if="mode === 'tree' && isCategory"
+        mode="tree"
+        @edit="emit('edit-category', item.id)"
+        @site="emit('open-site', item.id)"
+        @delete="emit('delete-category', item.id)"
+      />
+
       <template v-if="mode === 'trash'">
         <button
           v-if="!isCategory"
@@ -52,15 +52,6 @@
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
         </button>
         <button
-          v-if="isCategory"
-          class="tree-action-btn sl-btn sl-btn--ghost sl-btn--sm"
-          :disabled="item.restorable === false"
-          @click.stop="emit('restore-category', item.id)"
-          title="恢复分类"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-        </button>
-        <button
           v-if="!isCategory"
           class="tree-delete-btn sl-btn sl-btn--ghost sl-btn--sm"
           @click.stop="emit('purge-note', item.id)"
@@ -68,15 +59,15 @@
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
         </button>
-        <button
+        <CategoryActionMenu
           v-if="isCategory"
-          class="tree-delete-btn sl-btn sl-btn--ghost sl-btn--sm"
-          @click.stop="emit('purge-category', item.id)"
-          title="彻底删除分类"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-        </button>
+          mode="trash"
+          :restorable="item.restorable !== false"
+          @restore="emit('restore-category', item.id)"
+          @purge="emit('purge-category', item.id)"
+        />
       </template>
+
       <button v-if="isCategory" class="tree-expand sl-btn sl-btn--ghost sl-btn--sm" @click.stop="emit('toggle-category', item.id)">
         <svg :class="['chevron', { open: expanded }]" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
@@ -108,6 +99,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import CategoryActionMenu from '@/components/CategoryActionMenu.vue'
 
 const props = defineProps({
   item: { type: Object, required: true },
@@ -117,6 +109,7 @@ const props = defineProps({
   mode: { type: String, default: 'tree' },
   depth: { type: Number, default: 0 }
 })
+
 const emit = defineEmits([
   'select-note', 'select-category', 'toggle-category', 'edit-category', 'open-site', 'delete-category',
   'restore-note', 'purge-note', 'restore-category', 'purge-category'
@@ -180,12 +173,6 @@ function handleClick() {
   opacity: 0.4;
 }
 .tree-expand { padding: 0 4px; }
-.tree-edit-btn,
-.tree-site-btn {
-  padding: 0 4px;
-  opacity: 0.55;
-  transition: opacity 0.15s;
-}
 .tree-delete-btn {
   padding: 0 4px;
   opacity: 0.55;
@@ -198,15 +185,13 @@ function handleClick() {
   color: var(--sl-primary);
   transition: opacity 0.15s, color 0.15s;
 }
-.tree-row:hover .tree-site-btn,
+.tree-row:hover :deep(.category-action-menu__trigger),
 .tree-row:hover .tree-delete-btn,
 .tree-row:hover .tree-action-btn { opacity: 1; }
-.tree-site-btn:hover { opacity: 1 !important; }
-.tree-edit-btn:hover { opacity: 1 !important; }
 .tree-delete-btn:hover { opacity: 1 !important; }
 .tree-action-btn:hover { opacity: 1 !important; }
 .chevron { transition: transform 0.15s; }
 .chevron.open { transform: rotate(90deg); }
 .tree-children { display: flex; flex-direction: column; gap: 2px; }
+.tree-row :deep(.category-action-menu__trigger) { opacity: 0.55; }
 </style>
-

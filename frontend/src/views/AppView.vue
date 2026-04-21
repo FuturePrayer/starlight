@@ -46,14 +46,26 @@
 
         <!-- Action buttons -->
         <div class="sidebar-actions">
-          <button class="sl-btn sl-btn--primary" @click="handleNewNote" style="flex:1">
+          <button class="sl-btn sl-btn--primary sidebar-actions__primary" @click="handleNewNote">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             新建笔记
           </button>
-          <button class="sl-btn" @click="handleOpenCreateCategoryModal">
+          <button class="sl-btn sidebar-action-icon" @click="handleOpenCreateCategoryModal" title="新建分类" aria-label="新建分类">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
           </button>
-          <button v-if="authStore.isAdmin" class="sl-btn" @click="openSettings('admin')" title="管理员设置">
+          <button
+            class="sl-btn sidebar-action-icon"
+            :disabled="!noteStore.currentNote?.id"
+            @click="handleLocateCurrentNote"
+            title="定位当前已打开的笔记"
+            aria-label="定位当前已打开的笔记"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+          </button>
+          <button class="sl-btn sidebar-action-icon" @click="openSettings('profile')" title="设置中心" aria-label="设置中心">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          </button>
+          <button v-if="authStore.isAdmin" class="sl-btn sidebar-action-icon" @click="openSettings('admin')" title="管理员设置" aria-label="管理员设置">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
           </button>
         </div>
@@ -78,16 +90,6 @@
             </button>
             <button :class="['tab-btn', { active: sidebarTab === 'outline' }]" @click="sidebarTab = 'outline'">大纲</button>
           </div>
-          <button
-            class="sl-btn sl-btn--ghost sl-btn--sm sidebar-locate-btn"
-            type="button"
-            :disabled="!noteStore.currentNote?.id"
-            title="定位当前已打开的笔记"
-            aria-label="定位当前已打开的笔记"
-            @click="handleLocateCurrentNote"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
-          </button>
         </div>
 
         <!-- Tree / Trash / Outline panels -->
@@ -108,17 +110,13 @@
               @select-category="handleMobileTreeSelectCategory"
             >
               <template #actions="{ item, isCategory }">
-                <template v-if="isCategory">
-                  <button class="sl-btn sl-btn--ghost sl-btn--sm" type="button" @click.stop="handleEditCategoryRequest(item.id)" title="重命名分类">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 113 3L7 19l-4 1 1-4z"/></svg>
-                  </button>
-                  <button class="sl-btn sl-btn--ghost sl-btn--sm" type="button" @click.stop="handleOpenSiteModal(item.id)" title="星迹书阁设置">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-                  </button>
-                  <button class="sl-btn sl-btn--ghost sl-btn--sm mobile-tree-action--danger" type="button" @click.stop="handleDeleteCategoryRequest(item.id)" title="删除分类">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                  </button>
-                </template>
+                <CategoryActionMenu
+                  v-if="isCategory"
+                  mode="tree"
+                  @edit="handleEditCategoryRequest(item.id)"
+                  @site="handleOpenSiteModal(item.id)"
+                  @delete="handleDeleteCategoryRequest(item.id)"
+                />
               </template>
             </MobileTreeBrowser>
             <template v-else>
@@ -182,6 +180,13 @@
               @select-category="handleMobileTrashSelectCategory"
             >
               <template #actions="{ item, isCategory }">
+                <CategoryActionMenu
+                  v-if="isCategory"
+                  mode="trash"
+                  :restorable="item.restorable !== false"
+                  @restore="handleRestoreTrashCategory(item.id)"
+                  @purge="handlePurgeTrashCategoryRequest(item.id)"
+                />
                 <button
                   v-if="!isCategory"
                   class="sl-btn sl-btn--ghost sl-btn--sm"
@@ -193,30 +198,11 @@
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                 </button>
                 <button
-                  v-if="isCategory"
-                  class="sl-btn sl-btn--ghost sl-btn--sm"
-                  type="button"
-                  :disabled="item.restorable === false"
-                  @click.stop="handleRestoreTrashCategory(item.id)"
-                  title="恢复分类"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                </button>
-                <button
                   v-if="!isCategory"
                   class="sl-btn sl-btn--ghost sl-btn--sm mobile-tree-action--danger"
                   type="button"
                   @click.stop="handlePurge(item.id)"
                   title="彻底删除笔记"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                </button>
-                <button
-                  v-if="isCategory"
-                  class="sl-btn sl-btn--ghost sl-btn--sm mobile-tree-action--danger"
-                  type="button"
-                  @click.stop="handlePurgeTrashCategoryRequest(item.id)"
-                  title="彻底删除分类"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                 </button>
@@ -339,8 +325,14 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
             </button>
           </div>
-          <button class="fab-toggle sl-btn sl-btn--primary" @click="mobileActionsOpen = !mobileActionsOpen">
-            {{ mobileActionsOpen ? '收起' : '操作' }}
+          <button
+            class="fab-toggle sl-btn sl-btn--primary fab-action-btn"
+            :title="mobileActionsOpen ? '收起操作按钮组' : '展开操作按钮组'"
+            :aria-label="mobileActionsOpen ? '收起操作按钮组' : '展开操作按钮组'"
+            @click="mobileActionsOpen = !mobileActionsOpen"
+          >
+            <svg v-if="mobileActionsOpen" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
           </button>
         </div>
       </div>
@@ -368,8 +360,14 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
             </button>
           </div>
-          <button class="fab-toggle sl-btn sl-btn--primary" @click="mobileActionsOpen = !mobileActionsOpen">
-            {{ mobileActionsOpen ? '收起' : '操作' }}
+          <button
+            class="fab-toggle sl-btn sl-btn--primary fab-action-btn"
+            :title="mobileActionsOpen ? '收起操作按钮组' : '展开操作按钮组'"
+            :aria-label="mobileActionsOpen ? '收起操作按钮组' : '展开操作按钮组'"
+            @click="mobileActionsOpen = !mobileActionsOpen"
+          >
+            <svg v-if="mobileActionsOpen" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
           </button>
         </div>
       </div>
@@ -582,6 +580,7 @@ import SettingsModal from '@/components/SettingsModal.vue'
 import SiteModal from '@/components/SiteModal.vue'
 import SearchModal from '@/components/SearchModal.vue'
 import MobileTreeBrowser from '@/components/MobileTreeBrowser.vue'
+import CategoryActionMenu from '@/components/CategoryActionMenu.vue'
 import { findTreeNodeById, findTreePathById, summarizeTreeSubtree } from '@/utils/directoryTree'
 import { useSidebarWidth } from '@/utils/sidebarLayout'
 
@@ -1645,6 +1644,7 @@ onUnmounted(() => {
   --sl-sidebar-width: 340px;
   display: flex;
   height: 100vh;
+  min-height: 0;
   overflow: hidden;
   background: var(--sl-bg);
 }
@@ -1658,6 +1658,7 @@ onUnmounted(() => {
   border-right: 1px solid var(--sl-border);
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -1666,6 +1667,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
   padding: 16px;
   gap: 14px;
   overflow: hidden;
@@ -1716,7 +1718,21 @@ onUnmounted(() => {
 }
 
 .sidebar-section { display: flex; flex-direction: column; }
-.sidebar-actions { display: flex; gap: 6px; }
+.sidebar-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.sidebar-actions__primary {
+  flex: 1;
+}
+.sidebar-action-icon {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+}
 .sidebar-tools {
   display: flex;
   gap: 6px;
@@ -1728,8 +1744,6 @@ onUnmounted(() => {
 }
 .sidebar-tabs-wrap {
   display: flex;
-  align-items: center;
-  gap: 8px;
 }
 .sidebar-tabs {
   display: flex;
@@ -1737,13 +1751,6 @@ onUnmounted(() => {
   background: var(--sl-active-bg);
   border-radius: var(--sl-radius);
   padding: 3px;
-}
-.sidebar-locate-btn {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  padding: 0;
-  justify-content: center;
 }
 .tab-btn {
   flex: 1;
@@ -1777,6 +1784,7 @@ onUnmounted(() => {
 }
 .sidebar-scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -1922,6 +1930,7 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
   background: var(--sl-bg-secondary);
   position: relative;
@@ -1962,6 +1971,7 @@ onUnmounted(() => {
 /* --- Viewer --- */
 .viewer-area {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 24px 32px;
 }
@@ -2004,6 +2014,7 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
   position: relative;
 }
@@ -2014,6 +2025,7 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 .editor-pane.hidden { display: none; }
@@ -2068,6 +2080,7 @@ onUnmounted(() => {
 .editor-textarea::placeholder { color: var(--sl-text-tertiary); }
 .preview-pane {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 20px 24px;
   border-left: 1px solid var(--sl-border);
@@ -2105,17 +2118,16 @@ onUnmounted(() => {
   bottom: 16px;
   right: 16px;
   z-index: 50;
+  display: flex;
+  justify-content: flex-end;
 }
 .fab-menu {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
-  background: var(--sl-card);
-  border: 1px solid var(--sl-border);
-  border-radius: var(--sl-radius-lg);
-  padding: 6px;
-  box-shadow: var(--sl-shadow-flyout);
+  width: fit-content;
+  max-width: calc(100vw - 32px);
 }
 .fab-actions {
   display: flex;
@@ -2195,7 +2207,7 @@ onUnmounted(() => {
     width: 100%;
     height: 100%;
     padding: calc(env(safe-area-inset-top, 0px) + 14px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
-    gap: 12px;
+    gap: 8px;
   }
   .sidebar.open .sidebar-inner {
     max-width: 100vw;
@@ -2221,28 +2233,59 @@ onUnmounted(() => {
   .sidebar-section,
   .sidebar-actions,
   .sidebar-tools,
-  .sidebar-tabs,
+  .sidebar-tabs-wrap,
   .trash-panel__header {
-    padding: 12px;
+    padding: 8px 10px;
     background: color-mix(in srgb, var(--sl-card) 92%, transparent);
     border: 1px solid var(--sl-border);
     box-shadow: var(--sl-shadow-card);
   }
-  .sidebar-tabs-wrap {
-    padding: 12px;
-    background: color-mix(in srgb, var(--sl-card) 92%, transparent);
-    border: 1px solid var(--sl-border);
-    border-radius: var(--sl-radius-lg);
-    box-shadow: var(--sl-shadow-card);
+  .sidebar-section {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+  .sidebar-section .sl-label {
+    margin-bottom: 0;
+    min-width: 28px;
+    font-size: 12px;
+  }
+  .sidebar-section .sl-select {
+    height: 34px;
+    font-size: 13px;
+  }
+  .sidebar-actions {
+    gap: 5px;
+  }
+  .sidebar-actions__primary {
+    min-width: 0;
+    flex: 1;
+  }
+  .sidebar-action-icon {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+  }
+  .sidebar-tools {
+    gap: 5px;
+  }
+  .sidebar-tools__btn {
+    height: 34px;
+    padding: 0 10px;
+    font-size: 12px;
   }
   .sidebar-tabs {
-    padding: 4px;
+    padding: 3px;
     background: var(--sl-active-bg);
     border-radius: var(--sl-radius);
     border: none;
     box-shadow: none;
   }
+  .tab-btn {
+    padding: 6px 0;
+  }
   .sidebar-scroll {
+    min-height: 0;
     padding-right: 2px;
   }
   .sidebar-resize-handle {
@@ -2275,18 +2318,13 @@ onUnmounted(() => {
     flex: 1;
   }
   .mobile-fab {
-    left: 16px;
     right: 16px;
   }
   .fab-menu {
-    width: auto;
-    margin-left: auto;
-  }
-  .fab-toggle {
-    min-width: 76px;
+    width: fit-content;
   }
   .fab-actions {
-    width: 100%;
+    width: auto;
   }
   .fab-action-btn {
     width: 44px;

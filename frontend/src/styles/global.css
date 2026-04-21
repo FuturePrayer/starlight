@@ -2,6 +2,7 @@
 
 html, body {
   height: 100%;
+  overflow: hidden;
   font-family: var(--sl-font);
   background: var(--sl-bg);
   color: var(--sl-text);
@@ -20,7 +21,10 @@ body::before {
   z-index: -1;
 }
 
-#app { height: 100%; }
+#app {
+  height: 100%;
+  overflow: hidden;
+}
 
 /* Scrollbar — Win11 style thin */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
