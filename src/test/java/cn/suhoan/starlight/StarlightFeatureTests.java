@@ -5,9 +5,11 @@ import cn.suhoan.starlight.config.PlainTextMigrationRunner;
 import cn.suhoan.starlight.dto.ApiResponse;
 import cn.suhoan.starlight.entity.Category;
 import cn.suhoan.starlight.entity.Note;
+import cn.suhoan.starlight.entity.ApiKey;
 import cn.suhoan.starlight.entity.UserAccount;
 import cn.suhoan.starlight.entity.UserCredential;
 import cn.suhoan.starlight.repository.ApiKeyRepository;
+import cn.suhoan.starlight.repository.ApiKeyScopeRepository;
 import jakarta.persistence.EntityManager;
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.server.transport.ServerTransportSecurityException;
@@ -112,6 +114,9 @@ class StarlightFeatureTests {
 
     @Autowired
     private ApiKeyRepository apiKeyRepository;
+
+    @Autowired
+    private ApiKeyScopeRepository apiKeyScopeRepository;
 
     @Test
     void firstUserBecomesAdminAndRegistrationDefaultsToDisabled() {
@@ -404,15 +409,16 @@ class StarlightFeatureTests {
         ));
 
         Map<String, Object> tree = mcpNoteToolService.listTree(null, null, transportContext);
-        assertEquals(McpScopeService.VIRTUAL_ROOT_CATEGORY_ID, tree.get("rootCategoryId"));
-        assertEquals(true, tree.get("virtualRoot"));
+        assertEquals(root.getId(), tree.get("categoryId"));
+        assertEquals(root.getId(), tree.get("rootCategoryId"));
+        assertEquals(false, tree.get("virtualRoot"));
         Map<String, Object> treeScopeHints = scopeHints(tree);
-        assertEquals("virtual_root", treeScopeHints.get("rootMode"));
+        assertEquals("single_scope_root", treeScopeHints.get("rootMode"));
         assertEquals("root", treeScopeHints.get("currentView"));
-        assertEquals(true, treeScopeHints.get("currentNodeVirtualRoot"));
-        assertEquals(true, treeScopeHints.get("scopeBoundaryContainer"));
+        assertEquals(false, treeScopeHints.get("currentNodeVirtualRoot"));
+        assertEquals(false, treeScopeHints.get("scopeBoundaryContainer"));
         assertEquals("query_child_category", treeScopeHints.get("recommendedNextAction"));
-        assertEquals(List.of(root.getId()), treeScopeHints.get("nextQueryCategoryIds"));
+        assertEquals(List.of(child.getId()), treeScopeHints.get("nextQueryCategoryIds"));
         String treeText = tree.toString();
         assertTrue(treeText.contains("工作"));
         assertTrue(treeText.contains("周报总结"));
@@ -484,24 +490,70 @@ class StarlightFeatureTests {
                 McpAuthService.TRANSPORT_PRINCIPAL_KEY, singleScopePrincipal
         ));
         Map<String, Object> singleScopeTree = mcpNoteToolService.listTree(null, 0, singleScopeContext);
-        assertEquals(b.getId(), singleScopeTree.get("categoryId"));
-        assertEquals(b.getId(), singleScopeTree.get("rootCategoryId"));
+        assertEquals(c.getId(), singleScopeTree.get("categoryId"));
+        assertEquals(c.getId(), singleScopeTree.get("rootCategoryId"));
         assertEquals(false, singleScopeTree.get("virtualRoot"));
         Map<String, Object> singleScopeHints = scopeHints(singleScopeTree);
-        assertEquals("shared_parent", singleScopeHints.get("rootMode"));
+        assertEquals("single_scope_root", singleScopeHints.get("rootMode"));
         assertEquals(false, singleScopeHints.get("currentNodeVirtualRoot"));
-        assertEquals(true, singleScopeHints.get("scopeBoundaryContainer"));
-        assertEquals(List.of(c.getId()), singleScopeHints.get("nextQueryCategoryIds"));
+        assertEquals(false, singleScopeHints.get("scopeBoundaryContainer"));
+        assertEquals(List.of(), singleScopeHints.get("nextQueryCategoryIds"));
         String singleScopeTreeText = singleScopeTree.toString();
-        assertTrue(singleScopeTreeText.contains("C"));
+        assertTrue(singleScopeTreeText.contains("C 笔记"));
         assertFalse(singleScopeTreeText.contains("D"));
         assertFalse(singleScopeTreeText.contains("根目录笔记"));
 
-        Map<String, Object> sharedParentTree = mcpNoteToolService.listTree(b.getId(), 0, singleScopeContext);
-        Map<String, Object> sharedParentHints = scopeHints(sharedParentTree);
-        assertEquals("category", sharedParentHints.get("currentView"));
-        assertEquals(true, sharedParentHints.get("scopeBoundaryContainer"));
-        assertEquals(List.of(c.getId()), sharedParentHints.get("nextQueryCategoryIds"));
+        Map<String, Object> explicitRootTree = mcpNoteToolService.listTree(c.getId(), 0, singleScopeContext);
+        Map<String, Object> explicitRootHints = scopeHints(explicitRootTree);
+        assertEquals("root", explicitRootHints.get("currentView"));
+        assertEquals(false, explicitRootHints.get("scopeBoundaryContainer"));
+        assertEquals(List.of(), explicitRootHints.get("nextQueryCategoryIds"));
+        assertThrows(RuntimeException.class, () -> mcpNoteToolService.listTree(b.getId(), 0, singleScopeContext));
+    }
+
+    @Test
+    void categoryRenameAndApiKeyCopyShouldWorkForNewKeysOnly() {
+        UserAccount owner = authService.register("category-rename@example.com", "123456");
+        Category parent = noteService.createCategory(owner, "旧父分类", null);
+        Category child = noteService.createCategory(owner, "旧分类名", parent.getId());
+
+        Category renamed = noteService.updateCategory(owner, child.getId(), "新分类名", parent.getId());
+        assertEquals("新分类名", renamed.getName());
+        assertEquals(parent.getId(), renamed.getParent().getId());
+        String treeText = noteService.buildTree(owner.getId()).toString();
+        assertTrue(treeText.contains("新分类名"));
+        assertFalse(treeText.contains("旧分类名"));
+
+        Map<String, Object> createdKey = apiKeyService.createKey(owner, "可复制 Key", true, false, List.of(parent.getId()));
+        String apiKeyId = createdKey.get("id").toString();
+        String rawApiKey = createdKey.get("apiKey").toString();
+        assertEquals(1, apiKeyScopeRepository.findByApiKeyIdOrderByCreatedAtAsc(apiKeyId).size());
+
+        Map<String, Object> updatedKey = apiKeyService.updateKey(owner, apiKeyId, "可复制 Key", true, true, false, List.of(parent.getId()));
+        assertEquals(1, ((List<?>) updatedKey.get("scopeCategoryIds")).size());
+        assertEquals(1, apiKeyScopeRepository.findByApiKeyIdOrderByCreatedAtAsc(apiKeyId).size());
+
+        IllegalArgumentException missingFactor = assertThrows(IllegalArgumentException.class,
+                () -> apiKeyService.copyKey(owner, apiKeyId));
+        assertTrue(missingFactor.getMessage().contains("请先开启两步验证或通行密钥"));
+
+        owner.setTotpSecret("JBSWY3DPEHPK3PXP");
+        authService.updateTotpSecret(owner);
+        assertEquals(rawApiKey, apiKeyService.copyKey(owner, apiKeyId));
+
+        List<Map<String, Object>> keySummaries = apiKeyService.listUserKeys(owner.getId());
+        Map<String, Object> keySummary = keySummaries.stream()
+                .filter(item -> apiKeyId.equals(item.get("id")))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(true, keySummary.get("copyableFlag"));
+
+        ApiKey persistedKey = apiKeyRepository.findById(apiKeyId).orElseThrow();
+        persistedKey.setSecretCiphertext(null);
+        apiKeyRepository.save(persistedKey);
+        IllegalArgumentException legacyCopy = assertThrows(IllegalArgumentException.class,
+                () -> apiKeyService.copyKey(owner, apiKeyId));
+        assertTrue(legacyCopy.getMessage().contains("旧版本"));
     }
 
     @Test

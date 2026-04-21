@@ -162,6 +162,7 @@
                   </span>
                   <span class="api-key-item__meta api-key-item__meta--secondary">
                     <span>{{ item.allowAllCategoriesFlag ? '全部目录' : `指定目录 ${item.scopeCategoryIds?.length || 0} 个` }}</span>
+                    <span>{{ item.copyableFlag ? '支持受保护复制' : '旧版 Key 不可复制' }}</span>
                     <span>{{ item.lastUsedAt ? `最近使用 ${formatTime(item.lastUsedAt)}` : '尚未使用' }}</span>
                   </span>
                 </button>
@@ -261,6 +262,18 @@
 
       <div class="api-key-group-divider"></div>
 
+      <div v-if="editingKeyId" class="api-key-copy-hint" :class="{ 'api-key-copy-hint--warning': !selectedApiKey?.copyableFlag || !hasProtectedCopyMethod }">
+        <template v-if="!selectedApiKey?.copyableFlag">
+          这个 API Key 创建于旧版本，数据库中没有保存明文，因此无法复制。
+        </template>
+        <template v-else-if="!hasProtectedCopyMethod">
+          复制前必须先开启两步验证或至少注册一个通行密钥。
+        </template>
+        <template v-else>
+          复制前需要先选择一种安全验证方式，并完成一次身份校验。
+        </template>
+      </div>
+
       <div class="settings-section-card api-key-subsection">
         <div class="settings-section-card__header api-key-subsection__header">
           <div>
@@ -322,6 +335,14 @@
       <div class="api-key-editor-footer">
         <button v-if="editingKeyId" class="sl-btn sl-btn--danger api-key-editor-footer__danger" :disabled="apiKeySaving" @click="handleDeleteApiKey(editingKeyId)">删除</button>
         <div class="api-key-editor-footer__actions">
+          <button
+            v-if="editingKeyId"
+            class="sl-btn"
+            :disabled="apiKeySaving || !selectedApiKey?.copyableFlag || !hasProtectedCopyMethod"
+            @click="openApiKeyCopyDialog"
+          >
+            复制
+          </button>
           <button class="sl-btn" :disabled="apiKeySaving" @click="closeApiKeyEditor">关闭</button>
           <button class="sl-btn sl-btn--primary" :disabled="apiKeySaving" @click="handleSaveApiKey">
             {{ apiKeySaving ? '保存中...' : '保存' }}
@@ -360,6 +381,33 @@
     <template #footer>
       <button class="sl-btn" @click="promptState.visible = false">取消</button>
       <button class="sl-btn sl-btn--primary" @click="handlePromptOk">确定</button>
+    </template>
+  </PopupLayer>
+
+  <PopupLayer
+    v-if="apiKeyCopyState.visible"
+    title="验证后复制 API Key"
+    eyebrow="安全验证"
+    width="min(420px, calc(100vw - 32px))"
+    :close-on-backdrop="!apiKeyCopyState.busy"
+    @close="closeApiKeyCopyDialog"
+  >
+    <div class="api-key-copy-dialog">
+      <div class="field-hint">目标 Key：{{ apiKeyCopyState.keyName || '未命名 API Key' }}</div>
+      <div v-if="apiKeyCopyState.step === 'pick'" class="api-key-copy-methods">
+        <button v-if="authStore.totpBound" class="sl-btn" :disabled="apiKeyCopyState.busy" @click="apiKeyCopyState.step = 'totp'">使用两步验证</button>
+        <button v-if="passkeys.length" class="sl-btn sl-btn--primary" :disabled="apiKeyCopyState.busy" @click="handleCopyApiKeyWithPasskey">使用通行密钥</button>
+      </div>
+      <div v-else class="form-field">
+        <label class="sl-label">两步验证码</label>
+        <input v-model="apiKeyCopyState.totpCode" class="sl-input" maxlength="6" placeholder="输入 6 位验证码" @keyup.enter="handleCopyApiKeyWithTotp" />
+      </div>
+    </div>
+    <template #footer>
+      <button class="sl-btn" :disabled="apiKeyCopyState.busy" @click="closeApiKeyCopyDialog">取消</button>
+      <button v-if="apiKeyCopyState.step === 'totp'" class="sl-btn sl-btn--primary" :disabled="apiKeyCopyState.busy || !apiKeyCopyState.totpCode" @click="handleCopyApiKeyWithTotp">
+        {{ apiKeyCopyState.busy ? '验证中...' : '验证并复制' }}
+      </button>
     </template>
   </PopupLayer>
 
@@ -505,6 +553,14 @@ const createdApiKey = ref('')
 const apiKeyForm = ref(createApiKeyForm())
 const showApiKeyEditor = ref(false)
 const mcpSectionExpanded = ref(false)
+const apiKeyCopyState = ref({
+  visible: false,
+  apiKeyId: '',
+  keyName: '',
+  step: 'pick',
+  totpCode: '',
+  busy: false
+})
 
 const adminSaving = ref(false)
 const adminForm = ref({
@@ -577,6 +633,8 @@ const mcpTools = [
 
 const confirmState = ref({ visible: false, message: '', callback: null })
 const promptState = ref({ visible: false, message: '', value: '', callback: null })
+const selectedApiKey = computed(() => apiKeys.value.find(item => item.id === editingKeyId.value) || null)
+const hasProtectedCopyMethod = computed(() => authStore.totpBound || passkeys.value.length > 0)
 
 watch(() => authStore.profile, profile => {
   newUsername.value = profile?.username || ''
@@ -819,6 +877,95 @@ function closeApiKeyEditor() {
   showApiKeyEditor.value = false
 }
 
+function openApiKeyCopyDialog() {
+  if (!selectedApiKey.value?.copyableFlag) {
+    toast.info('旧版 API Key 未保存明文，无法复制')
+    return
+  }
+  if (!hasProtectedCopyMethod.value) {
+    toast.info('请先开启两步验证或至少注册一个通行密钥')
+    return
+  }
+  apiKeyCopyState.value = {
+    visible: true,
+    apiKeyId: selectedApiKey.value.id,
+    keyName: selectedApiKey.value.name || '',
+    step: authStore.totpBound && !passkeys.value.length ? 'totp' : 'pick',
+    totpCode: '',
+    busy: false
+  }
+}
+
+function closeApiKeyCopyDialog(force = false) {
+  if (apiKeyCopyState.value.busy && !force) return
+  apiKeyCopyState.value = {
+    visible: false,
+    apiKeyId: '',
+    keyName: '',
+    step: 'pick',
+    totpCode: '',
+    busy: false
+  }
+}
+
+async function handleCopyApiKeyWithTotp() {
+  if (!apiKeyCopyState.value.apiKeyId) return
+  apiKeyCopyState.value.busy = true
+  try {
+    const data = await apiKeyApi.copyWithTotp(apiKeyCopyState.value.apiKeyId, apiKeyCopyState.value.totpCode)
+    copyText(data.apiKey, { silent: true })
+    closeApiKeyCopyDialog(true)
+    toast.success('API Key 已复制')
+  } catch (err) {
+    toast.error(err.message)
+  } finally {
+    apiKeyCopyState.value.busy = false
+  }
+}
+
+async function handleCopyApiKeyWithPasskey() {
+  if (!apiKeyCopyState.value.apiKeyId) return
+  apiKeyCopyState.value.busy = true
+  try {
+    const { handle, optionsJson } = await apiKeyApi.copyPasskeyStart(apiKeyCopyState.value.apiKeyId)
+    const options = JSON.parse(optionsJson)
+    const publicKey = {
+      ...options,
+      challenge: base64urlToBuffer(options.challenge),
+      allowCredentials: (options.allowCredentials || []).map(item => ({
+        ...item,
+        id: base64urlToBuffer(item.id)
+      }))
+    }
+    const credential = await navigator.credentials.get({ publicKey })
+    const credentialResponse = {
+      id: credential.id,
+      rawId: bufferToBase64url(credential.rawId),
+      type: credential.type,
+      response: {
+        clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
+        authenticatorData: bufferToBase64url(credential.response.authenticatorData),
+        signature: bufferToBase64url(credential.response.signature),
+        userHandle: credential.response.userHandle ? bufferToBase64url(credential.response.userHandle) : null
+      },
+      clientExtensionResults: credential.getClientExtensionResults()
+    }
+    const data = await apiKeyApi.copyPasskeyFinish(apiKeyCopyState.value.apiKeyId, {
+      handle,
+      credential: credentialResponse
+    })
+    copyText(data.apiKey, { silent: true })
+    closeApiKeyCopyDialog(true)
+    toast.success('API Key 已复制')
+  } catch (err) {
+    if (err.name !== 'AbortError' && err.name !== 'NotAllowedError') {
+      toast.error(err.message || '通行密钥验证失败')
+    }
+  } finally {
+    apiKeyCopyState.value.busy = false
+  }
+}
+
 async function handleSaveApiKey() {
   if (!apiKeyForm.value.name.trim()) {
     toast.error('请输入 API Key 名称')
@@ -912,10 +1059,12 @@ async function handleAdminSave() {
   }
 }
 
-function copyText(text) {
+function copyText(text, { silent = false } = {}) {
   if (!text) return
   navigator.clipboard?.writeText(text)
-  toast.info('已复制到剪贴板')
+  if (!silent) {
+    toast.info('已复制到剪贴板')
+  }
 }
 
 function handleConfirmOk() {
@@ -1195,6 +1344,19 @@ function handlePromptOk() {
   flex-direction: column;
   gap: 16px;
 }
+.api-key-copy-hint {
+  padding: 12px 14px;
+  border-radius: var(--sl-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--sl-primary) 24%, var(--sl-border));
+  background: color-mix(in srgb, var(--sl-primary) 8%, var(--sl-card));
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--sl-text-secondary);
+}
+.api-key-copy-hint--warning {
+  border-color: color-mix(in srgb, var(--sl-warning) 28%, var(--sl-border));
+  background: color-mix(in srgb, var(--sl-warning) 10%, var(--sl-card));
+}
 .api-key-subsection {
   margin-top: 0;
   padding: 14px;
@@ -1233,6 +1395,16 @@ function handlePromptOk() {
   display: flex;
   gap: 8px;
   margin-left: auto;
+}
+.api-key-copy-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.api-key-copy-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .empty-hint--compact {
   padding: 18px 12px;

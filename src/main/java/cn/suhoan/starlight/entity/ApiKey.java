@@ -34,6 +34,10 @@ public class ApiKey extends BaseEntity {
     @Column(nullable = false, unique = true, length = 64)
     private String secretHash;
 
+    /** 可复制 API Key 的加密明文，仅新版本创建的 Key 会写入该字段。 */
+    @Column(columnDefinition = "TEXT")
+    private String secretCiphertext;
+
     /** 是否启用。 */
     @Column(nullable = false)
     private boolean enabledFlag = true;
@@ -79,6 +83,14 @@ public class ApiKey extends BaseEntity {
 
     public void setSecretHash(String secretHash) {
         this.secretHash = secretHash;
+    }
+
+    public String getSecretCiphertext() {
+        return secretCiphertext;
+    }
+
+    public void setSecretCiphertext(String secretCiphertext) {
+        this.secretCiphertext = secretCiphertext;
     }
 
     public boolean isEnabledFlag() {

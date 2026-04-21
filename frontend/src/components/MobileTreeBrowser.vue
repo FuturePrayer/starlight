@@ -34,6 +34,8 @@
           v-for="item in pinnedItems"
           :key="`pinned-${item.id}`"
           :class="['mobile-tree-row', { active: isActive(item), category: isCategory(item) }]"
+          :data-sidebar-node-id="item.id"
+          :data-sidebar-mode="mode"
           @click="handleRowClick(item)"
         >
           <div class="mobile-tree-row__body">
@@ -65,6 +67,8 @@
           v-for="item in currentItems"
           :key="item.id"
           :class="['mobile-tree-row', { active: isActive(item), category: isCategory(item) }]"
+          :data-sidebar-node-id="item.id"
+          :data-sidebar-mode="mode"
           @click="handleRowClick(item)"
         >
           <div class="mobile-tree-row__body">
@@ -115,6 +119,7 @@ import { findTreeNodeById, getTreeItemsAtPath, getTreeNodeLabel } from '@/utils/
 const props = defineProps({
   items: { type: Array, default: () => [] },
   pinnedItems: { type: Array, default: () => [] },
+  mode: { type: String, default: 'tree' },
   path: { type: Array, default: () => [] },
   selectedId: { type: [String, Number], default: null },
   selectedCategoryId: { type: [String, Number], default: null },

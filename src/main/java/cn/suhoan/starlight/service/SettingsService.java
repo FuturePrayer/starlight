@@ -37,6 +37,8 @@ public class SettingsService {
     public static final String GIT_IMPORT_ENABLED_KEY = "git.import.enabled";
     /** 配置项：Git 导入最大并发数，0 或负数表示不限制 */
     public static final String GIT_IMPORT_MAX_CONCURRENT_KEY = "git.import.max-concurrent";
+    /** 配置项：用于加密可复制 API Key 明文的服务端密钥 */
+    public static final String API_KEY_COPY_ENCRYPTION_KEY = "api-key.copy.encryption-key";
 
     private final AppSettingRepository appSettingRepository;
     private final UserAccountRepository userAccountRepository;

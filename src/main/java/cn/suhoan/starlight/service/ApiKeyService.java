@@ -8,6 +8,7 @@ import cn.suhoan.starlight.entity.UserAccount;
 import cn.suhoan.starlight.repository.ApiKeyRepository;
 import cn.suhoan.starlight.repository.ApiKeyScopeRepository;
 import cn.suhoan.starlight.repository.CategoryRepository;
+import cn.suhoan.starlight.repository.UserCredentialRepository;
 import cn.suhoan.starlight.support.McpApiKeyPrincipal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,9 +16,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -37,20 +43,32 @@ public class ApiKeyService {
 
     private static final Logger log = LoggerFactory.getLogger(ApiKeyService.class);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final Base64.Encoder BASE64_URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
+    private static final Base64.Decoder BASE64_URL_DECODER = Base64.getUrlDecoder();
+    private static final int COPY_KEY_BYTES = 32;
+    private static final int COPY_IV_BYTES = 12;
+    private static final int COPY_TAG_LENGTH_BITS = 128;
+    private final Object copyKeySecretLock = new Object();
 
     private final ApiKeyRepository apiKeyRepository;
     private final ApiKeyScopeRepository apiKeyScopeRepository;
     private final CategoryRepository categoryRepository;
     private final CategoryAccessService categoryAccessService;
+    private final UserCredentialRepository userCredentialRepository;
+    private final SettingsService settingsService;
 
     public ApiKeyService(ApiKeyRepository apiKeyRepository,
                          ApiKeyScopeRepository apiKeyScopeRepository,
                          CategoryRepository categoryRepository,
-                         CategoryAccessService categoryAccessService) {
+                         CategoryAccessService categoryAccessService,
+                         UserCredentialRepository userCredentialRepository,
+                         SettingsService settingsService) {
         this.apiKeyRepository = apiKeyRepository;
         this.apiKeyScopeRepository = apiKeyScopeRepository;
         this.categoryRepository = categoryRepository;
         this.categoryAccessService = categoryAccessService;
+        this.userCredentialRepository = userCredentialRepository;
+        this.settingsService = settingsService;
     }
 
     /** 查询当前用户的全部 API Key。 */
@@ -79,6 +97,7 @@ public class ApiKeyService {
         String rawApiKey = generateRawApiKey();
         key.setKeyPrefix(maskPrefix(rawApiKey));
         key.setSecretHash(SaSecureUtil.sha256(rawApiKey));
+        key.setSecretCiphertext(encryptRawApiKey(rawApiKey));
         ApiKey saved = apiKeyRepository.save(key);
         saveScopes(saved, owner.getId(), allowAllCategories, scopeCategoryIds);
         log.info("API Key 创建成功: apiKeyId={}, ownerId={}, allowAllCategories={}, readOnly={}",
@@ -117,6 +136,33 @@ public class ApiKeyService {
         apiKeyScopeRepository.deleteByApiKeyId(apiKeyId);
         apiKeyRepository.delete(apiKey);
         log.info("API Key 删除成功: apiKeyId={}, ownerId={}", apiKeyId, ownerId);
+    }
+
+    /**
+     * 断言当前用户至少启用了一个可用于复制 API Key 的二次验证方式。
+         * <p>允许使用两步验证或通行密钥，二者任意一种存在即可。</p>
+     */
+    @Transactional(readOnly = true)
+    public void assertCopyVerificationAvailable(UserAccount owner) {
+        boolean hasTotp = owner.getTotpSecret() != null && !owner.getTotpSecret().isBlank();
+        boolean hasPasskey = userCredentialRepository.countByUserId(owner.getId()) > 0;
+        if (!hasTotp && !hasPasskey) {
+            throw new IllegalArgumentException("请先开启两步验证或通行密钥后，再复制 API Key");
+        }
+    }
+
+    /**
+     * 在完成二次验证后返回 API Key 明文。
+     * <p>旧版本创建的 API Key 未持久化明文，因此无法复制。</p>
+     */
+    @Transactional(readOnly = true)
+    public String copyKey(UserAccount owner, String apiKeyId) {
+        assertCopyVerificationAvailable(owner);
+        ApiKey apiKey = getOwnedKey(owner.getId(), apiKeyId);
+        if (apiKey.getSecretCiphertext() == null || apiKey.getSecretCiphertext().isBlank()) {
+            throw new IllegalArgumentException("该 API Key 创建于旧版本，系统未保存可复制的明文");
+        }
+        return decryptRawApiKey(apiKey.getSecretCiphertext());
     }
 
     /** 根据明文 API Key 完成认证，并解析完整权限主体。 */
@@ -168,8 +214,11 @@ public class ApiKeyService {
                             String ownerId,
                             boolean allowAllCategories,
                             Collection<String> scopeCategoryIds) {
-        apiKeyScopeRepository.deleteByApiKeyId(apiKey.getId());
+        List<ApiKeyScope> existingScopes = apiKeyScopeRepository.findByApiKeyIdOrderByCreatedAtAsc(apiKey.getId());
         if (allowAllCategories) {
+            if (!existingScopes.isEmpty()) {
+                apiKeyScopeRepository.deleteAllInBatch(existingScopes);
+            }
             return;
         }
         Set<String> distinctCategoryIds = new LinkedHashSet<>();
@@ -180,13 +229,32 @@ public class ApiKeyService {
                 }
             }
         }
+        Map<String, ApiKeyScope> existingScopeByCategoryId = new HashMap<>();
+        for (ApiKeyScope existingScope : existingScopes) {
+            existingScopeByCategoryId.put(existingScope.getCategory().getId(), existingScope);
+        }
+
+        List<ApiKeyScope> scopesToDelete = existingScopes.stream()
+                .filter(scope -> !distinctCategoryIds.contains(scope.getCategory().getId()))
+                .toList();
+        if (!scopesToDelete.isEmpty()) {
+            apiKeyScopeRepository.deleteAllInBatch(scopesToDelete);
+        }
+
+        List<ApiKeyScope> scopesToCreate = new ArrayList<>();
         for (String categoryId : distinctCategoryIds) {
+            if (existingScopeByCategoryId.containsKey(categoryId)) {
+                continue;
+            }
             Category category = categoryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(categoryId, ownerId)
                     .orElseThrow(() -> new IllegalArgumentException("存在无效的分类授权范围"));
             ApiKeyScope scope = new ApiKeyScope();
             scope.setApiKey(apiKey);
             scope.setCategory(category);
-            apiKeyScopeRepository.save(scope);
+            scopesToCreate.add(scope);
+        }
+        if (!scopesToCreate.isEmpty()) {
+            apiKeyScopeRepository.saveAll(scopesToCreate);
         }
     }
 
@@ -214,6 +282,7 @@ public class ApiKeyService {
         map.put("lastUsedAt", apiKey.getLastUsedAt());
         map.put("createdAt", apiKey.getCreatedAt());
         map.put("updatedAt", apiKey.getUpdatedAt());
+        map.put("copyableFlag", apiKey.getSecretCiphertext() != null && !apiKey.getSecretCiphertext().isBlank());
         map.put("scopeCategoryIds", scopes.stream().map(scope -> scope.getCategory().getId()).toList());
         map.put("scopes", scopes.stream().map(scope -> {
             Map<String, Object> scopeMap = new HashMap<>();
@@ -245,6 +314,75 @@ public class ApiKeyService {
 
     private String maskPrefix(String rawApiKey) {
         return rawApiKey.substring(0, Math.min(rawApiKey.length(), 14));
+    }
+
+    /**
+     * 使用服务端主密钥加密 API Key 明文。
+     * <p>这里采用 AES/GCM，密文中会拼接随机 IV，便于后续安全地解密复制。</p>
+     */
+    private String encryptRawApiKey(String rawApiKey) {
+        try {
+            byte[] iv = new byte[COPY_IV_BYTES];
+            SECURE_RANDOM.nextBytes(iv);
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(getOrCreateCopySecretKey(), "AES"),
+                    new GCMParameterSpec(COPY_TAG_LENGTH_BITS, iv));
+            byte[] encrypted = cipher.doFinal(rawApiKey.getBytes(StandardCharsets.UTF_8));
+            byte[] payload = new byte[iv.length + encrypted.length];
+            System.arraycopy(iv, 0, payload, 0, iv.length);
+            System.arraycopy(encrypted, 0, payload, iv.length, encrypted.length);
+            return BASE64_URL_ENCODER.encodeToString(payload);
+        } catch (Exception exception) {
+            throw new IllegalStateException("API Key 明文加密失败", exception);
+        }
+    }
+
+    /**
+     * 解密可复制 API Key 明文。
+     * <p>如果服务端主密钥丢失或数据已损坏，会明确抛错，避免返回错误结果。</p>
+     */
+    private String decryptRawApiKey(String secretCiphertext) {
+        try {
+            byte[] payload = BASE64_URL_DECODER.decode(secretCiphertext);
+            if (payload.length <= COPY_IV_BYTES) {
+                throw new IllegalArgumentException("密文格式无效");
+            }
+            byte[] iv = java.util.Arrays.copyOfRange(payload, 0, COPY_IV_BYTES);
+            byte[] encrypted = java.util.Arrays.copyOfRange(payload, COPY_IV_BYTES, payload.length);
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(getOrCreateCopySecretKey(), "AES"),
+                    new GCMParameterSpec(COPY_TAG_LENGTH_BITS, iv));
+            return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalStateException("API Key 明文解密失败", exception);
+        }
+    }
+
+    /**
+     * 获取用于 API Key 明文加解密的服务端密钥。
+     * <p>密钥会延迟生成并持久化到应用配置中，确保兼容旧库并避免引入额外部署步骤。</p>
+     */
+    private byte[] getOrCreateCopySecretKey() {
+        synchronized (copyKeySecretLock) {
+            String current = settingsService.getValue(SettingsService.API_KEY_COPY_ENCRYPTION_KEY, "").trim();
+            if (current.isBlank()) {
+                byte[] secret = new byte[COPY_KEY_BYTES];
+                SECURE_RANDOM.nextBytes(secret);
+                current = BASE64_URL_ENCODER.encodeToString(secret);
+                settingsService.saveValue(SettingsService.API_KEY_COPY_ENCRYPTION_KEY, current);
+            }
+            try {
+                byte[] decoded = BASE64_URL_DECODER.decode(current);
+                if (decoded.length != COPY_KEY_BYTES) {
+                    throw new IllegalStateException("API Key 复制密钥长度无效");
+                }
+                return decoded;
+            } catch (IllegalArgumentException exception) {
+                throw new IllegalStateException("API Key 复制密钥格式无效", exception);
+            }
+        }
     }
 }
 

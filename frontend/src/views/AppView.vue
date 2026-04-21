@@ -50,7 +50,7 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             新建笔记
           </button>
-          <button class="sl-btn" @click="showCategoryModal = true">
+          <button class="sl-btn" @click="handleOpenCreateCategoryModal">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
           </button>
           <button v-if="authStore.isAdmin" class="sl-btn" @click="openSettings('admin')" title="管理员设置">
@@ -69,13 +69,25 @@
         </div>
 
         <!-- Sidebar tabs -->
-        <div class="sidebar-tabs">
-          <button :class="['tab-btn', { active: sidebarTab === 'tree' }]" @click="sidebarTab = 'tree'">目录</button>
-          <button :class="['tab-btn', { active: sidebarTab === 'trash' }]" @click="handleTrashTabClick">
-            回收站
-            <span v-if="noteStore.tree.trashCount" class="tab-count">{{ noteStore.tree.trashCount }}</span>
+        <div class="sidebar-tabs-wrap">
+          <div class="sidebar-tabs">
+            <button :class="['tab-btn', { active: sidebarTab === 'tree' }]" @click="sidebarTab = 'tree'">目录</button>
+            <button :class="['tab-btn', { active: sidebarTab === 'trash' }]" @click="handleTrashTabClick">
+              回收站
+              <span v-if="noteStore.tree.trashCount" class="tab-count">{{ noteStore.tree.trashCount }}</span>
+            </button>
+            <button :class="['tab-btn', { active: sidebarTab === 'outline' }]" @click="sidebarTab = 'outline'">大纲</button>
+          </div>
+          <button
+            class="sl-btn sl-btn--ghost sl-btn--sm sidebar-locate-btn"
+            type="button"
+            :disabled="!noteStore.currentNote?.id"
+            title="定位当前已打开的笔记"
+            aria-label="定位当前已打开的笔记"
+            @click="handleLocateCurrentNote"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
           </button>
-          <button :class="['tab-btn', { active: sidebarTab === 'outline' }]" @click="sidebarTab = 'outline'">大纲</button>
         </div>
 
         <!-- Tree / Trash / Outline panels -->
@@ -85,6 +97,7 @@
               v-if="isMobile"
               :items="noteStore.tree.items"
               :pinned-items="noteStore.tree.pinnedItems"
+              mode="tree"
               :path="mobileTreePath"
               :selected-id="noteStore.currentNote?.id"
               :selected-category-id="selectedCategoryId"
@@ -96,6 +109,9 @@
             >
               <template #actions="{ item, isCategory }">
                 <template v-if="isCategory">
+                  <button class="sl-btn sl-btn--ghost sl-btn--sm" type="button" @click.stop="handleEditCategoryRequest(item.id)" title="重命名分类">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 113 3L7 19l-4 1 1-4z"/></svg>
+                  </button>
                   <button class="sl-btn sl-btn--ghost sl-btn--sm" type="button" @click.stop="handleOpenSiteModal(item.id)" title="星迹书阁设置">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
                   </button>
@@ -131,6 +147,7 @@
                 @select-note="handleOpenNote"
                 @select-category="selectedCategoryId = $event"
                 @toggle-category="handleToggleCategory"
+                @edit-category="handleEditCategoryRequest"
                 @open-site="handleOpenSiteModal"
                 @delete-category="handleDeleteCategoryRequest"
               />
@@ -154,6 +171,7 @@
             <MobileTreeBrowser
               v-if="isMobile && noteStore.trashTree.totalCount"
               :items="noteStore.trashTree.items"
+              mode="trash"
               :path="mobileTrashPath"
               :selected-id="isDeletedNote ? noteStore.currentNote?.id : null"
               :selected-category-id="selectedTrashCategoryId"
@@ -253,58 +271,106 @@
         </div>
         <div class="topbar-actions" v-if="!isMobile">
           <template v-if="noteStore.editMode">
-            <button class="sl-btn" @click="togglePreview">{{ previewVisible ? '关闭预览' : '打开预览' }}</button>
-            <button class="sl-btn" @click="toggleAutosave">{{ noteStore.autosaveEnabled ? '暂停自动保存' : '恢复自动保存' }}</button>
-            <button class="sl-btn sl-btn--primary" @click="handleSave">保存</button>
-            <button class="sl-btn" @click="handleDiscardExit">不保存退出</button>
-            <button class="sl-btn" @click="handleFinish">完成</button>
+            <button class="sl-btn topbar-icon-btn" :title="previewVisible ? '关闭预览' : '打开预览'" :aria-label="previewVisible ? '关闭预览' : '打开预览'" @click="togglePreview">
+              <svg v-if="previewVisible" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0112 20C7 20 2.73 16.89 1 12c.92-2.6 2.63-4.78 4.89-6.32"/><path d="M10.58 10.58A3 3 0 0012 15a3 3 0 002.42-4.42"/><path d="M1 1l22 22"/><path d="M9.88 4.24A10.94 10.94 0 0112 4c5 0 9.27 3.11 11 8a11.76 11.76 0 01-4.29 5.94"/></svg>
+              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+            <button class="sl-btn topbar-icon-btn" :title="noteStore.autosaveEnabled ? '暂停自动保存' : '恢复自动保存'" :aria-label="noteStore.autosaveEnabled ? '暂停自动保存' : '恢复自动保存'" @click="toggleAutosave">
+              <svg v-if="noteStore.autosaveEnabled" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </button>
+            <button class="sl-btn sl-btn--primary topbar-icon-btn" title="保存" aria-label="保存" @click="handleSave">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            </button>
+            <button class="sl-btn topbar-icon-btn" title="不保存退出" aria-label="不保存退出" @click="handleDiscardExit">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
+            <button class="sl-btn topbar-icon-btn" title="完成编辑" aria-label="完成编辑" @click="handleFinish">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </button>
           </template>
           <template v-else-if="noteStore.currentNote && !isDeletedNote">
-            <button class="sl-btn" @click="handleTogglePinned">{{ noteStore.currentNote.pinnedFlag ? '取消置顶' : '置顶' }}</button>
-            <button class="sl-btn" @click="handleShare" v-if="noteStore.currentNote.id">分享</button>
-            <button class="sl-btn sl-btn--primary" @click="handleEnterEditMode">编辑</button>
-            <button class="sl-btn sl-btn--danger" @click="handleDelete" v-if="noteStore.currentNote.id" title="删除笔记">
+            <button class="sl-btn topbar-icon-btn" :title="noteStore.currentNote.pinnedFlag ? '取消置顶' : '置顶'" :aria-label="noteStore.currentNote.pinnedFlag ? '取消置顶' : '置顶'" @click="handleTogglePinned">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5"/><path d="M5 6V3h14v3l-4 4v3l2 2v1H7v-1l2-2v-3z"/></svg>
+            </button>
+            <button v-if="noteStore.currentNote.id" class="sl-btn topbar-icon-btn" title="分享" aria-label="分享" @click="handleShare">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            </button>
+            <button class="sl-btn sl-btn--primary topbar-icon-btn" title="编辑" aria-label="编辑" @click="handleEnterEditMode">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 113 3L7 19l-4 1 1-4z"/></svg>
+            </button>
+            <button v-if="noteStore.currentNote.id" class="sl-btn sl-btn--danger topbar-icon-btn" title="移入回收站" aria-label="移入回收站" @click="handleDelete">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
             </button>
           </template>
           <template v-else-if="noteStore.currentNote && isDeletedNote">
-            <button class="sl-btn sl-btn--primary" @click="handleRestore(noteStore.currentNote.id)">恢复</button>
-            <button class="sl-btn sl-btn--danger" @click="handlePurge(noteStore.currentNote.id)">彻底删除</button>
+            <button class="sl-btn sl-btn--primary topbar-icon-btn" title="恢复" aria-label="恢复" @click="handleRestore(noteStore.currentNote.id)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            </button>
+            <button class="sl-btn sl-btn--danger topbar-icon-btn" title="彻底删除" aria-label="彻底删除" @click="handlePurge(noteStore.currentNote.id)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            </button>
           </template>
-          <button class="sl-btn" @click="showImportExportModal = true">导入 / 导出</button>
+          <button class="sl-btn topbar-icon-btn" title="导入 / 导出" aria-label="导入 / 导出" @click="showImportExportModal = true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
         </div>
       </div>
 
       <!-- Mobile floating action bar -->
       <div v-if="isMobile && noteStore.editMode" class="mobile-fab">
         <div :class="['fab-menu', { expanded: mobileActionsOpen }]">
+          <div v-if="mobileActionsOpen" class="fab-actions">
+            <button class="sl-btn fab-action-btn" :title="previewVisible ? '关闭预览' : '打开预览'" :aria-label="previewVisible ? '关闭预览' : '打开预览'" @click="togglePreview">
+              <svg v-if="previewVisible" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0112 20C7 20 2.73 16.89 1 12c.92-2.6 2.63-4.78 4.89-6.32"/><path d="M10.58 10.58A3 3 0 0012 15a3 3 0 002.42-4.42"/><path d="M1 1l22 22"/><path d="M9.88 4.24A10.94 10.94 0 0112 4c5 0 9.27 3.11 11 8a11.76 11.76 0 01-4.29 5.94"/></svg>
+              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+            <button class="sl-btn fab-action-btn" :title="noteStore.autosaveEnabled ? '暂停自动保存' : '恢复自动保存'" :aria-label="noteStore.autosaveEnabled ? '暂停自动保存' : '恢复自动保存'" @click="toggleAutosave">
+              <svg v-if="noteStore.autosaveEnabled" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </button>
+            <button class="sl-btn sl-btn--primary fab-action-btn" title="保存" aria-label="保存" @click="handleSave">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            </button>
+            <button class="sl-btn fab-action-btn" title="不保存退出" aria-label="不保存退出" @click="handleDiscardExit">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
+            <button class="sl-btn fab-action-btn" title="完成编辑" aria-label="完成编辑" @click="handleFinish">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </button>
+          </div>
           <button class="fab-toggle sl-btn sl-btn--primary" @click="mobileActionsOpen = !mobileActionsOpen">
             {{ mobileActionsOpen ? '收起' : '操作' }}
           </button>
-          <template v-if="mobileActionsOpen">
-            <button class="sl-btn" @click="togglePreview">{{ previewVisible ? '恢复输入' : '预览' }}</button>
-            <button class="sl-btn" @click="toggleAutosave">{{ noteStore.autosaveEnabled ? '暂停自动保存' : '恢复自动保存' }}</button>
-            <button class="sl-btn sl-btn--primary" @click="handleSave">保存</button>
-            <button class="sl-btn" @click="handleDiscardExit">不保存退出</button>
-            <button class="sl-btn" @click="handleFinish">完成</button>
-          </template>
         </div>
       </div>
       <div v-if="isMobile && !noteStore.editMode && noteStore.currentNote" class="mobile-fab">
         <div :class="['fab-menu', { expanded: mobileActionsOpen }]">
+          <div v-if="mobileActionsOpen && !isDeletedNote" class="fab-actions">
+            <button class="sl-btn fab-action-btn" :title="noteStore.currentNote.pinnedFlag ? '取消置顶' : '置顶'" :aria-label="noteStore.currentNote.pinnedFlag ? '取消置顶' : '置顶'" @click="handleTogglePinned">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5"/><path d="M5 6V3h14v3l-4 4v3l2 2v1H7v-1l2-2v-3z"/></svg>
+            </button>
+            <button v-if="noteStore.currentNote.id" class="sl-btn fab-action-btn" title="分享" aria-label="分享" @click="handleShare">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            </button>
+            <button class="sl-btn sl-btn--primary fab-action-btn" title="编辑" aria-label="编辑" @click="handleEnterEditMode">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 113 3L7 19l-4 1 1-4z"/></svg>
+            </button>
+            <button class="sl-btn sl-btn--danger fab-action-btn" title="移入回收站" aria-label="移入回收站" @click="handleDelete">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            </button>
+          </div>
+          <div v-else-if="mobileActionsOpen && isDeletedNote" class="fab-actions">
+            <button class="sl-btn sl-btn--primary fab-action-btn" title="恢复" aria-label="恢复" @click="handleRestore(noteStore.currentNote.id)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            </button>
+            <button class="sl-btn sl-btn--danger fab-action-btn" title="彻底删除" aria-label="彻底删除" @click="handlePurge(noteStore.currentNote.id)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            </button>
+          </div>
           <button class="fab-toggle sl-btn sl-btn--primary" @click="mobileActionsOpen = !mobileActionsOpen">
             {{ mobileActionsOpen ? '收起' : '操作' }}
           </button>
-          <template v-if="mobileActionsOpen && !isDeletedNote">
-            <button class="sl-btn" @click="handleTogglePinned">{{ noteStore.currentNote.pinnedFlag ? '取消置顶' : '置顶' }}</button>
-            <button class="sl-btn" @click="handleShare" v-if="noteStore.currentNote.id">分享</button>
-            <button class="sl-btn sl-btn--primary" @click="handleEnterEditMode">编辑</button>
-            <button class="sl-btn sl-btn--danger" @click="handleDelete">移入回收站</button>
-          </template>
-          <template v-else-if="mobileActionsOpen && isDeletedNote">
-            <button class="sl-btn sl-btn--primary" @click="handleRestore(noteStore.currentNote.id)">恢复</button>
-            <button class="sl-btn sl-btn--danger" @click="handlePurge(noteStore.currentNote.id)">彻底删除</button>
-          </template>
         </div>
       </div>
 
@@ -384,8 +450,9 @@
     <CategoryModal
       v-if="showCategoryModal"
       :tree-items="noteStore.tree.items"
-      @close="showCategoryModal = false"
-      @created="handleCategoryCreated"
+      :category="editingCategory"
+      @close="handleCloseCategoryModal"
+      @saved="handleCategorySaved"
     />
     <SettingsModal
       v-if="showSettingsModal"
@@ -536,6 +603,7 @@ const selectedTrashCategoryId = ref(null)
 const allThemes = ref([])
 const showShareModal = ref(false)
 const showCategoryModal = ref(false)
+const editingCategory = ref(null)
 const showSettingsModal = ref(false)
 const settingsInitialTab = ref('profile')
 const showImportExportModal = ref(false)
@@ -1133,6 +1201,63 @@ function confirmDiscardExit() {
   toast.info('已退出编辑，未保存内容已放弃')
 }
 
+function handleOpenCreateCategoryModal() {
+  editingCategory.value = null
+  showCategoryModal.value = true
+}
+
+function handleCloseCategoryModal() {
+  showCategoryModal.value = false
+  editingCategory.value = null
+}
+
+function handleEditCategoryRequest(categoryId) {
+  const node = findTreeNodeById(noteStore.tree.items, categoryId)
+  if (!node || node.type !== 'category') {
+    toast.error('分类不存在或已被删除')
+    return
+  }
+  editingCategory.value = {
+    id: node.id,
+    name: node.name || node.label || '',
+    parentId: node.parentId || null
+  }
+  showCategoryModal.value = true
+}
+
+function scrollSidebarNodeIntoView(nodeId, mode) {
+  if (!nodeId) return
+  const safeId = window.CSS?.escape ? window.CSS.escape(String(nodeId)) : String(nodeId)
+  const target = document.querySelector(`[data-sidebar-node-id="${safeId}"][data-sidebar-mode="${mode}"]`)
+  target?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+
+async function handleLocateCurrentNote() {
+  if (!noteStore.currentNote?.id) {
+    toast.info('请先打开一篇笔记')
+    return
+  }
+
+  const mode = isDeletedNote.value ? 'trash' : 'tree'
+  if (mode === 'trash') {
+    sidebarTab.value = 'trash'
+    const path = findTreePathById(noteStore.trashTree.items, noteStore.currentNote.id)
+    selectedTrashCategoryId.value = path[path.length - 1] || null
+    mobileTrashPath.value = [...path]
+    expandCategoryPath(path, 'trash')
+  } else {
+    sidebarTab.value = 'tree'
+    const path = findTreePathById(noteStore.tree.items, noteStore.currentNote.id)
+    selectedCategoryId.value = path[path.length - 1] || null
+    mobileTreePath.value = [...path]
+    expandCategoryPath(path, 'tree')
+  }
+
+  await nextTick()
+  await nextTick()
+  scrollSidebarNodeIntoView(noteStore.currentNote.id, mode)
+}
+
 function handleNewNote() {
   noteStore.startNewNote(selectedCategoryId.value)
   editorTitle.value = ''
@@ -1294,9 +1419,10 @@ async function handleTogglePinned() {
   }
 }
 
-function handleCategoryCreated() {
+function handleCategorySaved(payload) {
   showCategoryModal.value = false
-  toast.success('分类已创建')
+  editingCategory.value = null
+  toast.success(payload?.mode === 'update' ? '分类名称已更新' : '分类已创建')
 }
 
 function openSettings(tab = 'profile') {
@@ -1600,11 +1726,24 @@ onUnmounted(() => {
   justify-content: center;
   background: linear-gradient(180deg, var(--sl-card) 0%, var(--sl-card-hover) 100%);
 }
+.sidebar-tabs-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .sidebar-tabs {
   display: flex;
+  flex: 1;
   background: var(--sl-active-bg);
   border-radius: var(--sl-radius);
   padding: 3px;
+}
+.sidebar-locate-btn {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
 }
 .tab-btn {
   flex: 1;
@@ -1812,6 +1951,13 @@ onUnmounted(() => {
 }
 .topbar-meta { display: flex; gap: 8px; margin-top: 4px; }
 .topbar-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.topbar-icon-btn {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+  justify-content: center;
+}
 
 /* --- Viewer --- */
 .viewer-area {
@@ -1962,12 +2108,27 @@ onUnmounted(() => {
 }
 .fab-menu {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 6px;
   background: var(--sl-card);
   border: 1px solid var(--sl-border);
   border-radius: var(--sl-radius-lg);
   padding: 6px;
   box-shadow: var(--sl-shadow-flyout);
+}
+.fab-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.fab-action-btn {
+  width: 48px;
+  min-width: 48px;
+  height: 42px;
+  padding: 0;
+  justify-content: center;
 }
 .fab-toggle { border-radius: var(--sl-radius); }
 
@@ -2067,8 +2228,19 @@ onUnmounted(() => {
     border: 1px solid var(--sl-border);
     box-shadow: var(--sl-shadow-card);
   }
+  .sidebar-tabs-wrap {
+    padding: 12px;
+    background: color-mix(in srgb, var(--sl-card) 92%, transparent);
+    border: 1px solid var(--sl-border);
+    border-radius: var(--sl-radius-lg);
+    box-shadow: var(--sl-shadow-card);
+  }
   .sidebar-tabs {
     padding: 4px;
+    background: var(--sl-active-bg);
+    border-radius: var(--sl-radius);
+    border: none;
+    box-shadow: none;
   }
   .sidebar-scroll {
     padding-right: 2px;
@@ -2107,15 +2279,19 @@ onUnmounted(() => {
     right: 16px;
   }
   .fab-menu {
-    flex-direction: column;
-    align-items: stretch;
-    width: min(240px, calc(100vw - 32px));
-    max-width: 100%;
+    width: auto;
     margin-left: auto;
   }
-  .fab-menu .sl-btn {
+  .fab-toggle {
+    min-width: 76px;
+  }
+  .fab-actions {
     width: 100%;
-    justify-content: center;
+  }
+  .fab-action-btn {
+    width: 44px;
+    min-width: 44px;
+    height: 40px;
   }
   .discard-confirm {
     flex-direction: column;

@@ -4,6 +4,8 @@
       :class="['tree-row', { active: isSelected, category: isCategory }]"
       :style="rowStyle"
       :title="item.name"
+      :data-sidebar-node-id="item.id"
+      :data-sidebar-mode="mode"
       @click="handleClick"
     >
       <span class="tree-icon">
@@ -30,6 +32,9 @@
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5"/><path d="M5 6V3h14v3l-4 4v3l2 2v1H7v-1l2-2v-3z"/></svg>
         </span>
       </span>
+      <button v-if="mode === 'tree' && isCategory" class="tree-edit-btn sl-btn sl-btn--ghost sl-btn--sm" @click.stop="emit('edit-category', item.id)" title="重命名分类">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 113 3L7 19l-4 1 1-4z"/></svg>
+      </button>
       <button v-if="mode === 'tree' && isCategory" class="tree-site-btn sl-btn sl-btn--ghost sl-btn--sm" @click.stop="emit('open-site', item.id)" title="星迹书阁设置">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
       </button>
@@ -89,6 +94,7 @@
         @select-note="$emit('select-note', $event)"
         @select-category="$emit('select-category', $event)"
         @toggle-category="$emit('toggle-category', $event)"
+        @edit-category="$emit('edit-category', $event)"
         @open-site="$emit('open-site', $event)"
         @delete-category="$emit('delete-category', $event)"
         @restore-note="$emit('restore-note', $event)"
@@ -112,7 +118,7 @@ const props = defineProps({
   depth: { type: Number, default: 0 }
 })
 const emit = defineEmits([
-  'select-note', 'select-category', 'toggle-category', 'open-site', 'delete-category',
+  'select-note', 'select-category', 'toggle-category', 'edit-category', 'open-site', 'delete-category',
   'restore-note', 'purge-note', 'restore-category', 'purge-category'
 ])
 
@@ -174,6 +180,7 @@ function handleClick() {
   opacity: 0.4;
 }
 .tree-expand { padding: 0 4px; }
+.tree-edit-btn,
 .tree-site-btn {
   padding: 0 4px;
   opacity: 0.55;
@@ -195,6 +202,7 @@ function handleClick() {
 .tree-row:hover .tree-delete-btn,
 .tree-row:hover .tree-action-btn { opacity: 1; }
 .tree-site-btn:hover { opacity: 1 !important; }
+.tree-edit-btn:hover { opacity: 1 !important; }
 .tree-delete-btn:hover { opacity: 1 !important; }
 .tree-action-btn:hover { opacity: 1 !important; }
 .chevron { transition: transform 0.15s; }

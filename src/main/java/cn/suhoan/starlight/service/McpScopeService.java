@@ -132,6 +132,13 @@ public class McpScopeService {
         }
 
         if (normalizedCategoryId == null || VIRTUAL_ROOT_CATEGORY_ID.equals(normalizedCategoryId)) {
+            if (rootDescriptor.singleScopeRoot()) {
+                return QueryTarget.rootView(rootDescriptor.rootCategoryId(), Map.of(), Set.of());
+            }
+            return QueryTarget.rootView(rootDescriptor.rootCategoryId(), Map.of(), Set.of());
+        }
+
+        if (rootDescriptor.singleScopeRoot() && normalizedCategoryId.equals(rootDescriptor.rootCategoryId())) {
             return QueryTarget.rootView(rootDescriptor.rootCategoryId(), Map.of(), Set.of());
         }
 
@@ -168,7 +175,7 @@ public class McpScopeService {
 
     private ScopeRootDescriptor resolveScopeRoot(McpApiKeyPrincipal principal, Map<String, Category> categoryById) {
         if (principal.allowAllCategories()) {
-            return new ScopeRootDescriptor(null, null, false, "全部笔记", List.of());
+            return new ScopeRootDescriptor(null, null, false, "real_root", "全部笔记", List.of());
         }
         List<Category> scopeRoots = principal.scopeRootCategoryIds().stream()
                 .map(categoryById::get)
@@ -176,7 +183,11 @@ public class McpScopeService {
                 .sorted(Comparator.comparing(Category::getName, String.CASE_INSENSITIVE_ORDER).thenComparing(Category::getId))
                 .toList();
         if (scopeRoots.isEmpty()) {
-            return new ScopeRootDescriptor(VIRTUAL_ROOT_CATEGORY_ID, null, true, VIRTUAL_ROOT_NAME, List.of());
+            return new ScopeRootDescriptor(VIRTUAL_ROOT_CATEGORY_ID, null, true, "virtual_root", VIRTUAL_ROOT_NAME, List.of());
+        }
+        if (scopeRoots.size() == 1) {
+            Category root = scopeRoots.getFirst();
+            return new ScopeRootDescriptor(root.getId(), root.getId(), false, "single_scope_root", root.getName(), List.of(root.getId()));
         }
         Set<String> parentIds = new LinkedHashSet<>();
         for (Category category : scopeRoots) {
@@ -187,12 +198,12 @@ public class McpScopeService {
             if (parentId != null) {
                 Category parent = categoryById.get(parentId);
                 if (parent != null) {
-                        return new ScopeRootDescriptor(parent.getId(), parent.getId(), false, parent.getName(),
+                    return new ScopeRootDescriptor(parent.getId(), parent.getId(), false, "shared_parent", parent.getName(),
                             scopeRoots.stream().map(Category::getId).toList());
                 }
             }
         }
-        return new ScopeRootDescriptor(VIRTUAL_ROOT_CATEGORY_ID, null, true, VIRTUAL_ROOT_NAME,
+        return new ScopeRootDescriptor(VIRTUAL_ROOT_CATEGORY_ID, null, true, "virtual_root", VIRTUAL_ROOT_NAME,
                 scopeRoots.stream().map(Category::getId).toList());
     }
 
@@ -244,6 +255,10 @@ public class McpScopeService {
             return items;
         }
 
+        if (rootDescriptor.singleScopeRoot()) {
+            return buildCategoryContentItems(rootDescriptor.rootCategoryId(), safeDepth, context);
+        }
+
         List<String> rootEntryCategoryIds = new ArrayList<>(rootDescriptor.rootEntryCategoryIds());
         rootEntryCategoryIds.sort(Comparator.comparing(id -> categoryById.get(id).getName(), String.CASE_INSENSITIVE_ORDER));
         for (String categoryId : rootEntryCategoryIds) {
@@ -259,7 +274,7 @@ public class McpScopeService {
             return false;
         }
         if (queryTarget.kind() == QueryKind.ROOT_VIEW) {
-            return true;
+            return !rootDescriptor.singleScopeRoot();
         }
         return queryTarget.category() != null && !principal.accessibleCategoryIds().contains(queryTarget.category().getId())
                 && rootDescriptor.rootCategoryId() != null
@@ -270,7 +285,7 @@ public class McpScopeService {
         if (principal.allowAllCategories()) {
             return "real_root";
         }
-        return rootDescriptor.virtualRoot() ? "virtual_root" : "shared_parent";
+        return rootDescriptor.rootMode();
     }
 
     private List<String> listNextQueryCategoryIds(QueryTarget queryTarget,
@@ -284,6 +299,12 @@ public class McpScopeService {
                         .map(Category::getId)
                         .toList();
                 return sortCategoryIds(topLevelCategoryIds, context.categoryById());
+            }
+            if (rootDescriptor.singleScopeRoot()) {
+                return sortCategoryIds(
+                        context.accessibleChildrenMap().getOrDefault(rootDescriptor.rootCategoryId(), List.of()),
+                        context.categoryById()
+                );
             }
             return sortCategoryIds(rootDescriptor.rootEntryCategoryIds(), context.categoryById());
         }
@@ -300,6 +321,27 @@ public class McpScopeService {
                 .sorted(Comparator.comparing(id -> categoryById.get(id).getName(), String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(String::valueOf))
                 .toList();
+    }
+
+    /**
+     * 将“单授权根分类”作为 MCP 逻辑根目录时，直接返回该分类下的子分类与笔记，
+     * 避免外层再包一层同名分类节点，减少客户端处理复杂度。
+     */
+    private List<Map<String, Object>> buildCategoryContentItems(String categoryId,
+                                                                int safeDepth,
+                                                                TreeBuildContext context) {
+        List<Map<String, Object>> items = new ArrayList<>();
+        List<String> directChildIds = new ArrayList<>(context.accessibleChildrenMap().getOrDefault(categoryId, List.of()));
+        directChildIds.sort(Comparator.comparing(id -> context.categoryById().get(id).getName(), String.CASE_INSENSITIVE_ORDER));
+        for (String childId : directChildIds) {
+            items.add(buildCategoryNode(childId, safeDepth - 1, context));
+        }
+        for (Note note : sortNotes(context.accessibleNotesByCategory().getOrDefault(categoryId, List.of()))) {
+            if (!note.isPinnedFlag()) {
+                items.add(toTreeNote(note));
+            }
+        }
+        return items;
     }
 
     private Map<String, Object> buildCategoryNode(String categoryId, int remainingDepth, TreeBuildContext context) {
@@ -357,7 +399,10 @@ public class McpScopeService {
                     includedCategoryIds.addAll(childIds);
                 }
             } else {
-                includedCategoryIds.addAll(collectDescendantIds(rootDescriptor.rootEntryCategoryIds(), accessibleChildrenMap));
+                List<String> startIds = rootDescriptor.singleScopeRoot()
+                        ? List.of(rootDescriptor.rootCategoryId())
+                        : rootDescriptor.rootEntryCategoryIds();
+                includedCategoryIds.addAll(collectDescendantIds(startIds, accessibleChildrenMap));
             }
         } else if (queryTarget.overrideChildrenMap().isEmpty()) {
             includedCategoryIds.addAll(collectDescendantIds(List.of(queryTarget.category().getId()), accessibleChildrenMap));
@@ -465,8 +510,13 @@ public class McpScopeService {
     private record ScopeRootDescriptor(String rootCategoryId,
                                        String actualCategoryId,
                                        boolean virtualRoot,
+                                       String rootMode,
                                        String rootCategoryName,
                                        List<String> rootEntryCategoryIds) {
+
+        private boolean singleScopeRoot() {
+            return "single_scope_root".equals(rootMode);
+        }
     }
 
     private record TreeBuildContext(Map<String, Category> categoryById,

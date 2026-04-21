@@ -105,6 +105,22 @@ public class NoteController {
         return ApiResponse.ok(result);
     }
 
+    /**
+     * 更新分类名称。
+     * <p>当前前端仅用于未删除分类的重命名，因此会沿用原父级结构。</p>
+     */
+    @PutMapping("/categories/{id}")
+    public ApiResponse<Map<String, Object>> updateCategory(@PathVariable String id,
+                                                           @RequestBody CategoryRequest request) {
+        UserAccount userAccount = sessionAuthService.requireUser();
+        Category category = noteService.updateCategory(userAccount, id, request.name(), request.parentId());
+        Map<String, Object> result = new HashMap<>();
+        result.put("id", category.getId());
+        result.put("name", category.getName());
+        result.put("parentId", category.getParent() == null ? null : category.getParent().getId());
+        return ApiResponse.ok(result);
+    }
+
     /** 将分类及其子树移入回收站。 */
     @DeleteMapping("/categories/{id}")
     public ApiResponse<Map<String, Object>> deleteCategory(@PathVariable String id) {

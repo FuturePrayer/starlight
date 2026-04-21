@@ -109,6 +109,7 @@ export const noteApi = {
 
 export const categoryApi = {
   create: (name, parentId) => request('/api/categories', { method: 'POST', body: JSON.stringify({ name, parentId }) }),
+  update: (id, name, parentId) => request(`/api/categories/${id}`, { method: 'PUT', body: JSON.stringify({ name, parentId }) }),
   delete: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
   restoreTrash: (id) => request(`/api/trash/categories/${id}/restore`, { method: 'POST', body: '{}' }),
   purgeTrash: (id) => request(`/api/trash/categories/${id}`, { method: 'DELETE' })
@@ -152,7 +153,10 @@ export const apiKeyApi = {
   list: () => request('/api/auth/api-keys'),
   create: (data) => request('/api/auth/api-keys', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/api/auth/api-keys/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  delete: (id) => request(`/api/auth/api-keys/${id}`, { method: 'DELETE' })
+  delete: (id) => request(`/api/auth/api-keys/${id}`, { method: 'DELETE' }),
+  copyWithTotp: (id, code) => request(`/api/auth/api-keys/${id}/copy/totp`, { method: 'POST', body: JSON.stringify({ code }) }),
+  copyPasskeyStart: (id) => request(`/api/auth/api-keys/${id}/copy/passkey/start`, { method: 'POST', body: '{}' }),
+  copyPasskeyFinish: (id, data) => request(`/api/auth/api-keys/${id}/copy/passkey/finish`, { method: 'POST', body: JSON.stringify(data) })
 }
 
 export const siteApi = {

@@ -1,17 +1,18 @@
 <template>
-  <PopupLayer title="创建分类" width="min(440px, calc(100vw - 32px))" @close="$emit('close')">
+  <PopupLayer :title="isEditing ? '重命名分类' : '创建分类'" width="min(440px, calc(100vw - 32px))" @close="$emit('close')">
     <div class="form-field">
       <label class="sl-label">分类名称</label>
-      <input v-model="name" class="sl-input" placeholder="例如：技术随笔" @keyup.enter="handleCreate" />
+      <input v-model="name" class="sl-input" placeholder="例如：技术随笔" @keyup.enter="handleSave" />
     </div>
-    <div class="form-field category-form-field">
+    <div v-if="!isEditing" class="form-field category-form-field">
       <label class="sl-label">父分类</label>
       <select v-model="parentId" class="sl-select">
         <option value="">无（顶级分类）</option>
         <option v-for="opt in options" :key="opt.id" :value="opt.id">{{ opt.label }}</option>
       </select>
     </div>
-    <button class="sl-btn sl-btn--primary category-submit-btn" @click="handleCreate">保存分类</button>
+    <div v-else class="field-hint category-form-hint">当前仅修改分类名称，原有父分类位置保持不变。</div>
+    <button class="sl-btn sl-btn--primary category-submit-btn" @click="handleSave">{{ isEditing ? '保存更名' : '保存分类' }}</button>
   </PopupLayer>
 </template>
 
@@ -21,13 +22,20 @@ import { useNoteStore } from '@/stores/note'
 import { useToastStore } from '@/stores/toast'
 import PopupLayer from '@/components/PopupLayer.vue'
 
-const props = defineProps({ treeItems: { type: Array, default: () => [] } })
-const emit = defineEmits(['close', 'created'])
+const props = defineProps({
+  treeItems: { type: Array, default: () => [] },
+  category: {
+    type: Object,
+    default: null
+  }
+})
+const emit = defineEmits(['close', 'saved'])
 const noteStore = useNoteStore()
 const toast = useToastStore()
 
-const name = ref('')
-const parentId = ref('')
+const isEditing = computed(() => Boolean(props.category?.id))
+const name = ref(props.category?.name || '')
+const parentId = ref(props.category?.parentId || '')
 
 const options = computed(() => {
   const result = []
@@ -43,11 +51,16 @@ const options = computed(() => {
   return result
 })
 
-async function handleCreate() {
+async function handleSave() {
   if (!name.value.trim()) { toast.error('请输入分类名称'); return }
   try {
+    if (isEditing.value) {
+      await noteStore.updateCategory(props.category.id, name.value.trim(), props.category?.parentId || null)
+      emit('saved', { mode: 'update', categoryId: props.category.id })
+      return
+    }
     await noteStore.createCategory(name.value.trim(), parentId.value || null)
-    emit('created')
+    emit('saved', { mode: 'create' })
   } catch (err) {
     toast.error(err.message)
   }
@@ -56,6 +69,7 @@ async function handleCreate() {
 
 <style scoped>
 .category-form-field { margin-top: 12px; }
+.category-form-hint { margin-top: 12px; }
 .category-submit-btn { width: 100%; margin-top: 18px; }
 </style>
 
