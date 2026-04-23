@@ -9,7 +9,7 @@ English · [中文](./README.md)
 [![License: Anti 996](https://img.shields.io/badge/License-Anti%20996-black)](./LICENSE)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/FuturePrayer/starlight)
 
-![Starlight Logo](./logo.png)
+![Starlight Logo](./images/logo.png)
 
 Starlight is a **Spring Boot 4 + Vue 3** Markdown note-taking application with category trees, full-text search, public sharing, publishable read-only sites, theme extension, and a built-in **MCP Server** for AI clients.
 
@@ -301,3 +301,7 @@ startlight/
 
 [**Anti 996**](./LICENSE)
 
+## Poster
+
+![Starlight Poster1](./images/宣传海报1.png)
+![Starlight Poster2](./images/宣传海报2.jpg)

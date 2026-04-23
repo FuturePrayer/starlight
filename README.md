@@ -9,7 +9,7 @@
 [![License: Anti 996](https://img.shields.io/badge/License-Anti%20996-black)](./LICENSE)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/FuturePrayer/starlight)
 
-![Starlight Logo](./logo.png)
+![Starlight Logo](./images/logo.png)
 
 Starlight 是一个基于 **Spring Boot 4 + Vue 3** 的 Markdown 笔记系统，支持分类树、全文搜索、分享链接、公开站点、主题扩展，以及面向 AI 客户端的 **MCP Server**。
 
@@ -300,3 +300,8 @@ startlight/
 ## License
 
 [**Anti 996**](./LICENSE)
+
+## 海报
+
+![Starlight 海报1](./images/宣传海报1.png)
+![Starlight 海报2](./images/宣传海报2.jpg)
