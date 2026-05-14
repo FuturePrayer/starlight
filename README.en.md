@@ -11,7 +11,7 @@ English · [中文](./README.md)
 
 ![Starlight Logo](./images/logo.png)
 
-Starlight is a **Spring Boot 4 + Vue 3** Markdown note-taking application with category trees, full-text search, public sharing, publishable read-only sites, theme extension, and a built-in **MCP Server** for AI clients.
+Starlight is a **Spring Boot 4 + Vue 3** Markdown note-taking application with category trees, full-text search, public sharing, publishable read-only sites, built-in themes, and a built-in **MCP Server** for AI clients.
 
 ## Highlights
 
@@ -22,7 +22,7 @@ Starlight is a **Spring Boot 4 + Vue 3** Markdown note-taking application with c
 - 🧬 Git repository import with branch selection, directory filtering, overwrite reimport, auto-sync, and sync history
 - 🔗 Public share links, password-protected shares, expiration, and QR codes
 - 🌌 Starlight Site: publish a category as a read-only public website
-- 🎨 Built-in and external themes
+- 🎨 Built-in themes
 - 🔐 TOTP 2FA and Passkey / WebAuthn
 - 🤖 Stateless Streamable HTTP MCP Server with API Key, scope, and read-only control
 
@@ -50,7 +50,6 @@ The repository now includes a root-level `docker-compose.yml` configured with:
 - combined image: `ghcr.io/futureprayer/starlight:latest`
 - database: file-based H2
 - persistent data directory: `./data`
-- external theme directory: `./themes`
 
 Start:
 
@@ -84,7 +83,6 @@ docker run -d \
   --name starlight \
   -p 8080:8080 \
   -v ./data:/app/data \
-  -v ./themes:/app/themes \
   ghcr.io/futureprayer/starlight:latest
 ```
 
@@ -125,7 +123,6 @@ Default runtime settings live in `src/main/resources/application.yaml`.
 | `STARLIGHT_DATASOURCE_URL` | `jdbc:h2:file:./data/starlight;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE` | JDBC datasource URL |
 | `STARLIGHT_DATASOURCE_USERNAME` | `sa` | Database username |
 | `STARLIGHT_DATASOURCE_PASSWORD` | empty | Database password |
-| `STARLIGHT_THEME_DIR` | `themes` | External theme directory |
 | `STARLIGHT_NOTE_TRASH_RETENTION_DAYS` | `30` | Trash retention period in days |
 | `STARLIGHT_NOTE_TRASH_CLEANUP_CRON` | `0 20 3 * * *` | Trash cleanup cron |
 | `JAVA_OPTS` | empty | JVM startup options, useful in containers |
@@ -264,7 +261,15 @@ npm ci
 npm run dev
 ```
 
-The Vite dev server proxies `/api` and `/theme-files` to `http://localhost:8080`.
+The Vite dev server proxies `/api` to `http://localhost:8080`.
+
+The redesigned frontend now lives in `frontend2/` for parallel development and review. It is **not wired into the Dockerfiles, Compose setup, or GitHub workflows yet**:
+
+```bash
+cd frontend2
+npm ci
+npm run dev
+```
 
 ### Backend
 
@@ -284,7 +289,8 @@ mvn test
 startlight/
 ├─ src/main/java/          # Spring Boot backend source
 ├─ src/main/resources/     # configuration, Flyway, static assets
-├─ frontend/               # Vue 3 + Vite frontend
+├─ frontend/               # current Vue 3 + Vite frontend
+├─ frontend2/              # redesigned frontend, not wired into Docker/workflows yet
 ├─ deploy/nginx/           # Nginx template for standalone frontend deployment
 ├─ docker-compose.yml      # Compose deployment using default H2 storage
 ├─ sql/                    # init / reference SQL

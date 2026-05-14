@@ -13,19 +13,8 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "starlight")
 public class StarlightProperties {
 
-    /** 外部主题文件目录路径，默认为 "themes" */
-    private String themeDir = "themes";
-
     /** 笔记回收站相关配置。 */
     private NoteTrash noteTrash = new NoteTrash();
-
-    public String getThemeDir() {
-        return themeDir;
-    }
-
-    public void setThemeDir(String themeDir) {
-        this.themeDir = themeDir;
-    }
 
     public NoteTrash getNoteTrash() {
         return noteTrash;

@@ -9,5 +9,4 @@ services:
       JAVA_OPTS: "-XX:MaxRAMPercentage=75.0"
     volumes:
       - ./data:/app/data
-      - ./themes:/app/themes
 

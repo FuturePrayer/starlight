@@ -32,7 +32,6 @@ spring:
           mcp-endpoint: /api/mcp
 
 starlight:
-  theme-dir: ${STARLIGHT_THEME_DIR:themes}
   note-trash:
     retention-days: ${STARLIGHT_NOTE_TRASH_RETENTION_DAYS:30}
     cleanup-cron: ${STARLIGHT_NOTE_TRASH_CLEANUP_CRON:0 20 3 * * *}

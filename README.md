@@ -11,7 +11,7 @@
 
 ![Starlight Logo](./images/logo.png)
 
-Starlight 是一个基于 **Spring Boot 4 + Vue 3** 的 Markdown 笔记系统，支持分类树、全文搜索、分享链接、公开站点、主题扩展，以及面向 AI 客户端的 **MCP Server**。
+Starlight 是一个基于 **Spring Boot 4 + Vue 3** 的 Markdown 笔记系统，支持分类树、全文搜索、分享链接、公开站点、内置主题，以及面向 AI 客户端的 **MCP Server**。
 
 ## 特性概览
 
@@ -22,7 +22,7 @@ Starlight 是一个基于 **Spring Boot 4 + Vue 3** 的 Markdown 笔记系统，
 - 🧬 Git 仓库导入：分支选择、目录筛选、重导入覆盖、自动同步与同步记录
 - 🔗 公开分享、密码分享、过期时间、二维码
 - 🌌 星迹书阁：把分类发布为只读公开站点
-- 🎨 内置与外部主题
+- 🎨 内置主题
 - 🔐 TOTP 两步验证、Passkey / WebAuthn
 - 🤖 无状态 Streamable HTTP MCP Server，支持 API Key、目录范围和只读权限
 
@@ -50,7 +50,6 @@ Starlight 是一个基于 **Spring Boot 4 + Vue 3** 的 Markdown 笔记系统，
 - 合并镜像：`ghcr.io/futureprayer/starlight:latest`
 - 数据库：H2 文件库
 - 数据持久化目录：`./data`
-- 主题目录：`./themes`
 
 启动：
 
@@ -84,7 +83,6 @@ docker run -d \
   --name starlight \
   -p 8080:8080 \
   -v ./data:/app/data \
-  -v ./themes:/app/themes \
   ghcr.io/futureprayer/starlight:latest
 ```
 
@@ -125,7 +123,6 @@ mvn spring-boot:run
 | `STARLIGHT_DATASOURCE_URL` | `jdbc:h2:file:./data/starlight;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE` | 数据库连接串 |
 | `STARLIGHT_DATASOURCE_USERNAME` | `sa` | 数据库用户名 |
 | `STARLIGHT_DATASOURCE_PASSWORD` | 空 | 数据库密码 |
-| `STARLIGHT_THEME_DIR` | `themes` | 外部主题目录 |
 | `STARLIGHT_NOTE_TRASH_RETENTION_DAYS` | `30` | 回收站保留天数 |
 | `STARLIGHT_NOTE_TRASH_CLEANUP_CRON` | `0 20 3 * * *` | 回收站清理计划 |
 | `JAVA_OPTS` | 空 | JVM 启动参数（容器场景常用） |
@@ -264,7 +261,15 @@ npm ci
 npm run dev
 ```
 
-Vite 开发服务器会将 `/api` 与 `/theme-files` 代理到 `http://localhost:8080`。
+Vite 开发服务器会将 `/api` 代理到 `http://localhost:8080`。
+
+新的重构版前端位于 `frontend2/`，当前用于并行开发与验收，**尚未接入 Dockerfile、Compose 或 GitHub 工作流**：
+
+```bash
+cd frontend2
+npm ci
+npm run dev
+```
 
 ### 后端
 
@@ -284,7 +289,8 @@ mvn test
 startlight/
 ├─ src/main/java/          # Spring Boot 后端源码
 ├─ src/main/resources/     # 配置、Flyway、静态资源
-├─ frontend/               # Vue 3 + Vite 前端
+├─ frontend/               # 现有 Vue 3 + Vite 前端
+├─ frontend2/              # 重构中的新前端（暂未接入 Docker / workflow）
 ├─ deploy/nginx/           # 独立前端部署的 Nginx 模板
 ├─ docker-compose.yml      # 默认 H2 的 Compose 部署文件
 ├─ sql/                    # 初始化 / 参考 SQL

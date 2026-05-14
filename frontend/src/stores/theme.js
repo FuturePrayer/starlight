@@ -36,48 +36,48 @@ const BUILTIN_THEMES = [
   {
     id: 'win11-light',
     name: 'Windows 11 浅色',
-    previewColor: '#005fb8',
+    previewColor: '#0f6cbd',
     backgroundImage: '',
     backgroundOpacity: 0,
     vars: {
-      '--sl-primary': '#005fb8',
-      '--sl-primary-hover': '#004e99',
-      '--sl-primary-active': '#003e7e',
-      '--sl-primary-light': 'rgba(0, 95, 184, 0.08)',
-      '--sl-bg': '#f3f3f3',
+      '--sl-primary': '#0f6cbd',
+      '--sl-primary-hover': '#115ea3',
+      '--sl-primary-active': '#0c4a7b',
+      '--sl-primary-light': 'rgba(15, 108, 189, 0.10)',
+      '--sl-bg': '#f5f7fb',
       '--sl-bg-secondary': '#ffffff',
       '--sl-panel': '#ffffff',
-      '--sl-card': '#ffffff',
-      '--sl-card-hover': '#f9f9f9',
-      '--sl-border': '#e5e5e5',
-      '--sl-border-strong': '#c4c4c4',
-      '--sl-text': '#1a1a1a',
-      '--sl-text-secondary': '#616161',
-      '--sl-text-tertiary': '#9e9e9e',
-      '--sl-danger': '#c42b1c',
-      '--sl-danger-hover': '#a42618',
-      '--sl-danger-active': '#8f2115',
+      '--sl-card': '#fbfdff',
+      '--sl-card-hover': '#f2f6fb',
+      '--sl-border': '#d7dee8',
+      '--sl-border-strong': '#bcc7d8',
+      '--sl-text': '#1b1f24',
+      '--sl-text-secondary': '#5d6674',
+      '--sl-text-tertiary': '#818da0',
+      '--sl-danger': '#d13438',
+      '--sl-danger-hover': '#b22d31',
+      '--sl-danger-active': '#8f2529',
       '--sl-success': '#0f7b0f',
-      '--sl-warning': '#9d5d00',
-      '--sl-shadow-card': '0 2px 8px rgba(0, 0, 0, 0.04), 0 0 1px rgba(0, 0, 0, 0.12)',
-      '--sl-shadow-flyout': '0 8px 32px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.12)',
-      '--sl-radius': '8px',
-      '--sl-radius-lg': '12px',
+      '--sl-warning': '#9a6c08',
+      '--sl-shadow-card': '0 12px 30px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.08)',
+      '--sl-shadow-flyout': '0 24px 56px rgba(15, 23, 42, 0.14), 0 1px 3px rgba(15, 23, 42, 0.10)',
+      '--sl-radius': '14px',
+      '--sl-radius-lg': '22px',
       '--sl-input-bg': '#ffffff',
-      '--sl-input-border': '#e5e5e5',
-      '--sl-input-focus': '#005fb8',
-      '--sl-sidebar-bg': '#f3f3f3',
-      '--sl-hover-bg': 'rgba(0, 0, 0, 0.03)',
-      '--sl-active-bg': 'rgba(0, 0, 0, 0.05)',
-      '--sl-selection': 'rgba(0, 95, 184, 0.12)',
-      '--sl-scrollbar': 'rgba(0, 0, 0, 0.2)',
-      '--sl-scrollbar-hover': 'rgba(0, 0, 0, 0.35)',
-      '--sl-code-bg': '#f6f6f6',
-      '--sl-backdrop': 'rgba(0, 0, 0, 0.3)',
+      '--sl-input-border': '#cfd8e6',
+      '--sl-input-focus': '#0f6cbd',
+      '--sl-sidebar-bg': '#eef3fb',
+      '--sl-hover-bg': 'rgba(15, 108, 189, 0.06)',
+      '--sl-active-bg': 'rgba(15, 108, 189, 0.12)',
+      '--sl-selection': 'rgba(15, 108, 189, 0.14)',
+      '--sl-scrollbar': 'rgba(84, 104, 141, 0.24)',
+      '--sl-scrollbar-hover': 'rgba(84, 104, 141, 0.42)',
+      '--sl-code-bg': '#f4f7fb',
+      '--sl-backdrop': 'rgba(13, 19, 31, 0.32)',
       '--sl-mark-bg': 'rgba(255, 183, 0, 0.25)',
       '--sl-mark-text': 'inherit',
       '--sl-mark-border': 'rgba(255, 183, 0, 0.5)',
-      ...LIGHT_CODE_VARS,
+      ...DARK_CODE_VARS,
     }
   },
   {
@@ -88,43 +88,90 @@ const BUILTIN_THEMES = [
     backgroundOpacity: 0,
     vars: {
       '--sl-primary': '#60cdff',
-      '--sl-primary-hover': '#4cc2ff',
+      '--sl-primary-hover': '#79d7ff',
       '--sl-primary-active': '#38b7ff',
-      '--sl-primary-light': 'rgba(96, 205, 255, 0.06)',
-      '--sl-bg': '#202020',
-      '--sl-bg-secondary': '#282828',
-      '--sl-panel': '#2d2d2d',
-      '--sl-card': '#2d2d2d',
-      '--sl-card-hover': '#333333',
-      '--sl-border': '#3d3d3d',
-      '--sl-border-strong': '#555555',
-      '--sl-text': '#ffffff',
-      '--sl-text-secondary': '#c5c5c5',
-      '--sl-text-tertiary': '#8b8b8b',
-      '--sl-danger': '#ff5f6d',
-      '--sl-danger-hover': '#ff4a5c',
-      '--sl-danger-active': '#ef394d',
+      '--sl-primary-light': 'rgba(96, 205, 255, 0.14)',
+      '--sl-bg': '#0f1115',
+      '--sl-bg-secondary': '#151922',
+      '--sl-panel': '#1b2028',
+      '--sl-card': '#1b2028',
+      '--sl-card-hover': '#232935',
+      '--sl-border': '#2e3542',
+      '--sl-border-strong': '#435066',
+      '--sl-text': '#f4f7fb',
+      '--sl-text-secondary': '#c3ccd9',
+      '--sl-text-tertiary': '#8894a7',
+      '--sl-danger': '#ff6b78',
+      '--sl-danger-hover': '#ff5665',
+      '--sl-danger-active': '#eb4857',
       '--sl-success': '#6ccb5f',
-      '--sl-warning': '#fce100',
-      '--sl-shadow-card': '0 2px 8px rgba(0, 0, 0, 0.16), 0 0 1px rgba(0, 0, 0, 0.24)',
-      '--sl-shadow-flyout': '0 8px 32px rgba(0, 0, 0, 0.24), 0 0 1px rgba(0, 0, 0, 0.24)',
-      '--sl-radius': '8px',
-      '--sl-radius-lg': '12px',
-      '--sl-input-bg': '#1e1e1e',
-      '--sl-input-border': '#3d3d3d',
+      '--sl-warning': '#ffd34d',
+      '--sl-shadow-card': '0 18px 44px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(255, 255, 255, 0.03)',
+      '--sl-shadow-flyout': '0 28px 72px rgba(0, 0, 0, 0.52), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+      '--sl-radius': '14px',
+      '--sl-radius-lg': '22px',
+      '--sl-input-bg': '#151922',
+      '--sl-input-border': '#333b4a',
       '--sl-input-focus': '#60cdff',
-      '--sl-sidebar-bg': '#202020',
-      '--sl-hover-bg': 'rgba(255, 255, 255, 0.04)',
-      '--sl-active-bg': 'rgba(255, 255, 255, 0.07)',
-      '--sl-selection': 'rgba(96, 205, 255, 0.12)',
-      '--sl-scrollbar': 'rgba(255, 255, 255, 0.15)',
-      '--sl-scrollbar-hover': 'rgba(255, 255, 255, 0.3)',
-      '--sl-code-bg': '#1e1e1e',
-      '--sl-backdrop': 'rgba(0, 0, 0, 0.5)',
-      '--sl-mark-bg': 'rgba(255, 183, 0, 0.18)',
-      '--sl-mark-text': '#ffd54f',
-      '--sl-mark-border': 'rgba(255, 183, 0, 0.45)',
+      '--sl-sidebar-bg': '#12161d',
+      '--sl-hover-bg': 'rgba(255, 255, 255, 0.045)',
+      '--sl-active-bg': 'rgba(96, 205, 255, 0.15)',
+      '--sl-selection': 'rgba(96, 205, 255, 0.18)',
+      '--sl-scrollbar': 'rgba(195, 204, 217, 0.20)',
+      '--sl-scrollbar-hover': 'rgba(195, 204, 217, 0.36)',
+      '--sl-code-bg': '#12161d',
+      '--sl-backdrop': 'rgba(1, 4, 9, 0.68)',
+      '--sl-mark-bg': 'rgba(255, 211, 77, 0.18)',
+      '--sl-mark-text': '#ffe082',
+      '--sl-mark-border': 'rgba(255, 211, 77, 0.42)',
       ...DARK_CODE_VARS,
+    }
+  },
+  {
+    id: 'violet-light',
+    name: '暮光紫 浅色',
+    previewColor: '#7563ff',
+    backgroundImage: '',
+    backgroundOpacity: 0,
+    vars: {
+      '--sl-primary': '#7563ff',
+      '--sl-primary-hover': '#6754f5',
+      '--sl-primary-active': '#5746df',
+      '--sl-primary-light': 'rgba(117, 99, 255, 0.10)',
+      '--sl-bg': '#f6f3ff',
+      '--sl-bg-secondary': '#fcfbff',
+      '--sl-panel': '#ffffff',
+      '--sl-card': '#ffffff',
+      '--sl-card-hover': '#f4f1ff',
+      '--sl-border': '#e4defa',
+      '--sl-border-strong': '#cdc1ff',
+      '--sl-text': '#241d3e',
+      '--sl-text-secondary': '#5f5979',
+      '--sl-text-tertiary': '#8b83aa',
+      '--sl-danger': '#dd4d68',
+      '--sl-danger-hover': '#cf3d59',
+      '--sl-danger-active': '#ba314d',
+      '--sl-success': '#2f9f70',
+      '--sl-warning': '#b97a17',
+      '--sl-shadow-card': '0 12px 32px rgba(62, 45, 142, 0.08), 0 0 0 1px rgba(117, 99, 255, 0.04)',
+      '--sl-shadow-flyout': '0 24px 56px rgba(44, 33, 107, 0.12), 0 0 0 1px rgba(117, 99, 255, 0.06)',
+      '--sl-radius': '14px',
+      '--sl-radius-lg': '22px',
+      '--sl-input-bg': 'rgba(255, 255, 255, 0.94)',
+      '--sl-input-border': '#ddd2ff',
+      '--sl-input-focus': '#7563ff',
+      '--sl-sidebar-bg': '#f7f4ff',
+      '--sl-hover-bg': 'rgba(117, 99, 255, 0.06)',
+      '--sl-active-bg': 'rgba(117, 99, 255, 0.11)',
+      '--sl-selection': 'rgba(117, 99, 255, 0.14)',
+      '--sl-scrollbar': 'rgba(88, 70, 196, 0.24)',
+      '--sl-scrollbar-hover': 'rgba(88, 70, 196, 0.40)',
+      '--sl-code-bg': '#f4f0ff',
+      '--sl-backdrop': 'rgba(18, 14, 42, 0.42)',
+      '--sl-mark-bg': 'rgba(255, 183, 0, 0.25)',
+      '--sl-mark-text': 'inherit',
+      '--sl-mark-border': 'rgba(255, 183, 0, 0.5)',
+      ...LIGHT_CODE_VARS,
     }
   },
   {
@@ -274,7 +321,7 @@ const CACHE_KEY = 'starlight-theme'
 
 export const useThemeStore = defineStore('theme', () => {
   const current = ref(null)
-  const themes = ref([])
+  const themes = ref([...BUILTIN_THEMES])
 
   const currentId = computed(() => current.value?.id || 'win11-light')
 
@@ -283,19 +330,8 @@ export const useThemeStore = defineStore('theme', () => {
     if (theme.vars) {
       Object.entries(theme.vars).forEach(([k, v]) => root.style.setProperty(k, v))
     }
-    if (theme.cssUrl) {
-      let link = document.getElementById('sl-theme-css')
-      if (!link) {
-        link = document.createElement('link')
-        link.id = 'sl-theme-css'
-        link.rel = 'stylesheet'
-        document.head.appendChild(link)
-      }
-      link.href = theme.cssUrl
-    } else {
-      const existing = document.getElementById('sl-theme-css')
-      if (existing) existing.remove()
-    }
+    const existing = document.getElementById('sl-theme-css')
+    if (existing) existing.remove()
     document.body.style.setProperty('--sl-background-image', theme.backgroundImage ? `url(${theme.backgroundImage})` : 'none')
     document.body.style.setProperty('--sl-background-opacity', theme.backgroundOpacity ?? 0)
   }
@@ -314,8 +350,9 @@ export const useThemeStore = defineStore('theme', () => {
       const raw = localStorage.getItem(CACHE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw)
-        apply(parsed)
-        return parsed
+        const resolved = resolveTheme(parsed)
+        apply(resolved)
+        return resolved
       }
     } catch {}
     apply(BUILTIN_THEMES[0])
@@ -334,11 +371,13 @@ export const useThemeStore = defineStore('theme', () => {
   async function loadThemes() {
     try {
       const serverThemes = await themeApi.list()
-      // Merge server themes (external) with built-in, built-in always present
-      const external = serverThemes.filter(t => !BUILTIN_THEMES.some(b => b.id === t.id))
-      themes.value = external
-    } catch {}
-    return [...BUILTIN_THEMES, ...themes.value]
+      themes.value = serverThemes
+        .map(item => BUILTIN_THEMES.find(theme => theme.id === item.id) || item)
+        .filter((item, index, list) => list.findIndex(theme => theme.id === item.id) === index)
+    } catch {
+      themes.value = [...BUILTIN_THEMES]
+    }
+    return [...themes.value]
   }
 
   async function selectTheme(themeId) {
@@ -349,7 +388,7 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   function getAll() {
-    return [...BUILTIN_THEMES, ...themes.value]
+    return [...themes.value]
   }
 
   return { current, themes, currentId, apply, loadCached, loadThemes, selectTheme, getAll, resolveTheme }
