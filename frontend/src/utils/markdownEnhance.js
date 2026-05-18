@@ -30,6 +30,11 @@ function escapeSelector(value) {
 }
 
 function buildMermaidConfig() {
+  const themeText = getCssVar('--sl-text', '#111111')
+  const themeTextSecondary = getCssVar('--sl-text-secondary', '#57606a')
+  const themeCard = getCssVar('--sl-card', '#ffffff')
+  const themeSurface = getCssVar('--sl-bg-secondary', '#ffffff')
+  const themeBorder = getCssVar('--sl-border', '#d0d7de')
   const seriesColors = Object.fromEntries(mermaidPalette.flatMap((color, index) => [
     [`pie${index + 1}`, color],
     [`cScale${index}`, color],
@@ -48,31 +53,45 @@ function buildMermaidConfig() {
     },
     themeVariables: {
       ...seriesColors,
-      primaryColor: mermaidPalette[0],
-      primaryTextColor: '#ffffff',
-      primaryBorderColor: '#1d4ed8',
-      secondaryColor: mermaidPalette[1],
-      secondaryTextColor: '#ffffff',
-      secondaryBorderColor: '#7e22ce',
-      tertiaryColor: mermaidPalette[2],
-      tertiaryTextColor: '#ffffff',
-      tertiaryBorderColor: '#15803d',
-      lineColor: getCssVar('--sl-text-secondary', '#57606a'),
-      textColor: getCssVar('--sl-text', '#111111'),
-      mainBkg: getCssVar('--sl-card', '#ffffff'),
-      secondBkg: getCssVar('--sl-bg-secondary', '#f6f8fa'),
-      clusterBkg: getCssVar('--sl-bg-secondary', '#f6f8fa'),
-      clusterBorder: getCssVar('--sl-border', '#d0d7de'),
-      edgeLabelBackground: getCssVar('--sl-card', '#ffffff'),
-      nodeBorder: '#1d4ed8',
-      background: getCssVar('--sl-bg-secondary', '#ffffff'),
+      primaryColor: themeCard,
+      primaryTextColor: themeText,
+      primaryBorderColor: themeBorder,
+      secondaryColor: themeSurface,
+      secondaryTextColor: themeText,
+      secondaryBorderColor: themeBorder,
+      tertiaryColor: getCssVar('--sl-primary-light', '#eef6ff'),
+      tertiaryTextColor: themeText,
+      tertiaryBorderColor: themeBorder,
+      lineColor: themeTextSecondary,
+      textColor: themeText,
+      mainBkg: themeCard,
+      secondBkg: themeSurface,
+      clusterBkg: themeSurface,
+      clusterBorder: themeBorder,
+      edgeLabelBackground: themeCard,
+      nodeBorder: themeBorder,
+      background: themeSurface,
       fontFamily: getCssVar('--sl-font', 'Segoe UI, sans-serif'),
-      pieTitleTextColor: getCssVar('--sl-text', '#111111'),
-      pieLegendTextColor: getCssVar('--sl-text', '#111111'),
+      pieTitleTextColor: themeText,
+      pieLegendTextColor: themeText,
       pieSectionTextColor: '#ffffff',
-      pieStrokeColor: getCssVar('--sl-bg-secondary', '#ffffff'),
+      pieStrokeColor: themeSurface,
       pieStrokeWidth: '2px',
-      pieOpacity: '1'
+      pieOpacity: '1',
+      xyChart: {
+        backgroundColor: themeSurface,
+        titleColor: themeText,
+        dataLabelColor: themeText,
+        xAxisTitleColor: themeText,
+        xAxisLabelColor: themeText,
+        xAxisTickColor: themeTextSecondary,
+        xAxisLineColor: themeTextSecondary,
+        yAxisTitleColor: themeText,
+        yAxisLabelColor: themeText,
+        yAxisTickColor: themeTextSecondary,
+        yAxisLineColor: themeTextSecondary,
+        plotColorPalette: mermaidPalette.join(',')
+      }
     }
   }
 }
