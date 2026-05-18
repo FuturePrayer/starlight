@@ -85,7 +85,6 @@ public class NoteService {
         note.setOwner(owner);
         note.setTitle(normalizeTitle(title, markdownContent));
         note.setMarkdownContent(markdownContent == null ? "" : markdownContent);
-        note.setRenderedHtml(markdownService.renderToHtml(note.getMarkdownContent()));
         note.setOutlineJson(markdownService.buildOutlineJson(note.getMarkdownContent()));
         note.setPlainText(markdownService.stripToPlainText(note.getMarkdownContent()));
         note.setCategory(resolveCategory(owner.getId(), categoryId));
@@ -109,7 +108,6 @@ public class NoteService {
         Note note = getOwnedNote(owner.getId(), noteId);
         note.setTitle(normalizeTitle(title, markdownContent));
         note.setMarkdownContent(markdownContent == null ? "" : markdownContent);
-        note.setRenderedHtml(markdownService.renderToHtml(note.getMarkdownContent()));
         note.setOutlineJson(markdownService.buildOutlineJson(note.getMarkdownContent()));
         note.setPlainText(markdownService.stripToPlainText(note.getMarkdownContent()));
         note.setCategory(resolveCategory(owner.getId(), categoryId));
@@ -829,7 +827,6 @@ public class NoteService {
         map.put("id", note.getId());
         map.put("title", note.getTitle());
         map.put("markdownContent", note.getMarkdownContent());
-        map.put("renderedHtml", note.getRenderedHtml());
         map.put("outlineJson", note.getOutlineJson());
         map.put("categoryId", note.getCategory() == null ? null : note.getCategory().getId());
         map.put("updatedAt", note.getUpdatedAt());

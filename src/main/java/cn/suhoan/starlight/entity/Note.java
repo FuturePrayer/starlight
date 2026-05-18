@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 
 /**
  * 笔记实体。
- * <p>存储用户笔记的核心数据，包括 Markdown 原文、渲染后的 HTML、大纲 JSON 和纯文本索引。</p>
+ * <p>存储用户笔记的核心数据，包括 Markdown 原文、大纲 JSON 和纯文本索引。</p>
  *
  * @author suhoan
  */
@@ -36,10 +36,6 @@ public class Note extends BaseEntity {
     /** Markdown 原始内容 */
     @Column(nullable = false, columnDefinition = "TEXT")
     private String markdownContent;
-
-    /** 由 Markdown 渲染后的 HTML 内容 */
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String renderedHtml;
 
     /** 笔记大纲结构（JSON 格式），用于目录导航 */
     @Column(nullable = false, columnDefinition = "TEXT")
@@ -89,14 +85,6 @@ public class Note extends BaseEntity {
 
     public void setMarkdownContent(String markdownContent) {
         this.markdownContent = markdownContent;
-    }
-
-    public String getRenderedHtml() {
-        return renderedHtml;
-    }
-
-    public void setRenderedHtml(String renderedHtml) {
-        this.renderedHtml = renderedHtml;
     }
 
     public String getOutlineJson() {

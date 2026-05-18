@@ -228,7 +228,6 @@ export const useNoteStore = defineStore('note', () => {
       id: null,
       title: '',
       markdownContent: '',
-      renderedHtml: '',
       outlineJson: '[]',
       categoryId
     }

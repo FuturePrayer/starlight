@@ -402,7 +402,6 @@ public class PublicSiteService {
         data.put("note", Map.of(
                 "id", note.getId(),
                 "title", note.getTitle(),
-                "renderedHtml", note.getRenderedHtml(),
                 "outlineJson", note.getOutlineJson(),
                 "markdownContent", note.getMarkdownContent(),
                 "updatedAt", note.getUpdatedAt(),

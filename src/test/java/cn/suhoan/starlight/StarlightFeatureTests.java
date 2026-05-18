@@ -164,7 +164,8 @@ class StarlightFeatureTests {
         );
 
         Map<String, Object> detail = noteService.toDetail(note);
-        assertTrue(detail.get("renderedHtml").toString().contains("<h2 id=\"第一节\">"));
+        assertFalse(detail.containsKey("renderedHtml"));
+        assertTrue(detail.get("markdownContent").toString().contains("## 第一节"));
         assertTrue(detail.get("outlineJson").toString().contains("第一节"));
         assertTrue(detail.get("outlineJson").toString().contains("子节"));
 

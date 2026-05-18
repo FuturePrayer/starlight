@@ -153,7 +153,6 @@ public class ShareService {
                 "id", share.getNote().getId(),
                 "title", share.getNote().getTitle(),
                 "markdownContent", share.getNote().getMarkdownContent(),
-                "renderedHtml", share.getNote().getRenderedHtml(),
                 "outlineJson", share.getNote().getOutlineJson(),
                 "updatedAt", share.getNote().getUpdatedAt()
         ));

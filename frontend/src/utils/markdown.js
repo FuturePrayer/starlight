@@ -1,5 +1,6 @@
 import hljs from 'highlight.js/lib/common'
 import MarkdownIt from 'markdown-it'
+import footnote from 'markdown-it-footnote'
 
 const md = new MarkdownIt({
   html: false,
@@ -7,6 +8,8 @@ const md = new MarkdownIt({
   typographer: true,
   breaks: true
 })
+
+md.use(footnote)
 
 function normalizeLanguage(lang) {
   return String(lang || '').trim().split(/\s+/)[0].toLowerCase()
