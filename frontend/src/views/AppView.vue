@@ -657,6 +657,7 @@ let editorScrollSyncTimer = null
 let previewScrollSyncTimer = null
 let syncFromEditor = false
 let syncFromPreview = false
+let suppressNextHashScroll = false
 
 
 const topbarTitle = computed(() => {
@@ -871,15 +872,17 @@ function getLineOffset(text, lineNumber) {
   return offset
 }
 
-function scrollEditorToLine(lineNumber, { focus = false } = {}) {
+function scrollEditorToLine(lineNumber, { focus = false, moveCursor = true, behavior = 'smooth' } = {}) {
   const textarea = editorTextarea.value
   if (!textarea || !lineNumber) return
   const lineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight) || 24
   const targetTop = Math.max((Number(lineNumber) - 1) * lineHeight - lineHeight * 2, 0)
   syncFromPreview = true
-  textarea.scrollTo({ top: targetTop, behavior: 'smooth' })
-  const selectionStart = getLineOffset(editorContent.value, lineNumber)
-  textarea.setSelectionRange(selectionStart, selectionStart)
+  textarea.scrollTo({ top: targetTop, behavior })
+  if (moveCursor) {
+    const selectionStart = getLineOffset(editorContent.value, lineNumber)
+    textarea.setSelectionRange(selectionStart, selectionStart)
+  }
   if (focus && !isMobile.value) {
     textarea.focus()
   }
@@ -915,7 +918,10 @@ async function applyCurrentHashScroll(behavior = 'auto') {
   if (noteStore.editMode) {
     const outlineItem = getOutlineItemByAnchor(anchor)
     if (outlineItem) {
-      scrollEditorToLine(outlineItem.line)
+      scrollEditorToLine(outlineItem.line, { moveCursor: false, behavior })
+      if (!previewVisible.value) {
+        return true
+      }
     }
   }
 
@@ -945,26 +951,24 @@ async function enhancePreviewContent() {
   await nextTick()
   await enhanceMarkdown(previewMarkdownRef.value)
   syncPreviewToEditor()
-  const scrolled = await applyCurrentHashScroll('auto')
-  if (!scrolled) {
-    activeOutlineAnchor.value = previewVisible.value
-      ? detectActiveHeadingAnchor(previewPaneRef.value)
-      : detectActiveOutlineAnchorByEditor(editorTextarea.value, outlineItems.value)
-  }
+  activeOutlineAnchor.value = detectActiveHeadingAnchor(previewPaneRef.value)
 }
 
-async function updateRouteHash(anchor) {
+async function updateRouteHash(anchor, { suppressScroll = false } = {}) {
   const nextHash = anchor ? `#${anchor}` : ''
   if (route.hash === nextHash) {
     activeOutlineAnchor.value = anchor || ''
     return
+  }
+  if (suppressScroll) {
+    suppressNextHashScroll = true
   }
   await router.replace({ path: route.path, query: route.query, hash: nextHash })
   activeOutlineAnchor.value = anchor || ''
 }
 
 async function handleOutlineSelect(item) {
-  await updateRouteHash(item.anchor)
+  await updateRouteHash(item.anchor, { suppressScroll: true })
   activeOutlineAnchor.value = item.anchor
 
   if (noteStore.editMode) {
@@ -1578,6 +1582,10 @@ watch(
 
 watch(() => route.hash, async hash => {
   activeOutlineAnchor.value = normalizeHash(hash)
+  if (suppressNextHashScroll) {
+    suppressNextHashScroll = false
+    return
+  }
   await nextTick()
   await applyCurrentHashScroll('smooth')
 })

@@ -95,6 +95,37 @@
 
           <GitImportPanel :tree-items="treeItems" />
         </div>
+
+        <div v-show="currentTab === 'docx'" class="transfer-panel">
+          <div class="transfer-panel__header">
+            <h3>导出当前笔记为 DOCX</h3>
+            <p>将当前打开的笔记导出为 Word 文档，Mermaid 图表会渲染为图片插入，支持脚注、表格与代码块。</p>
+          </div>
+
+          <div class="transfer-card">
+            <div class="transfer-card__header">
+              <div>
+                <h4 class="transfer-card__title">当前笔记导出 DOCX</h4>
+                <p class="transfer-card__desc">
+                  {{ hasCurrentNote ? '标题: ' + currentNoteTitle : '请先打开一篇笔记' }}
+                </p>
+              </div>
+              <span class="sl-badge">.docx</span>
+            </div>
+
+            <div v-if="hasUnsavedChanges" class="transfer-alert">
+              <strong>提示：</strong> 当前存在未保存内容，导出只会包含已经保存到服务器的版本。
+            </div>
+
+            <button
+              class="sl-btn sl-btn--primary transfer-action-btn"
+              :disabled="!hasCurrentNote || exportingDocx"
+              @click="handleExportDocx"
+            >
+              {{ exportingDocx ? '正在生成…' : '导出 DOCX' }}
+            </button>
+          </div>
+        </div>
       </section>
     </div>
   </PopupLayer>
@@ -106,6 +137,7 @@ import GitImportPanel from '@/components/GitImportPanel.vue'
 import PopupLayer from '@/components/PopupLayer.vue'
 import { useNoteStore } from '@/stores/note'
 import { useToastStore } from '@/stores/toast'
+import { exportMarkdownAsDocx } from '@/utils/docxExport'
 
 defineProps({
   treeItems: {
@@ -122,12 +154,18 @@ const fileInputRef = ref(null)
 const selectedFile = ref(null)
 const exporting = ref(false)
 const importing = ref(false)
+const exportingDocx = ref(false)
 const currentTab = ref('zip')
 
 const hasUnsavedChanges = computed(() => noteStore.editMode && noteStore.dirty)
+const hasCurrentNote = computed(() => Boolean(noteStore.currentNote?.id) || noteStore.editMode)
+const currentNoteTitle = computed(() =>
+  noteStore.editMode ? (noteStore.currentNote?.title || '未命名笔记') : (noteStore.currentNote?.title || '')
+)
 const navItems = [
   { id: 'zip', title: 'ZIP', desc: '批量导入与导出' },
-  { id: 'git', title: 'Git', desc: '仓库导入与自动同步' }
+  { id: 'git', title: 'Git', desc: '仓库导入与自动同步' },
+  { id: 'docx', title: 'DOCX', desc: '当前笔记导出 Word' }
 ]
 
 function openFilePicker() {
@@ -194,6 +232,25 @@ async function handleImport() {
     toast.error(err.message)
   } finally {
     importing.value = false
+  }
+}
+
+async function handleExportDocx() {
+  if (!hasCurrentNote.value) {
+    toast.error('请先打开一篇笔记')
+    return
+  }
+  exportingDocx.value = true
+  try {
+    await exportMarkdownAsDocx({
+      title: noteStore.currentNote?.title,
+      markdown: noteStore.currentNote?.markdownContent
+    })
+    toast.success('DOCX 已开始下载')
+  } catch (err) {
+    toast.error(err.message || '导出 DOCX 失败')
+  } finally {
+    exportingDocx.value = false
   }
 }
 </script>

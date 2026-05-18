@@ -137,6 +137,186 @@ function serializeSvg(svgElement) {
   }
 }
 
+function getSvgMarkupDimensions(markup) {
+  const doc = new DOMParser().parseFromString(markup, 'image/svg+xml')
+  const svg = doc.documentElement
+  const viewBox = svg.getAttribute('viewBox')?.split(/\s+/).map(Number) || []
+  const widthAttr = svg.getAttribute('width') || ''
+  const heightAttr = svg.getAttribute('height') || ''
+  const width = viewBox[2] || (!widthAttr.includes('%') && Number.parseFloat(widthAttr)) || 1200
+  const height = viewBox[3] || (!heightAttr.includes('%') && Number.parseFloat(heightAttr)) || 800
+  return { width: Math.max(Math.ceil(width), 1), height: Math.max(Math.ceil(height), 1) }
+}
+
+function normalizeSvgMarkup(markup, width, height) {
+  const doc = new DOMParser().parseFromString(markup, 'image/svg+xml')
+  const svg = doc.documentElement
+  svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+  if (!svg.getAttribute('xmlns:xlink')) {
+    svg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+  }
+  if (!svg.getAttribute('viewBox')) {
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
+  }
+  svg.setAttribute('width', String(width))
+  svg.setAttribute('height', String(height))
+  return new XMLSerializer().serializeToString(svg)
+}
+
+async function blobToArrayBuffer(blob) {
+  if (blob.arrayBuffer) {
+    return blob.arrayBuffer()
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(reader.error || new Error('读取图片数据失败'))
+    reader.readAsArrayBuffer(blob)
+  })
+}
+
+function canvasToPngBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(result => {
+      if (result) {
+        resolve(result)
+        return
+      }
+      reject(new Error('Mermaid 图片生成失败'))
+    }, 'image/png')
+  })
+}
+
+function createScaledCanvas(width, height, scale) {
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.ceil(width * scale)
+  canvas.height = Math.ceil(height * scale)
+  const context = canvas.getContext('2d')
+  if (!context) {
+    throw new Error('当前浏览器不支持 Mermaid 图片导出')
+  }
+  context.setTransform(scale, 0, 0, scale, 0, 0)
+  context.fillStyle = getCssVar('--sl-bg-secondary', '#ffffff')
+  context.fillRect(0, 0, width, height)
+  return { canvas, context }
+}
+
+function getRenderedSvgDimensions(svgElement, fallbackWidth, fallbackHeight) {
+  return {
+    width: Math.max(
+      1,
+      Math.ceil(svgElement.clientWidth || svgElement.getBoundingClientRect().width || fallbackWidth)
+    ),
+    height: Math.max(
+      1,
+      Math.ceil(svgElement.clientHeight || svgElement.getBoundingClientRect().height || fallbackHeight)
+    )
+  }
+}
+
+function mountHiddenSvg(markup) {
+  const host = document.createElement('div')
+  host.style.position = 'fixed'
+  host.style.left = '-10000px'
+  host.style.top = '0'
+  host.style.visibility = 'hidden'
+  host.style.pointerEvents = 'none'
+  host.style.width = 'fit-content'
+  host.style.height = 'fit-content'
+  host.innerHTML = markup
+  document.body.appendChild(host)
+  const svgElement = host.querySelector('svg')
+  if (!svgElement) {
+    host.remove()
+    throw new Error('无法解析 Mermaid SVG')
+  }
+  return { host, svgElement }
+}
+
+async function rasterizeSvgElementToPng(svgElement, fallbackWidth, fallbackHeight, scale) {
+  const { width, height } = getRenderedSvgDimensions(svgElement, fallbackWidth, fallbackHeight)
+  const markup = normalizeSvgMarkup(new XMLSerializer().serializeToString(svgElement), width, height)
+  try {
+    return await rasterizeSerializedSvgWithImage(markup, width, height, scale, 'blob')
+  } catch (error) {
+    try {
+      return await rasterizeSerializedSvgWithImage(markup, width, height, scale, 'data')
+    } catch (fallbackError) {
+      return {
+        blob: await rasterizeSvgWithCanvg(markup, width, height, scale),
+        width,
+        height
+      }
+    }
+  }
+}
+
+async function rasterizeSerializedSvgWithImage(markup, width, height, scale, mode) {
+  const { canvas, context } = createScaledCanvas(width, height, scale)
+  const isBlobUrl = mode === 'blob'
+  const url = isBlobUrl
+    ? URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }))
+    : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`
+  try {
+    const image = new Image()
+    if (isBlobUrl) {
+      image.crossOrigin = 'anonymous'
+    }
+    await new Promise((resolve, reject) => {
+      image.onload = resolve
+      image.onerror = () => reject(new Error('浏览器无法加载 Mermaid SVG'))
+      image.src = url
+    })
+    context.drawImage(image, 0, 0, width, height)
+    return {
+      blob: await canvasToPngBlob(canvas),
+      width,
+      height
+    }
+  } finally {
+    if (isBlobUrl) {
+      URL.revokeObjectURL(url)
+    }
+  }
+}
+
+async function rasterizeSvgWithImage(markup, fallbackWidth, fallbackHeight, scale) {
+  const { host, svgElement } = mountHiddenSvg(markup)
+  try {
+    return await rasterizeSvgElementToPng(svgElement, fallbackWidth, fallbackHeight, scale)
+  } finally {
+    host.remove()
+  }
+}
+
+async function rasterizeSvgWithCanvg(markup, width, height, scale) {
+  const { canvas, context } = createScaledCanvas(width, height, scale)
+  const canvg = await Canvg.fromString(context, markup, {
+    ignoreAnimation: true,
+    ignoreMouse: true,
+    useCORS: true
+  })
+  await canvg.render()
+  return canvasToPngBlob(canvas)
+}
+
+export async function renderMermaidSourceToPng(source, { scale = 2, maxWidth = 600 } = {}) {
+  mermaid.initialize(buildMermaidConfig())
+  const renderId = `starlight-docx-mermaid-${++mermaidRenderSeed}`
+  const { svg } = await mermaid.render(renderId, source)
+  const { width, height } = getSvgMarkupDimensions(svg)
+  const markup = normalizeSvgMarkup(svg, width, height)
+  const pixelScale = Math.max(window.devicePixelRatio || 1, scale)
+  const renderedImage = await rasterizeSvgWithImage(markup, width, height, pixelScale)
+
+  const displayWidth = Math.min(renderedImage.width, maxWidth)
+  return {
+    data: await blobToArrayBuffer(renderedImage.blob),
+    width: displayWidth,
+    height: Math.max(1, Math.round(renderedImage.height * (displayWidth / renderedImage.width)))
+  }
+}
+
 async function exportSvg(svgElement, fileName) {
   const { markup } = serializeSvg(svgElement)
   downloadBlob(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }), fileName)
@@ -145,34 +325,7 @@ async function exportSvg(svgElement, fileName) {
 async function exportPng(svgElement, fileName) {
   const { markup, width, height } = serializeSvg(svgElement)
   const scale = Math.max(window.devicePixelRatio || 1, 2)
-
-  const canvas = document.createElement('canvas')
-  canvas.width = width * scale
-  canvas.height = height * scale
-  const context = canvas.getContext('2d')
-  if (!context) {
-    throw new Error('当前浏览器不支持 PNG 导出')
-  }
-
-  context.setTransform(scale, 0, 0, scale, 0, 0)
-  context.fillStyle = getCssVar('--sl-bg-secondary', '#ffffff')
-  context.fillRect(0, 0, width, height)
-  const canvg = await Canvg.fromString(context, markup, {
-    ignoreAnimation: true,
-    ignoreMouse: true,
-    useCORS: true
-  })
-  await canvg.render()
-
-  const pngBlob = await new Promise((resolve, reject) => {
-    canvas.toBlob(blob => {
-      if (blob) {
-        resolve(blob)
-        return
-      }
-      reject(new Error('PNG 导出失败'))
-    }, 'image/png')
-  })
+  const pngBlob = (await rasterizeSvgElementToPng(svgElement, width, height, scale)).blob
 
   downloadBlob(pngBlob, fileName)
 }
@@ -368,4 +521,3 @@ export function detectActiveOutlineAnchorByEditor(textarea, outlineItems, { offs
 
   return activeAnchor
 }
-

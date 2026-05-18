@@ -12,12 +12,16 @@
   },
   "dependencies": {
     "canvg": "^4.0.3",
+    "docx": "^9.6.1",
     "highlight.js": "^11.11.1",
     "markdown-it": "^14.1.1",
     "markdown-it-footnote": "^4.0.0",
     "mermaid": "^11.14.0",
     "pinia": "^3.0.4",
     "qrcode": "^1.5.4",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5",
     "vue": "^3.5.30",
     "vue-router": "^4.6.4"
   },
