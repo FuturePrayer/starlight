@@ -17,29 +17,12 @@ import remarkGfm from 'remark-gfm'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'
 import { renderMermaidSourceToPng } from '@/utils/markdownEnhance'
+import { downloadBlob, sanitizeFileName } from '@/utils/fileDownload'
 
 const BODY_FONT = { ascii: 'Aptos', hAnsi: 'Aptos', eastAsia: 'Microsoft YaHei' }
 const CODE_FONT = { ascii: 'Consolas', hAnsi: 'Consolas', eastAsia: 'Microsoft YaHei' }
 const BODY_SIZE = 22
 const FOOTNOTE_SIZE = 18
-
-function safeFileName(value) {
-  return String(value || '未命名笔记')
-    .replace(/[\\/:*?"<>|]/g, '_')
-    .replace(/\s+/g, ' ')
-    .trim() || '未命名笔记'
-}
-
-function triggerDownload(blob, fileName) {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = fileName
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 0)
-}
 
 function textRun(text, options = {}) {
   return new TextRun({
@@ -360,7 +343,7 @@ export async function exportMarkdownAsDocx({ title, markdown }) {
   })
 
   const blob = await Packer.toBlob(doc)
-  const fileName = `${safeFileName(title)}.docx`
-  triggerDownload(blob, fileName)
+  const fileName = `${sanitizeFileName(title, '未命名笔记')}.docx`
+  downloadBlob(blob, fileName)
   return { blob, fileName }
 }

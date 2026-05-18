@@ -21,8 +21,8 @@
   --sl-warning: #9a6c08;
   --sl-shadow-card: 0 12px 30px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.08);
   --sl-shadow-flyout: 0 24px 56px rgba(15, 23, 42, 0.14), 0 1px 3px rgba(15, 23, 42, 0.10);
-  --sl-radius: 14px;
-  --sl-radius-lg: 22px;
+  --sl-radius: 8px;
+  --sl-radius-lg: 12px;
   --sl-input-bg: #ffffff;
   --sl-input-border: #cfd8e6;
   --sl-input-focus: #0f6cbd;

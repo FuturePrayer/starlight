@@ -149,7 +149,7 @@ button, input, select, textarea {
 .sl-card {
   background: var(--sl-card);
   border: 1px solid var(--sl-border);
-  border-radius: var(--sl-radius-lg);
+  border-radius: var(--sl-radius);
   box-shadow: var(--sl-shadow-card);
 }
 
@@ -414,7 +414,7 @@ mark, .sl-mark {
 .sl-mermaid {
   margin: 16px 0;
   border: 1px solid var(--sl-border);
-  border-radius: var(--sl-radius-lg);
+  border-radius: var(--sl-radius);
   background: linear-gradient(180deg, var(--sl-card) 0%, var(--sl-bg-secondary) 100%);
   box-shadow: var(--sl-shadow-card);
   overflow: hidden;

@@ -108,6 +108,60 @@ public class NoteTransferService {
     }
 
     /**
+     * 导出指定分类及其全部下级分类中的笔记为 ZIP 二进制内容。
+     * <p>ZIP 文件名使用选中分类名称，内部包含该分类下的笔记与下级分类，笔记会导出为 `.md` 文件。</p>
+     *
+     * @param ownerId    用户 ID
+     * @param categoryId 分类 ID
+     * @return 导出的 ZIP 内容与推荐文件名
+     */
+    @Transactional(readOnly = true)
+    public ArchivePayload exportCategoryArchive(String ownerId, String categoryId) {
+        if (categoryId == null || categoryId.isBlank()) {
+            throw new IllegalArgumentException("请选择要导出的分类");
+        }
+        Category rootCategory = categoryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(categoryId, ownerId)
+                .orElseThrow(() -> new IllegalArgumentException("分类不存在或已删除"));
+
+        log.info("开始导出分类 ZIP: ownerId={}, categoryId={}", ownerId, categoryId);
+        List<Category> categories = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(ownerId);
+        List<Note> notes = noteRepository.findByOwnerIdAndDeletedAtIsNullOrderByUpdatedAtDesc(ownerId);
+
+        Map<String, List<Category>> childCategories = new HashMap<>();
+        for (Category category : categories) {
+            String parentId = category.getParent() == null ? ROOT_KEY : category.getParent().getId();
+            childCategories.computeIfAbsent(parentId, ignored -> new ArrayList<>()).add(category);
+        }
+
+        Map<String, List<Note>> notesByCategory = new HashMap<>();
+        for (Note note : notes) {
+            String noteCategoryId = note.getCategory() == null ? ROOT_KEY : note.getCategory().getId();
+            notesByCategory.computeIfAbsent(noteCategoryId, ignored -> new ArrayList<>()).add(note);
+        }
+
+        String safeRootName = sanitizePathSegment(rootCategory.getName(), "未命名分类");
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+             ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream, StandardCharsets.UTF_8)) {
+            ExportStat nestedStat = writeDirectoryContents(
+                    zipOutputStream,
+                    "",
+                    childCategories,
+                    notesByCategory,
+                    rootCategory.getId()
+            );
+            zipOutputStream.finish();
+            byte[] bytes = outputStream.toByteArray();
+            String fileName = safeRootName + ".zip";
+            log.info("分类 ZIP 导出完成: ownerId={}, categoryId={}, categoryCount={}, noteCount={}, bytes={}",
+                    ownerId, categoryId, nestedStat.categoryCount(), nestedStat.noteCount(), bytes.length);
+            return new ArchivePayload(bytes, fileName, nestedStat.noteCount(), nestedStat.categoryCount());
+        } catch (IOException exception) {
+            log.error("导出分类 ZIP 失败: ownerId={}, categoryId={}", ownerId, categoryId, exception);
+            throw new IllegalStateException("导出 ZIP 失败，请稍后重试");
+        }
+    }
+
+    /**
      * 从 ZIP 文件中导入分类与 Markdown 笔记。
      * <p>导入时会复用已存在的同名父子分类，Markdown 文件会创建为新笔记。</p>
      *
@@ -452,7 +506,7 @@ public class NoteTransferService {
 
     /**
      * 生成适用于 ZIP 路径的安全名称。
-     * <p>会保留人类可读性，并尽量避免 Windows 文件名冲突。</p>
+     * <p>会删除操作系统不允许的文件名字符，并尽量避免 Windows 文件名冲突。</p>
      */
     private String sanitizePathSegment(String name, String fallback) {
         String source = name == null ? "" : name.strip();
@@ -463,19 +517,13 @@ public class NoteTransferService {
         StringBuilder builder = new StringBuilder();
         for (char current : source.toCharArray()) {
             switch (current) {
-                case '<' -> builder.append('＜');
-                case '>' -> builder.append('＞');
-                case ':' -> builder.append('：');
-                case '"' -> builder.append('＂');
-                case '/' -> builder.append('／');
-                case '\\' -> builder.append('＼');
-                case '|' -> builder.append('｜');
-                case '?' -> builder.append('？');
-                case '*' -> builder.append('＊');
-                case '\t', '\r', '\n' -> builder.append(' ');
+                case '<', '>', ':', '"', '/', '\\', '|', '?', '*' -> {
+                }
+                case '\t', '\r', '\n' -> {
+                }
                 default -> {
                     if (Character.isISOControl(current)) {
-                        builder.append(' ');
+                        continue;
                     } else {
                         builder.append(current);
                     }

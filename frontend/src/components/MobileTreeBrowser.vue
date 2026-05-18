@@ -1,6 +1,6 @@
 <template>
-  <div class="mobile-tree-browser">
-    <div class="mobile-tree-browser__header sl-card">
+  <div :class="['mobile-tree-browser', { 'mobile-tree-browser--compact': compact, 'mobile-tree-browser--list-only': listOnly || hideHeader, 'mobile-tree-browser--crumb-only': crumbOnly }]">
+    <div v-if="!hideHeader" class="mobile-tree-browser__header sl-card">
       <div class="mobile-tree-browser__header-top">
         <button
           class="sl-btn sl-btn--ghost sl-btn--sm"
@@ -13,18 +13,24 @@
         <div class="mobile-tree-browser__title">{{ currentTitle }}</div>
       </div>
       <div class="mobile-tree-browser__crumbs" aria-label="当前目录路径">
-        <button
-          v-for="(crumb, index) in breadcrumbs"
+        <template
+          v-for="(crumb, index) in visibleBreadcrumbs"
           :key="crumb.key"
-          :class="['mobile-tree-browser__crumb', { active: index === breadcrumbs.length - 1 }]"
-          @click="handleBreadcrumb(index)"
         >
-          {{ crumb.label }}
-        </button>
+          <span v-if="crumb.ellipsis" class="mobile-tree-browser__crumb mobile-tree-browser__crumb--ellipsis" aria-hidden="true">...</span>
+          <button
+            v-else
+            :class="['mobile-tree-browser__crumb', { active: crumb.path.length === path.length }]"
+            type="button"
+            @click="handleBreadcrumbPath(crumb.path)"
+          >
+            {{ crumb.label }}
+          </button>
+        </template>
       </div>
     </div>
 
-    <section v-if="showPinnedSection" class="mobile-tree-section sl-card">
+    <section v-if="!crumbOnly && showPinnedSection" class="mobile-tree-section sl-card">
       <div class="mobile-tree-section__header">
         <span class="mobile-tree-section__title">置顶</span>
         <span class="mobile-tree-section__hint">目录最上方</span>
@@ -37,6 +43,12 @@
           :data-sidebar-node-id="item.id"
           :data-sidebar-mode="mode"
           @click="handleRowClick(item)"
+          @contextmenu="handleRowContext(item, $event)"
+          @pointerdown="startLongPress(item, $event)"
+          @pointermove="handleLongPressMove"
+          @pointerup="cancelLongPress"
+          @pointercancel="cancelLongPress"
+          @pointerleave="cancelLongPress"
         >
           <div class="mobile-tree-row__body">
             <span class="mobile-tree-row__icon" aria-hidden="true">
@@ -56,7 +68,7 @@
       </div>
     </section>
 
-    <section class="mobile-tree-section sl-card">
+    <section v-if="!crumbOnly" class="mobile-tree-section sl-card">
       <div class="mobile-tree-section__header">
         <span class="mobile-tree-section__title">{{ path.length ? '当前层级' : rootTitle }}</span>
         <span class="mobile-tree-section__hint">{{ currentItems.length }} 项</span>
@@ -70,6 +82,12 @@
           :data-sidebar-node-id="item.id"
           :data-sidebar-mode="mode"
           @click="handleRowClick(item)"
+          @contextmenu="handleRowContext(item, $event)"
+          @pointerdown="startLongPress(item, $event)"
+          @pointermove="handleLongPressMove"
+          @pointerup="cancelLongPress"
+          @pointercancel="cancelLongPress"
+          @pointerleave="cancelLongPress"
         >
           <div class="mobile-tree-row__body">
             <span class="mobile-tree-row__icon" aria-hidden="true">
@@ -113,7 +131,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onUnmounted } from 'vue'
 import { findTreeNodeById, getTreeItemsAtPath, getTreeNodeLabel } from '@/utils/directoryTree'
 
 const props = defineProps({
@@ -124,10 +142,21 @@ const props = defineProps({
   selectedId: { type: [String, Number], default: null },
   selectedCategoryId: { type: [String, Number], default: null },
   emptyText: { type: String, default: '暂无内容' },
-  rootTitle: { type: String, default: '全部' }
+  rootTitle: { type: String, default: '全部' },
+  tailCrumbCount: { type: Number, default: 3 },
+  contextMenuEnabled: { type: Boolean, default: false },
+  contextMenuTypes: { type: Array, default: () => ['category', 'note'] },
+  hideHeader: { type: Boolean, default: false },
+  compact: { type: Boolean, default: false },
+  listOnly: { type: Boolean, default: false },
+  crumbOnly: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['navigate', 'select-note', 'select-category'])
+const emit = defineEmits(['navigate', 'select-note', 'select-category', 'row-context'])
+
+let longPressTimer = null
+let longPressStart = null
+let longPressTriggered = false
 
 const currentItems = computed(() => getTreeItemsAtPath(props.items, props.path))
 const currentTitle = computed(() => {
@@ -145,6 +174,18 @@ const breadcrumbs = computed(() => {
     }
   })
   return root.concat(next)
+})
+const visibleBreadcrumbs = computed(() => {
+  const allCrumbs = breadcrumbs.value
+  const tailCount = Math.min(Math.max(Number(props.tailCrumbCount) || 1, 1), 3)
+  if (allCrumbs.length <= tailCount + 1) {
+    return allCrumbs
+  }
+  return [
+    allCrumbs[0],
+    { key: 'crumb-ellipsis', label: '...', ellipsis: true, path: [] },
+    ...allCrumbs.slice(-tailCount)
+  ]
 })
 const showPinnedSection = computed(() => !props.path.length && props.pinnedItems.length > 0)
 
@@ -182,11 +223,77 @@ function handleEnter(item) {
 }
 
 function handleRowClick(item) {
+  if (longPressTriggered) {
+    longPressTriggered = false
+    return
+  }
   if (isCategory(item)) {
     handleEnter(item)
     return
   }
   emit('select-note', item.id)
+}
+
+function handleRowContext(item, event) {
+  if (!isContextMenuTarget(item)) return
+  event?.preventDefault?.()
+  event?.stopPropagation?.()
+  cancelLongPress()
+  emit('row-context', {
+    item,
+    mode: props.mode,
+    x: event?.clientX || 0,
+    y: event?.clientY || 0,
+    nativeEvent: event
+  })
+}
+
+function startLongPress(item, event) {
+  if (!isContextMenuTarget(item)) return
+  if (event?.pointerType === 'mouse') return
+  cancelLongPress()
+  longPressTriggered = false
+  longPressStart = {
+    item,
+    x: event?.clientX || 0,
+    y: event?.clientY || 0
+  }
+  longPressTimer = window.setTimeout(() => {
+    if (!longPressStart) return
+    longPressTriggered = true
+    emit('row-context', {
+      item: longPressStart.item,
+      mode: props.mode,
+      x: longPressStart.x,
+      y: longPressStart.y,
+      nativeEvent: event,
+      longPress: true
+    })
+    window.setTimeout(() => {
+      longPressTriggered = false
+    }, 700)
+  }, 560)
+}
+
+function isContextMenuTarget(item) {
+  return Boolean(props.contextMenuEnabled && props.contextMenuTypes.includes(item?.type))
+}
+
+function handleLongPressMove(event) {
+  if (!longPressStart) return
+  const dx = Math.abs((event?.clientX || 0) - longPressStart.x)
+  const dy = Math.abs((event?.clientY || 0) - longPressStart.y)
+  if (dx > 8 || dy > 8) {
+    cancelLongPress()
+  }
+}
+
+function cancelLongPress() {
+  if (longPressTimer) {
+    window.clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+  longPressStart = null
 }
 
 function handleBack() {
@@ -200,10 +307,23 @@ function handleBack() {
 function handleBreadcrumb(index) {
   const crumb = breadcrumbs.value[index]
   if (!crumb) return
-  const nextSelectedCategoryId = crumb.path[crumb.path.length - 1] || null
-  emit('select-category', nextSelectedCategoryId)
-  emit('navigate', crumb.path)
+  handleBreadcrumbPath(crumb.path)
 }
+
+defineExpose({
+  handleBreadcrumb
+})
+
+function handleBreadcrumbPath(path) {
+  const nextPath = Array.isArray(path) ? path : []
+  const nextSelectedCategoryId = nextPath[nextPath.length - 1] || null
+  emit('select-category', nextSelectedCategoryId)
+  emit('navigate', nextPath)
+}
+
+onUnmounted(() => {
+  cancelLongPress()
+})
 </script>
 
 <style scoped>
@@ -214,10 +334,14 @@ function handleBreadcrumb(index) {
   padding-bottom: 6px;
 }
 
+.mobile-tree-browser--list-only {
+  gap: 0;
+}
+
 .mobile-tree-browser__header,
 .mobile-tree-section {
   padding: 12px;
-  border-radius: var(--sl-radius-lg);
+  border-radius: var(--sl-radius);
 }
 
 .mobile-tree-browser__header {
@@ -279,6 +403,12 @@ function handleBreadcrumb(index) {
   color: var(--sl-primary);
   background: var(--sl-selection);
   border-color: transparent;
+}
+
+.mobile-tree-browser__crumb--ellipsis {
+  cursor: default;
+  color: var(--sl-text-tertiary);
+  background: color-mix(in srgb, var(--sl-card) 80%, transparent);
 }
 
 .mobile-tree-section {
@@ -432,6 +562,89 @@ function handleBreadcrumb(index) {
   text-align: center;
   font-size: 12px;
   color: var(--sl-text-tertiary);
+}
+
+.mobile-tree-browser--list-only .mobile-tree-section {
+  margin: 0;
+}
+
+.mobile-tree-browser--list-only .mobile-tree-section__header {
+  display: none;
+}
+
+.mobile-tree-browser--list-only .mobile-tree-section,
+.mobile-tree-browser--list-only .mobile-tree-row {
+  box-shadow: none;
+}
+
+.mobile-tree-browser--list-only .mobile-tree-section {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.mobile-tree-browser--compact {
+  gap: 8px;
+}
+
+.mobile-tree-browser--compact .mobile-tree-section {
+  gap: 6px;
+}
+
+.mobile-tree-browser--compact .mobile-tree-list {
+  gap: 4px;
+}
+
+.mobile-tree-browser--compact .mobile-tree-row {
+  min-height: 32px;
+  padding: 6px 6px 6px 8px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.mobile-tree-browser--compact .mobile-tree-row:hover {
+  border-color: transparent;
+  background: var(--sl-hover-bg);
+}
+
+.mobile-tree-browser--compact .mobile-tree-row.active {
+  border-color: transparent;
+  background: var(--sl-active-bg);
+  box-shadow: none;
+}
+
+.mobile-tree-browser--compact .mobile-tree-row__body {
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-tree-browser--compact .mobile-tree-row__icon {
+  width: 16px;
+  margin-top: 0;
+}
+
+.mobile-tree-browser--compact .mobile-tree-row__title {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  -webkit-line-clamp: 1;
+}
+
+.mobile-tree-browser--compact .mobile-tree-row__meta {
+  margin-top: 2px;
+  font-size: 10px;
+}
+
+.mobile-tree-browser--compact .mobile-tree-row__enter {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  justify-content: center;
+}
+
+.mobile-tree-browser--compact .mobile-tree-badge {
+  padding: 1px 5px;
 }
 
 @media (max-width: 768px) {

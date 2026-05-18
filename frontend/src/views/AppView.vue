@@ -8,17 +8,11 @@
     <!-- Sidebar -->
     <aside :class="['sidebar', { open: sidebarOpen, resizing: isSidebarResizing }]" :style="sidebarStyle" @click.self="sidebarOpen = false">
       <div class="sidebar-inner">
-        <div v-if="isMobile" class="sidebar-mobile-chrome sl-card">
-          <div>
-            <div class="sidebar-mobile-chrome__title">{{ mobileSidebarTitle }}</div>
-            <div class="sidebar-mobile-chrome__meta">目录、回收站与当前大纲</div>
-          </div>
-          <button class="sl-btn sl-btn--ghost sl-btn--sm" type="button" @click="sidebarOpen = false" title="关闭侧边栏">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
         <!-- Profile section -->
         <div class="sidebar-profile">
+          <button v-if="isMobile" class="sidebar-menu-btn sl-btn sl-btn--ghost sl-btn--sm" type="button" @click="sidebarOpen = false" title="关闭侧边栏" aria-label="关闭侧边栏">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+          </button>
           <div class="profile-info" style="cursor:pointer" @click="openSettings('profile')" title="打开设置中心">
             <div class="profile-avatar">{{ authStore.username?.charAt(0)?.toUpperCase() || '?' }}</div>
             <div>
@@ -27,21 +21,13 @@
             </div>
           </div>
           <div class="profile-actions">
-            <button class="sl-btn sl-btn--ghost sl-btn--sm" @click="openSettings('security')" title="安全与集成设置">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            <button class="sl-btn sl-btn--ghost sl-btn--sm" @click="openSettings('profile')" title="设置中心" aria-label="设置中心">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
             </button>
             <button class="sl-btn sl-btn--ghost sl-btn--sm" @click="handleLogout" title="退出登录">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
           </div>
-        </div>
-
-        <!-- Theme selector -->
-        <div class="sidebar-section">
-          <label class="sl-label">主题</label>
-          <select class="sl-select" :value="themeStore.currentId" @change="handleThemeChange($event.target.value)">
-            <option v-for="t in allThemes" :key="t.id" :value="t.id">{{ t.name }}</option>
-          </select>
         </div>
 
         <!-- Action buttons -->
@@ -62,131 +48,116 @@
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
           </button>
-          <button class="sl-btn sidebar-action-icon" @click="openSettings('profile')" title="设置中心" aria-label="设置中心">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-          </button>
-          <button v-if="authStore.isAdmin" class="sl-btn sidebar-action-icon" @click="openSettings('admin')" title="管理员设置" aria-label="管理员设置">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          </button>
-        </div>
-        <div class="sidebar-tools">
-          <button class="sl-btn sidebar-tools__btn" @click="showSearchModal = true">
+          <button class="sl-btn sidebar-action-icon" @click="showSearchModal = true" title="搜索" aria-label="搜索">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            搜索
-          </button>
-          <button class="sl-btn sidebar-tools__btn" @click="showImportExportModal = true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            导入 / 导出
           </button>
         </div>
 
-        <!-- Sidebar tabs -->
-        <div class="sidebar-tabs-wrap">
-          <div class="sidebar-tabs">
-            <button :class="['tab-btn', { active: sidebarTab === 'tree' }]" @click="sidebarTab = 'tree'">目录</button>
-            <button :class="['tab-btn', { active: sidebarTab === 'trash' }]" @click="handleTrashTabClick">
-              回收站
-              <span v-if="noteStore.tree.trashCount" class="tab-count">{{ noteStore.tree.trashCount }}</span>
-            </button>
-            <button :class="['tab-btn', { active: sidebarTab === 'outline' }]" @click="sidebarTab = 'outline'">大纲</button>
-          </div>
+        <div class="sidebar-breadcrumb-shell">
+          <MobileTreeBrowser
+            class="sidebar-breadcrumb-browser"
+            :items="activeSidebarItems"
+            :path="activeSidebarPath"
+            :tail-crumb-count="sidebarCrumbTailCount"
+            :root-title="activeSidebarRootTitle"
+            :hide-header="false"
+            crumb-only
+            list-only
+            @navigate="handleSidebarBreadcrumbNavigate"
+            @select-category="handleSidebarBreadcrumbSelectCategory"
+          />
+        </div>
+
+        <nav class="sidebar-primary-nav" aria-label="侧边栏导航">
+          <button :class="['sidebar-nav-item', { active: sidebarTab === 'tree' }]" type="button" @click="handleTreeTabClick">
+            <span class="sidebar-nav-item__main">
+              <span class="sidebar-nav-item__icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h5l2 2h7a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+              </span>
+              <span>全部笔记</span>
+            </span>
+            <span class="sidebar-nav-item__count">{{ totalNoteCount }}</span>
+          </button>
+          <button :class="['sidebar-nav-item', { active: sidebarTab === 'trash' }]" type="button" @click="handleTrashTabClick">
+            <span class="sidebar-nav-item__main">
+              <span class="sidebar-nav-item__icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+              </span>
+              <span>回收站</span>
+            </span>
+            <span v-if="noteStore.tree.trashCount" class="sidebar-nav-item__count">{{ noteStore.tree.trashCount }}</span>
+          </button>
+          <button :class="['sidebar-nav-item', { active: sidebarTab === 'outline' }]" type="button" @click="sidebarTab = 'outline'">
+            <span class="sidebar-nav-item__main">
+              <span class="sidebar-nav-item__icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2"/><path d="M10 6h10"/><circle cx="6" cy="12" r="2"/><path d="M10 12h10"/><circle cx="6" cy="18" r="2"/><path d="M10 18h10"/></svg>
+              </span>
+              <span>大纲</span>
+            </span>
+          </button>
+        </nav>
+
+        <div class="sidebar-folder-header">
+          <span>{{ sidebarFolderTitle }}</span>
+          <button
+            v-if="sidebarTab === 'tree'"
+            class="sidebar-folder-add sl-btn sl-btn--ghost sl-btn--sm"
+            type="button"
+            @click="handleOpenCreateCategoryModal"
+            title="新建分类"
+            aria-label="新建分类"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
         </div>
 
         <!-- Tree / Trash / Outline panels -->
         <div class="sidebar-scroll">
           <div v-show="sidebarTab === 'tree'" class="tree-panel">
             <MobileTreeBrowser
-              v-if="isMobile"
               :items="noteStore.tree.items"
               :pinned-items="noteStore.tree.pinnedItems"
               mode="tree"
               :path="mobileTreePath"
               :selected-id="noteStore.currentNote?.id"
               :selected-category-id="selectedCategoryId"
+              :tail-crumb-count="sidebarCrumbTailCount"
+              :context-menu-enabled="true"
+              :context-menu-types="['category', 'note']"
               root-title="全部笔记"
               empty-text="还没有笔记，点击上方按钮创建"
+              hide-header
+              list-only
+              compact
               @navigate="handleMobileTreeNavigate"
               @select-note="handleOpenNote"
               @select-category="handleMobileTreeSelectCategory"
-            >
-              <template #actions="{ item, isCategory }">
-                <CategoryActionMenu
-                  v-if="isCategory"
-                  mode="tree"
-                  @edit="handleEditCategoryRequest(item.id)"
-                  @site="handleOpenSiteModal(item.id)"
-                  @delete="handleDeleteCategoryRequest(item.id)"
-                />
-              </template>
-            </MobileTreeBrowser>
-            <template v-else>
-              <section v-if="noteStore.tree.pinnedItems?.length" class="quick-section">
-                <div class="quick-section__header">
-                  <span class="quick-section__title">置顶</span>
-                  <span class="quick-section__hint">目录最上方</span>
-                </div>
-                <div class="quick-section__list">
-                  <TreeNode
-                    v-for="item in noteStore.tree.pinnedItems"
-                    :key="`pinned-${item.id}`"
-                    :item="item"
-                    :selected-id="noteStore.currentNote?.id"
-                    :expanded-ids="noteStore.expandedCategoryIds"
-                    @select-note="handleOpenNote"
-                  />
-                </div>
-              </section>
-              <TreeNode
-                v-for="item in noteStore.tree.items"
-                :key="item.id"
-                :item="item"
-                :selected-id="noteStore.currentNote?.id"
-                :expanded-ids="noteStore.expandedCategoryIds"
-                @select-note="handleOpenNote"
-                @select-category="selectedCategoryId = $event"
-                @toggle-category="handleToggleCategory"
-                @edit-category="handleEditCategoryRequest"
-                @open-site="handleOpenSiteModal"
-                @delete-category="handleDeleteCategoryRequest"
-              />
-              <div
-                v-if="!noteStore.tree.items?.length && !noteStore.tree.pinnedItems?.length"
-                class="empty-hint"
-              >
-                还没有笔记，点击上方按钮创建
-              </div>
-            </template>
+              @row-context="handleSidebarRowContext"
+            />
           </div>
 
           <div v-show="sidebarTab === 'trash'" class="trash-panel">
-            <div class="trash-panel__header">
-              <div>
-                <div class="quick-section__title">回收站</div>
-                <div class="quick-section__hint">删除后保留 30 天，可恢复或彻底删除</div>
-              </div>
-              <span class="sl-badge">{{ noteStore.trashTree.totalCount || 0 }} 项</span>
-            </div>
             <MobileTreeBrowser
-              v-if="isMobile && noteStore.trashTree.totalCount"
+              v-if="noteStore.trashTree.totalCount"
               :items="noteStore.trashTree.items"
               mode="trash"
               :path="mobileTrashPath"
               :selected-id="isDeletedNote ? noteStore.currentNote?.id : null"
               :selected-category-id="selectedTrashCategoryId"
+              :tail-crumb-count="sidebarCrumbTailCount"
+              :context-menu-enabled="true"
+              :context-menu-types="['category']"
               root-title="回收站"
               empty-text="回收站还是空的，误删的笔记和分类会先来到这里"
+              hide-header
+              list-only
+              compact
               @navigate="handleMobileTrashNavigate"
               @select-note="handleOpenTrashNote"
               @select-category="handleMobileTrashSelectCategory"
+              @row-context="handleSidebarRowContext"
             >
               <template #actions="{ item, isCategory }">
-                <CategoryActionMenu
-                  v-if="isCategory"
-                  mode="trash"
-                  :restorable="item.restorable !== false"
-                  @restore="handleRestoreTrashCategory(item.id)"
-                  @purge="handlePurgeTrashCategoryRequest(item.id)"
-                />
                 <button
                   v-if="!isCategory"
                   class="sl-btn sl-btn--ghost sl-btn--sm"
@@ -209,24 +180,6 @@
               </template>
             </MobileTreeBrowser>
             <div v-else-if="!noteStore.trashTree.totalCount" class="empty-hint">回收站还是空的，误删的笔记和分类会先来到这里</div>
-            <div v-else class="trash-tree-wrap">
-              <TreeNode
-                v-for="item in noteStore.trashTree.items"
-                :key="`trash-${item.id}`"
-                :item="item"
-                :mode="'trash'"
-                :selected-id="isDeletedNote ? noteStore.currentNote?.id : null"
-                :selected-category-id="selectedTrashCategoryId"
-                :expanded-ids="noteStore.trashExpandedCategoryIds"
-                @select-note="handleOpenTrashNote"
-                @select-category="selectedTrashCategoryId = $event"
-                @toggle-category="handleToggleTrashCategory"
-                @restore-note="handleRestore"
-                @purge-note="handlePurge"
-                @restore-category="handleRestoreTrashCategory"
-                @purge-category="handlePurgeTrashCategoryRequest"
-              />
-            </div>
           </div>
           <div v-show="sidebarTab === 'outline'" class="outline-panel">
             <OutlineList
@@ -236,6 +189,7 @@
             />
           </div>
         </div>
+
       </div>
     </aside>
     <div v-if="!isMobile" class="sidebar-resize-handle" @pointerdown="startSidebarResize" @dblclick="resetSidebarWidth" />
@@ -373,7 +327,18 @@
       </div>
 
       <!-- View mode -->
-      <div v-if="!noteStore.editMode" ref="viewerAreaRef" class="viewer-area" @scroll="handleViewerScroll">
+      <div
+        v-if="!noteStore.editMode"
+        ref="viewerAreaRef"
+        class="viewer-area"
+        @scroll="handleViewerScroll"
+        @contextmenu="handleViewerContextMenu"
+        @pointerdown="startViewerLongPress"
+        @pointermove="handleViewerLongPressMove"
+        @pointerup="cancelViewerLongPress"
+        @pointercancel="cancelViewerLongPress"
+        @pointerleave="cancelViewerLongPress"
+      >
         <template v-if="noteStore.currentNote">
           <div v-if="isDeletedNote" class="trash-banner">
             <div class="trash-banner__title">这篇笔记当前位于回收站</div>
@@ -442,9 +407,30 @@
     <!-- Modals -->
     <ShareModal
       v-if="showShareModal"
-      :note-id="noteStore.currentNote?.id"
-      @close="showShareModal = false"
+      :note-id="shareTargetNoteId || noteStore.currentNote?.id"
+      @close="closeShareModal"
     />
+    <div
+      v-if="contextMenuState.visible"
+      ref="contextMenuRef"
+      class="context-menu sl-card"
+      :style="contextMenuStyle"
+      role="menu"
+      @click.stop
+      @contextmenu.prevent.stop
+    >
+      <button
+        v-for="action in contextMenuItems"
+        :key="action.key"
+        :class="['context-menu__item', action.tone ? `context-menu__item--${action.tone}` : '']"
+        type="button"
+        role="menuitem"
+        :disabled="action.disabled"
+        @click="handleContextMenuAction(action.key)"
+      >
+        {{ action.label }}
+      </button>
+    </div>
     <CategoryModal
       v-if="showCategoryModal"
       :tree-items="noteStore.tree.items"
@@ -563,6 +549,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useNoteStore } from '@/stores/note'
 import { useToastStore } from '@/stores/toast'
+import { noteApi } from '@/api'
 import { renderMarkdown, formatTime, parseOutline } from '@/utils/markdown'
 import {
   enhanceMarkdown,
@@ -570,7 +557,8 @@ import {
   detectActiveHeadingAnchor,
   detectActiveOutlineAnchorByEditor
 } from '@/utils/markdownEnhance'
-import TreeNode from '@/components/TreeNode.vue'
+import { exportMarkdownAsDocx } from '@/utils/docxExport'
+import { downloadBlob, sanitizeFileName } from '@/utils/fileDownload'
 import OutlineList from '@/components/OutlineList.vue'
 import ImportExportModal from '@/components/ImportExportModal.vue'
 import PopupLayer from '@/components/PopupLayer.vue'
@@ -580,7 +568,6 @@ import SettingsModal from '@/components/SettingsModal.vue'
 import SiteModal from '@/components/SiteModal.vue'
 import SearchModal from '@/components/SearchModal.vue'
 import MobileTreeBrowser from '@/components/MobileTreeBrowser.vue'
-import CategoryActionMenu from '@/components/CategoryActionMenu.vue'
 import { findTreeNodeById, findTreePathById, summarizeTreeSubtree } from '@/utils/directoryTree'
 import { useSidebarWidth } from '@/utils/sidebarLayout'
 
@@ -599,8 +586,8 @@ const mobileTreePath = ref([])
 const mobileTrashPath = ref([])
 const selectedCategoryId = ref(null)
 const selectedTrashCategoryId = ref(null)
-const allThemes = ref([])
 const showShareModal = ref(false)
+const shareTargetNoteId = ref(null)
 const showCategoryModal = ref(false)
 const editingCategory = ref(null)
 const showSettingsModal = ref(false)
@@ -639,7 +626,18 @@ const activeOutlineAnchor = ref('')
 const appReady = ref(false)
 
 const isMobile = ref(window.innerWidth <= 768)
+const viewportWidth = ref(window.innerWidth)
+const contextMenuRef = ref(null)
+const contextMenuState = ref({
+  visible: false,
+  x: 0,
+  y: 0,
+  source: '',
+  mode: 'tree',
+  item: null
+})
 const {
+  sidebarWidth,
   sidebarStyle,
   isResizing: isSidebarResizing,
   startResize: startSidebarResize,
@@ -658,6 +656,8 @@ let previewScrollSyncTimer = null
 let syncFromEditor = false
 let syncFromPreview = false
 let suppressNextHashScroll = false
+let noteContentLongPressTimer = null
+let noteContentLongPressStart = null
 
 
 const topbarTitle = computed(() => {
@@ -671,6 +671,53 @@ const topbarTitle = computed(() => {
 })
 
 const isDeletedNote = computed(() => Boolean(noteStore.currentNote?.deletedAt))
+
+const sidebarCrumbTailCount = computed(() => {
+  const availableWidth = isMobile.value ? viewportWidth.value : sidebarWidth.value
+  if (availableWidth < 330) return 1
+  if (availableWidth < 410) return 2
+  return 3
+})
+
+const contextMenuStyle = computed(() => ({
+  left: `${contextMenuState.value.x}px`,
+  top: `${contextMenuState.value.y}px`
+}))
+
+const contextMenuItems = computed(() => {
+  const item = contextMenuState.value.item
+  if (!contextMenuState.value.visible || !item) return []
+
+  if (item.type === 'category') {
+    if (contextMenuState.value.mode === 'trash') {
+      return [
+        { key: 'restore-category', label: '恢复', disabled: item.restorable === false },
+        { key: 'purge-category', label: '彻底删除', tone: 'danger' }
+      ]
+    }
+    return [
+      { key: 'edit-category', label: '重命名' },
+      { key: 'site-category', label: '星迹书阁' },
+      { key: 'export-category-zip', label: '导出为zip' },
+      { key: 'delete-category', label: '移入回收站', tone: 'danger' }
+    ]
+  }
+
+  if (item.type === 'note') {
+    const noteId = getNoteActionId(item)
+    const isEditingTarget = Boolean(noteStore.editMode && noteStore.currentNote?.id && noteStore.currentNote.id === noteId)
+    return [
+      { key: 'pin-note', label: item.pinnedFlag ? '取消置顶' : '置顶' },
+      { key: 'share-note', label: '分享' },
+      { key: 'edit-note', label: '编辑', hidden: isEditingTarget },
+      { key: 'export-note-md', label: '导出为md' },
+      { key: 'export-note-docx', label: '导出为docx' },
+      { key: 'delete-note', label: '移入回收站', tone: 'danger' }
+    ].filter(action => !action.hidden)
+  }
+
+  return []
+})
 
 const autosaveStatusText = computed(() => noteStore.autosaveEnabled
   ? '自动保存：已开启（每 30 秒检查一次）'
@@ -688,10 +735,27 @@ const saveStateText = computed(() => {
   return '等待首次保存'
 })
 
-const mobileSidebarTitle = computed(() => {
+const activeSidebarItems = computed(() => (
+  sidebarTab.value === 'trash' ? noteStore.trashTree.items : noteStore.tree.items
+))
+
+const activeSidebarPath = computed(() => (
+  sidebarTab.value === 'trash' ? mobileTrashPath.value : mobileTreePath.value
+))
+
+const activeSidebarRootTitle = computed(() => (
+  sidebarTab.value === 'trash' ? '回收站' : '全部'
+))
+
+const totalNoteCount = computed(() => (
+  summarizeTreeSubtree(noteStore.tree.items).noteCount + (noteStore.tree.pinnedItems?.length || 0)
+))
+
+const sidebarFolderTitle = computed(() => {
   if (sidebarTab.value === 'trash') return '回收站'
   if (sidebarTab.value === 'outline') return '当前大纲'
-  return '笔记目录'
+  if (activeSidebarPath.value.length) return '当前文件夹'
+  return '文件夹'
 })
 
 const renderedHtml = computed(() => {
@@ -1028,8 +1092,10 @@ async function syncNoteFromRoute() {
 
   try {
     if (routeTrash) {
+      selectedTrashCategoryId.value = null
       await noteStore.openTrashNote(noteId)
     } else {
+      selectedCategoryId.value = null
       await noteStore.openNote(noteId)
     }
     sidebarOpen.value = false
@@ -1102,6 +1168,7 @@ async function handleFinish() {
 
 async function handleOpenNote(id) {
   try {
+    selectedCategoryId.value = null
     await noteStore.openNote(id)
     await syncRouteToCurrentNote({ replace: false })
     sidebarOpen.value = false
@@ -1111,6 +1178,279 @@ async function handleOpenNote(id) {
   }
 }
 
+function getNoteActionId(item = null) {
+  return item?.id || noteStore.currentNote?.id || null
+}
+
+function getItemTitle(item = null) {
+  return item?.title || item?.name || item?.label || noteStore.currentNote?.title || ''
+}
+
+async function getExportNoteDetail(noteId, item = null) {
+  if (!noteId) {
+    throw new Error('请先选择笔记')
+  }
+  if (noteStore.currentNote?.id === noteId && noteStore.currentNote?.markdownContent !== undefined) {
+    return noteStore.currentNote
+  }
+  if (item?.markdownContent !== undefined) {
+    return item
+  }
+  return noteApi.get(noteId)
+}
+
+function exportNoteAsMarkdown(note) {
+  const title = note?.title || note?.name || '未命名笔记'
+  const fileName = `${sanitizeFileName(title, '未命名笔记')}.md`
+  const blob = new Blob([note?.markdownContent || ''], { type: 'text/markdown;charset=utf-8' })
+  downloadBlob(blob, fileName)
+}
+
+function canUseCurrentNoteContextMenu() {
+  return Boolean(noteStore.currentNote?.id && !isDeletedNote.value && !noteStore.editMode)
+}
+
+function openContextMenu({ x = 0, y = 0, item = null, mode = 'tree', source = '' } = {}) {
+  if (!item) return
+  closeContextMenu()
+  const menuWidth = 168
+  const estimatedMenuHeight = item.type === 'note' ? 246 : 174
+  const nextX = Math.min(Math.max(8, x), Math.max(8, window.innerWidth - menuWidth - 8))
+  const nextY = Math.min(Math.max(8, y), Math.max(8, window.innerHeight - estimatedMenuHeight - 8))
+  contextMenuState.value = {
+    visible: true,
+    x: nextX,
+    y: nextY,
+    source,
+    mode,
+    item
+  }
+  nextTick(adjustContextMenuPosition)
+}
+
+function adjustContextMenuPosition() {
+  const menu = contextMenuRef.value
+  if (!menu || !contextMenuState.value.visible) return
+  const rect = menu.getBoundingClientRect()
+  const nextX = Math.min(contextMenuState.value.x, Math.max(8, window.innerWidth - rect.width - 8))
+  const nextY = Math.min(contextMenuState.value.y, Math.max(8, window.innerHeight - rect.height - 8))
+  if (nextX !== contextMenuState.value.x || nextY !== contextMenuState.value.y) {
+    contextMenuState.value = {
+      ...contextMenuState.value,
+      x: nextX,
+      y: nextY
+    }
+  }
+}
+
+function closeContextMenu() {
+  if (!contextMenuState.value.visible) return
+  contextMenuState.value = {
+    visible: false,
+    x: 0,
+    y: 0,
+    source: '',
+    mode: 'tree',
+    item: null
+  }
+}
+
+function handleDocumentPointerDown(event) {
+  if (!contextMenuState.value.visible) return
+  if (contextMenuRef.value?.contains(event.target)) return
+  closeContextMenu()
+}
+
+function handleContextKeydown(event) {
+  if (event.key === 'Escape') {
+    closeContextMenu()
+  }
+}
+
+function handleSidebarRowContext(payload) {
+  const item = payload?.item
+  if (!item) return
+  openContextMenu({
+    x: payload.x,
+    y: payload.y,
+    item,
+    mode: payload.mode || 'tree',
+    source: 'sidebar'
+  })
+}
+
+function handleViewerContextMenu(event) {
+  if (!canUseCurrentNoteContextMenu()) return
+  event.preventDefault()
+  event.stopPropagation()
+  openContextMenu({
+    x: event.clientX,
+    y: event.clientY,
+    source: 'viewer',
+    mode: 'tree',
+    item: {
+      ...noteStore.currentNote,
+      type: 'note',
+      name: noteStore.currentNote.title || '未命名笔记'
+    }
+  })
+}
+
+function startViewerLongPress(event) {
+  if (!canUseCurrentNoteContextMenu()) return
+  if (event?.pointerType === 'mouse') return
+  cancelViewerLongPress()
+  noteContentLongPressStart = {
+    x: event?.clientX || 0,
+    y: event?.clientY || 0
+  }
+  noteContentLongPressTimer = window.setTimeout(() => {
+    if (!noteContentLongPressStart || !canUseCurrentNoteContextMenu()) return
+    event?.preventDefault?.()
+    openContextMenu({
+      x: noteContentLongPressStart.x,
+      y: noteContentLongPressStart.y,
+      source: 'viewer',
+      mode: 'tree',
+      item: {
+        ...noteStore.currentNote,
+        type: 'note',
+        name: noteStore.currentNote.title || '未命名笔记'
+      }
+    })
+  }, 560)
+}
+
+function handleViewerLongPressMove(event) {
+  if (!noteContentLongPressStart) return
+  const dx = Math.abs((event?.clientX || 0) - noteContentLongPressStart.x)
+  const dy = Math.abs((event?.clientY || 0) - noteContentLongPressStart.y)
+  if (dx > 8 || dy > 8) {
+    cancelViewerLongPress()
+  }
+}
+
+function cancelViewerLongPress() {
+  if (noteContentLongPressTimer) {
+    window.clearTimeout(noteContentLongPressTimer)
+    noteContentLongPressTimer = null
+  }
+  noteContentLongPressStart = null
+}
+
+async function handleContextMenuAction(actionKey) {
+  const item = contextMenuState.value.item
+  const mode = contextMenuState.value.mode
+  if (!item) return
+  closeContextMenu()
+
+  if (actionKey === 'edit-category') {
+    handleEditCategoryRequest(item.id)
+    return
+  }
+  if (actionKey === 'site-category') {
+    handleOpenSiteModal(item.id)
+    return
+  }
+  if (actionKey === 'delete-category') {
+    handleDeleteCategoryRequest(item.id)
+    return
+  }
+  if (actionKey === 'export-category-zip') {
+    await handleExportCategoryArchive(item)
+    return
+  }
+  if (actionKey === 'restore-category') {
+    if (item.restorable === false) return
+    await handleRestoreTrashCategory(item.id)
+    return
+  }
+  if (actionKey === 'purge-category') {
+    handlePurgeTrashCategoryRequest(item.id)
+    return
+  }
+
+  const noteId = getNoteActionId(item)
+  if (!noteId || mode !== 'tree') return
+
+  if (actionKey === 'pin-note') {
+    await handleTogglePinned(item)
+    return
+  }
+  if (actionKey === 'share-note') {
+    openShareForNote(noteId)
+    return
+  }
+  if (actionKey === 'edit-note') {
+    await openNoteForEdit(noteId)
+    return
+  }
+  if (actionKey === 'export-note-md') {
+    await handleExportNoteMarkdown(noteId, item)
+    return
+  }
+  if (actionKey === 'export-note-docx') {
+    await handleExportNoteDocx(noteId, item)
+    return
+  }
+  if (actionKey === 'delete-note') {
+    openDeleteConfirm('trash', noteId, getItemTitle(item))
+  }
+}
+
+async function handleExportCategoryArchive(item) {
+  if (!item?.id) return
+  try {
+    const { blob, fileName } = await noteStore.exportCategoryArchive(item.id)
+    downloadBlob(blob, fileName || `${sanitizeFileName(item.name, '未命名分类')}.zip`)
+    toast.success('分类 ZIP 已开始下载')
+  } catch (err) {
+    toast.error(err.message || '导出分类 ZIP 失败')
+  }
+}
+
+async function handleExportNoteMarkdown(noteId, item = null) {
+  try {
+    const note = await getExportNoteDetail(noteId, item)
+    exportNoteAsMarkdown(note)
+    toast.success('Markdown 已开始下载')
+  } catch (err) {
+    toast.error(err.message || '导出 Markdown 失败')
+  }
+}
+
+async function handleExportNoteDocx(noteId, item = null) {
+  try {
+    const note = await getExportNoteDetail(noteId, item)
+    await exportMarkdownAsDocx({
+      title: note?.title || item?.name,
+      markdown: note?.markdownContent || ''
+    })
+    toast.success('DOCX 已开始下载')
+  } catch (err) {
+    toast.error(err.message || '导出 DOCX 失败')
+  }
+}
+
+function openShareForNote(noteId) {
+  if (!noteId) return
+  shareTargetNoteId.value = noteId
+  showShareModal.value = true
+}
+
+function closeShareModal() {
+  showShareModal.value = false
+  shareTargetNoteId.value = null
+}
+
+async function openNoteForEdit(noteId) {
+  if (!noteId) return
+  if (noteStore.currentNote?.id !== noteId || isDeletedNote.value) {
+    await handleOpenNote(noteId)
+  }
+  selectedCategoryId.value = null
+  handleEnterEditMode()
+}
 
 function handleEnterEditMode() {
   if (isDeletedNote.value) {
@@ -1118,14 +1458,6 @@ function handleEnterEditMode() {
     return
   }
   noteStore.enterEditMode()
-}
-
-function handleToggleCategory(id) {
-  noteStore.toggleCategoryExpanded(id)
-}
-
-function handleToggleTrashCategory(id) {
-  noteStore.toggleTrashCategoryExpanded(id)
 }
 
 function expandCategoryPath(path, mode = 'tree') {
@@ -1139,7 +1471,6 @@ function expandCategoryPath(path, mode = 'tree') {
 }
 
 function syncMobileTreePathFromSelection() {
-  if (!isMobile.value) return
   if (selectedCategoryId.value) {
     mobileTreePath.value = findTreePathById(noteStore.tree.items, selectedCategoryId.value, { includeTargetCategory: true })
     expandCategoryPath(mobileTreePath.value, 'tree')
@@ -1154,7 +1485,6 @@ function syncMobileTreePathFromSelection() {
 }
 
 function syncMobileTrashPathFromSelection() {
-  if (!isMobile.value) return
   if (selectedTrashCategoryId.value) {
     mobileTrashPath.value = findTreePathById(noteStore.trashTree.items, selectedTrashCategoryId.value, { includeTargetCategory: true })
     expandCategoryPath(mobileTrashPath.value, 'trash')
@@ -1186,6 +1516,29 @@ function handleMobileTreeSelectCategory(categoryId) {
 
 function handleMobileTrashSelectCategory(categoryId) {
   selectedTrashCategoryId.value = categoryId || null
+}
+
+function handleTreeTabClick() {
+  sidebarTab.value = 'tree'
+  syncMobileTreePathFromSelection()
+}
+
+function handleSidebarBreadcrumbNavigate(path) {
+  if (sidebarTab.value === 'trash') {
+    handleMobileTrashNavigate(path)
+    return
+  }
+  sidebarTab.value = 'tree'
+  handleMobileTreeNavigate(path)
+}
+
+function handleSidebarBreadcrumbSelectCategory(categoryId) {
+  if (sidebarTab.value === 'trash') {
+    handleMobileTrashSelectCategory(categoryId)
+    return
+  }
+  sidebarTab.value = 'tree'
+  handleMobileTreeSelectCategory(categoryId)
 }
 
 function toggleAutosave() {
@@ -1272,8 +1625,9 @@ function handleNewNote() {
   router.replace({ name: 'App', query: {}, hash: '' })
 }
 
-function handleShare() {
-  if (noteStore.currentNote?.id) showShareModal.value = true
+function handleShare(noteId = noteStore.currentNote?.id) {
+  const targetId = typeof noteId === 'string' ? noteId : noteStore.currentNote?.id
+  openShareForNote(targetId)
 }
 
 async function handleDelete() {
@@ -1404,18 +1758,26 @@ async function confirmDeleteAction() {
       sidebarTab.value = 'trash'
     }
     await syncRouteToCurrentNote({ replace: true })
+    syncMobileTreePathFromSelection()
+    syncMobileTrashPathFromSelection()
     mobileActionsOpen.value = false
   } catch (err) {
     toast.error(err.message)
   }
 }
 
-async function handleTogglePinned() {
-  if (!noteStore.currentNote?.id || isDeletedNote.value) return
+async function handleTogglePinned(targetItem = null) {
+  const noteId = getNoteActionId(targetItem)
+  const targetDeleted = targetItem?.deletedAt || (!targetItem && isDeletedNote.value)
+  if (!noteId || targetDeleted) return
   try {
-    const nextValue = !noteStore.currentNote.pinnedFlag
-    await noteStore.setPinned(noteStore.currentNote.id, nextValue)
+    const currentPinned = targetItem
+      ? Boolean(targetItem.pinnedFlag)
+      : Boolean(noteStore.currentNote?.pinnedFlag)
+    const nextValue = !currentPinned
+    await noteStore.setPinned(noteId, nextValue)
     toast.success(nextValue ? '已置顶到目录上方' : '已取消置顶')
+    syncMobileTreePathFromSelection()
     mobileActionsOpen.value = false
   } catch (err) {
     toast.error(err.message)
@@ -1459,15 +1821,6 @@ async function handleSiteUpdated() {
   }
 }
 
-async function handleThemeChange(id) {
-  try {
-    await themeStore.selectTheme(id)
-    toast.success('主题已切换')
-  } catch (err) {
-    toast.error(err.message)
-  }
-}
-
 async function handleLogout() {
   await authStore.logout()
   router.push('/login')
@@ -1475,6 +1828,7 @@ async function handleLogout() {
 
 function handleResize() {
   const wasMobile = isMobile.value
+  viewportWidth.value = window.innerWidth
   isMobile.value = window.innerWidth <= 768
   syncSidebarWidth()
   if (wasMobile !== isMobile.value) {
@@ -1482,13 +1836,15 @@ function handleResize() {
   }
   if (!isMobile.value) previewVisible.value = true
   if (!isMobile.value) mobileActionsOpen.value = false
-  if (isMobile.value) {
-    syncMobileTreePathFromSelection()
-    syncMobileTrashPathFromSelection()
-  }
+  syncMobileTreePathFromSelection()
+  syncMobileTrashPathFromSelection()
+  closeContextMenu()
 }
 
 function handleGlobalKeydown(e) {
+  if (e.key === 'Escape') {
+    closeContextMenu()
+  }
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
     e.preventDefault()
     showSearchModal.value = true
@@ -1499,9 +1855,9 @@ function handleGlobalKeydown(e) {
 
 async function handleTrashTabClick() {
   sidebarTab.value = 'trash'
-  selectedTrashCategoryId.value = null
   try {
     await noteStore.refreshTrash()
+    syncMobileTrashPathFromSelection()
   } catch (err) {
     toast.error(err.message)
   }
@@ -1612,10 +1968,12 @@ onMounted(async () => {
   handleResize()
   window.addEventListener('resize', handleResize)
   window.addEventListener('keydown', handleGlobalKeydown)
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
+  document.addEventListener('keydown', handleContextKeydown)
 
   try {
     await authStore.fetchMe()
-    allThemes.value = await themeStore.loadThemes()
+    await themeStore.loadThemes()
     await noteStore.refreshTree()
     await noteStore.refreshTrash()
     // Autosave every 30s
@@ -1630,6 +1988,8 @@ onMounted(async () => {
     appReady.value = true
     activeOutlineAnchor.value = normalizeHash(route.hash)
     await syncNoteFromRoute()
+    syncMobileTreePathFromSelection()
+    syncMobileTrashPathFromSelection()
     await enhanceViewerContent()
     await enhancePreviewContent()
   } catch {
@@ -1640,10 +2000,13 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('keydown', handleGlobalKeydown)
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  document.removeEventListener('keydown', handleContextKeydown)
   clearInterval(autosaveTimer)
   clearInterval(clockTimer)
   clearTimeout(editorScrollSyncTimer)
   clearTimeout(previewScrollSyncTimer)
+  cancelViewerLongPress()
 })
 </script>
 
@@ -1676,64 +2039,65 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  padding: 16px;
-  gap: 14px;
+  padding: 18px 16px;
+  gap: 12px;
   overflow: hidden;
 }
 .sidebar-profile {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--sl-border);
+  gap: 10px;
+  padding: 2px 2px 8px;
 }
-.profile-info { display: flex; align-items: center; gap: 10px; }
+.sidebar-menu-btn {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+}
+.profile-info {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .profile-avatar {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: var(--sl-primary);
-  color: #fff;
+  background: color-mix(in srgb, var(--sl-text) 12%, var(--sl-card));
+  color: var(--sl-text);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 14px;
   font-weight: 600;
-}
-.profile-name { font-size: 13px; font-weight: 600; }
-.profile-role { font-size: 11px; color: var(--sl-text-tertiary); }
-.profile-actions { display: flex; gap: 2px; }
-.sidebar-mobile-chrome {
-  display: none;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: var(--sl-radius-lg);
   border: 1px solid var(--sl-border);
-  background: linear-gradient(180deg, var(--sl-card) 0%, color-mix(in srgb, var(--sl-card) 70%, var(--sl-hover-bg)) 100%);
-  box-shadow: var(--sl-shadow-card);
 }
-.sidebar-mobile-chrome__title {
-  font-size: 15px;
+.profile-name {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--sl-text);
 }
-.sidebar-mobile-chrome__meta {
-  margin-top: 3px;
-  font-size: 12px;
-  color: var(--sl-text-tertiary);
-}
-
-.sidebar-section { display: flex; flex-direction: column; }
-.sidebar-actions {
+.profile-role { font-size: 11px; color: var(--sl-text-tertiary); }
+.profile-actions {
   display: flex;
-  gap: 6px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.sidebar-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 34px 34px;
+  gap: 8px;
   align-items: center;
 }
-.sidebar-actions__primary {
-  flex: 1;
-}
+.sidebar-actions__primary { min-width: 0; }
 .sidebar-action-icon {
   width: 34px;
   min-width: 34px;
@@ -1741,60 +2105,142 @@ onUnmounted(() => {
   padding: 0;
   justify-content: center;
 }
-.sidebar-tools {
-  display: flex;
-  gap: 6px;
+.sidebar-breadcrumb-shell {
+  min-width: 0;
+  max-width: 100%;
 }
-.sidebar-tools__btn {
+.sidebar-breadcrumb-browser {
+  max-width: 100%;
   width: 100%;
-  justify-content: center;
-  background: linear-gradient(180deg, var(--sl-card) 0%, var(--sl-card-hover) 100%);
 }
-.sidebar-tabs-wrap {
-  display: flex;
-}
-.sidebar-tabs {
-  display: flex;
-  flex: 1;
-  background: var(--sl-active-bg);
+.sidebar-breadcrumb-browser :deep(.mobile-tree-browser__header) {
+  position: static;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
   border-radius: var(--sl-radius);
-  padding: 3px;
-}
-.tab-btn {
-  flex: 1;
-  background: transparent;
-  border: none;
-  padding: 5px 0;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--sl-text-secondary);
-  cursor: pointer;
-  border-radius: 5px;
-  transition: all 0.15s;
-}
-.tab-btn.active {
+  border-color: color-mix(in srgb, var(--sl-primary) 34%, var(--sl-border));
   background: var(--sl-card);
-  color: var(--sl-text);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  box-shadow: none;
+  overflow: hidden;
 }
-.tab-count {
+.sidebar-breadcrumb-browser :deep(.mobile-tree-browser__header-top) {
+  display: none;
+}
+.sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumbs) {
+  min-width: 0;
+  flex-wrap: nowrap;
+  gap: 0;
+  overflow: hidden;
+}
+.sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumb) {
+  min-width: 0;
+  max-width: 96px;
+  height: 30px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 10px;
+  color: var(--sl-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+}
+.sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumb:hover),
+.sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumb.active) {
+  color: var(--sl-text);
+  background: var(--sl-hover-bg);
+}
+.sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumb.active) {
+  flex: 1 1 auto;
+  max-width: none;
+}
+.sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumb + .mobile-tree-browser__crumb)::before {
+  content: '›';
+  margin-right: 8px;
+  color: var(--sl-text-tertiary);
+}
+.sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumb--ellipsis) {
+  flex: 0 0 auto;
+  max-width: 42px;
+  cursor: default;
+}
+.sidebar-primary-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sidebar-nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: var(--sl-radius);
+  background: transparent;
+  color: var(--sl-text-secondary);
+  padding: 7px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.sidebar-nav-item:hover {
+  background: var(--sl-hover-bg);
+  color: var(--sl-text);
+}
+.sidebar-nav-item.active {
+  border-color: color-mix(in srgb, var(--sl-border) 70%, transparent);
+  background: var(--sl-active-bg);
+  color: var(--sl-text);
+  font-weight: 600;
+}
+.sidebar-nav-item__main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.sidebar-nav-item__icon {
+  width: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  margin-left: 6px;
-  border-radius: 999px;
-  background: var(--sl-selection);
-  color: var(--sl-primary);
+  color: currentColor;
+}
+.sidebar-nav-item__count {
+  flex-shrink: 0;
   font-size: 11px;
+  color: var(--sl-text-tertiary);
+}
+.sidebar-folder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 0 4px;
+  color: var(--sl-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+.sidebar-folder-add {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  justify-content: center;
 }
 .sidebar-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  padding-right: 2px;
 }
 .sidebar-resize-handle {
   position: relative;
@@ -1930,6 +2376,45 @@ onUnmounted(() => {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 120;
+  min-width: 156px;
+  padding: 6px;
+  border: 1px solid var(--sl-border);
+  border-radius: var(--sl-radius);
+  background: color-mix(in srgb, var(--sl-card) 96%, transparent);
+  box-shadow: var(--sl-shadow-flyout);
+  backdrop-filter: saturate(1.06) blur(12px);
+}
+
+.context-menu__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border: none;
+  border-radius: calc(var(--sl-radius) - 2px);
+  background: transparent;
+  color: var(--sl-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu__item:hover {
+  background: var(--sl-hover-bg);
+}
+
+.context-menu__item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.context-menu__item--danger {
+  color: var(--sl-danger);
 }
 
 
@@ -2222,75 +2707,45 @@ onUnmounted(() => {
     background: transparent;
     box-shadow: none;
   }
-  .sidebar-mobile-chrome {
-    display: flex;
-  }
   .sidebar-profile,
-  .sidebar-section,
   .sidebar-actions,
-  .sidebar-tools,
-  .sidebar-tabs,
-  .trash-panel__header,
-  .quick-section,
+  .sidebar-breadcrumb-shell,
+  .sidebar-primary-nav,
   .outline-panel,
   .tree-panel,
   .trash-panel {
-    border-radius: var(--sl-radius-lg);
+    border-radius: var(--sl-radius);
   }
   .sidebar-profile,
-  .sidebar-section,
   .sidebar-actions,
-  .sidebar-tools,
-  .sidebar-tabs-wrap,
-  .trash-panel__header {
+  .sidebar-primary-nav {
     padding: 8px 10px;
     background: color-mix(in srgb, var(--sl-card) 92%, transparent);
     border: 1px solid var(--sl-border);
     box-shadow: var(--sl-shadow-card);
   }
-  .sidebar-section {
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-  }
-  .sidebar-section .sl-label {
-    margin-bottom: 0;
-    min-width: 28px;
-    font-size: 12px;
-  }
-  .sidebar-section .sl-select {
-    height: 34px;
-    font-size: 13px;
-  }
   .sidebar-actions {
+    padding: 8px;
     gap: 5px;
   }
   .sidebar-actions__primary {
     min-width: 0;
-    flex: 1;
   }
   .sidebar-action-icon {
     width: 32px;
     min-width: 32px;
     height: 32px;
   }
-  .sidebar-tools {
-    gap: 5px;
+  .sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumb) {
+    max-width: 118px;
   }
-  .sidebar-tools__btn {
-    height: 34px;
-    padding: 0 10px;
-    font-size: 12px;
+  .sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumb.active) {
+    max-width: none;
   }
-  .sidebar-tabs {
-    padding: 3px;
-    background: var(--sl-active-bg);
-    border-radius: var(--sl-radius);
-    border: none;
-    box-shadow: none;
-  }
-  .tab-btn {
-    padding: 6px 0;
+  .sidebar-breadcrumb-shell,
+  .sidebar-breadcrumb-browser,
+  .sidebar-breadcrumb-browser :deep(.mobile-tree-browser__header) {
+    width: 100%;
   }
   .sidebar-scroll {
     min-height: 0;

@@ -122,7 +122,7 @@ onUnmounted(() => {
   max-width: 100%;
   max-height: min(88vh, 760px);
   overflow: hidden;
-  border-radius: calc(var(--sl-radius-lg) + 2px);
+  border-radius: var(--sl-radius-lg);
   box-shadow: var(--sl-shadow-flyout);
   background:
     linear-gradient(180deg, var(--sl-popup-tint) 0, transparent 96px),

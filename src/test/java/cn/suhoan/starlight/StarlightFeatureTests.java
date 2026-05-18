@@ -207,8 +207,24 @@ class StarlightFeatureTests {
             }
         }
         assertTrue(entryNames.contains("README.md"));
-        assertTrue(entryNames.contains("开发：后端/接口文档/接口／约定？.md"));
+        assertTrue(entryNames.contains("开发后端/接口文档/接口约定.md"));
         assertTrue(entryNames.contains("空目录/"));
+
+        NoteTransferService.ArchivePayload categoryPayload = noteTransferService.exportCategoryArchive(exporter.getId(), backend.getId());
+        assertEquals("开发后端.zip", categoryPayload.fileName());
+        assertEquals(1, categoryPayload.noteCount());
+        assertEquals(1, categoryPayload.categoryCount());
+        Set<String> categoryEntryNames = new HashSet<>();
+        try (ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(categoryPayload.content()))) {
+            var entry = zipInputStream.getNextEntry();
+            while (entry != null) {
+                categoryEntryNames.add(entry.getName());
+                entry = zipInputStream.getNextEntry();
+            }
+        }
+        assertTrue(categoryEntryNames.contains("接口文档/接口约定.md"));
+        assertFalse(categoryEntryNames.contains("README.md"));
+        assertFalse(categoryEntryNames.contains("空目录/"));
 
         settingsService.setRegistrationEnabled(true);
         UserAccount importer = authService.register("importer@example.com", "123456");
@@ -226,11 +242,11 @@ class StarlightFeatureTests {
 
         Map<String, Object> tree = noteService.buildTree(importer.getId());
         String treeText = tree.toString();
-        assertTrue(treeText.contains("开发：后端"));
+        assertTrue(treeText.contains("开发后端"));
         assertTrue(treeText.contains("接口文档"));
         assertTrue(treeText.contains("空目录"));
         assertTrue(treeText.contains("README"));
-        assertTrue(treeText.contains("接口／约定？"));
+        assertTrue(treeText.contains("接口约定"));
 
         boolean hasApiContent = noteService.listUserNotes(importer.getId()).stream()
                 .map(item -> noteService.getNoteDetail(importer.getId(), item.get("id").toString()))

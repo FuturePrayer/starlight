@@ -98,6 +98,7 @@ export function useSidebarWidth({
   }))
 
   return {
+    sidebarWidth,
     sidebarStyle,
     isResizing,
     startResize,

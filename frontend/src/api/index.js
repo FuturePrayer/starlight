@@ -100,6 +100,7 @@ export const noteApi = {
     return request(url)
   },
   exportArchive: () => download('/api/notes/export'),
+  exportCategoryArchive: (categoryId) => download(`/api/categories/${categoryId}/export`),
   importArchive: (file) => {
     const formData = new FormData()
     formData.append('file', file)

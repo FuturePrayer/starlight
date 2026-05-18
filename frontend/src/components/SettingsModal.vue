@@ -46,6 +46,32 @@
               {{ profileSaving ? '保存中...' : '保存资料' }}
             </button>
           </div>
+
+          <section class="settings-section-card theme-settings-card">
+            <div class="settings-section-card__header">
+              <div>
+                <h4>主题外观</h4>
+                <p>选择界面配色，侧边栏图标与背景会随主题同步变化。</p>
+              </div>
+              <span
+                class="theme-settings-card__swatch"
+                :style="{ background: currentThemePreviewColor }"
+                aria-hidden="true"
+              ></span>
+            </div>
+            <div class="form-field settings-form-field">
+              <label class="sl-label">当前主题</label>
+              <select
+                :value="themeStore.currentId"
+                class="sl-select"
+                @change="handleThemeChange($event.target.value)"
+              >
+                <option v-for="theme in themeOptions" :key="theme.id" :value="theme.id">
+                  {{ theme.name }}
+                </option>
+              </select>
+            </div>
+          </section>
         </div>
 
         <div v-else-if="currentTab === 'security'" class="settings-panel">
@@ -479,6 +505,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { adminApi, apiKeyApi, authApi, base64urlToBuffer, bufferToBase64url } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 import { useToastStore } from '@/stores/toast'
 import DirectoryTree from '@/components/DirectoryTree.vue'
 import { formatTime } from '@/utils/markdown'
@@ -498,6 +525,7 @@ const props = defineProps({
 })
 
 const authStore = useAuthStore()
+const themeStore = useThemeStore()
 const toast = useToastStore()
 
 const currentTab = ref(props.initialTab)
@@ -536,6 +564,12 @@ const newUsername = ref('')
 const currentPassword = ref('')
 const newPassword = ref('')
 const profileSaving = ref(false)
+const themeOptions = ref([])
+
+const currentThemePreviewColor = computed(() => {
+  const current = themeOptions.value.find(item => item.id === themeStore.currentId) || themeStore.current
+  return current?.previewColor || current?.vars?.['--sl-primary'] || 'var(--sl-primary)'
+})
 
 const totpGlobalEnabled = ref(false)
 const passkeyGlobalEnabled = ref(false)
@@ -642,11 +676,29 @@ watch(() => authStore.profile, profile => {
 
 onMounted(async () => {
   await Promise.allSettled([
+    loadThemeOptions(),
     loadSecurityState(),
     loadApiKeys(),
     loadAdminSettings()
   ])
 })
+
+async function loadThemeOptions() {
+  try {
+    themeOptions.value = await themeStore.loadThemes()
+  } catch {
+    themeOptions.value = themeStore.getAll()
+  }
+}
+
+async function handleThemeChange(id) {
+  try {
+    await themeStore.selectTheme(id)
+    toast.success('主题已切换')
+  } catch (err) {
+    toast.error(err.message)
+  }
+}
 
 function createApiKeyForm() {
   return {
@@ -1182,6 +1234,17 @@ function handlePromptOk() {
 }
 .settings-actions--inline {
   margin-top: 0;
+}
+.theme-settings-card {
+  margin-top: 12px;
+}
+.theme-settings-card__swatch {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: var(--sl-radius);
+  border: 1px solid var(--sl-border);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sl-card) 45%, transparent);
 }
 .settings-inline-field {
   display: flex;

@@ -217,6 +217,10 @@ export const useNoteStore = defineStore('note', () => {
     return noteApi.exportArchive()
   }
 
+  async function exportCategoryArchive(categoryId) {
+    return noteApi.exportCategoryArchive(categoryId)
+  }
+
   async function importArchive(file) {
     const result = await noteApi.importArchive(file)
     await refreshTree()
@@ -293,7 +297,7 @@ export const useNoteStore = defineStore('note', () => {
   return {
     tree, trashNotes, trashTree, currentNote, editMode, dirty, autosaveEnabled, lastSavedAt, expandedCategoryIds, trashExpandedCategoryIds,
     refreshTree, refreshTrash, openNote, openTrashNote, clearCurrentNote, saveNote, deleteNote, restoreNote, purgeNote, setPinned,
-    createCategory, updateCategory, deleteCategory, restoreTrashCategory, purgeTrashCategory, exportArchive, importArchive,
+    createCategory, updateCategory, deleteCategory, restoreTrashCategory, purgeTrashCategory, exportArchive, exportCategoryArchive, importArchive,
     startNewNote, enterEditMode, discardEdit, finishEditing,
     setEditMode, setAutosaveEnabled,
     hasExpandedCategory, setCategoryExpanded, toggleCategoryExpanded,

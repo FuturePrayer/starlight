@@ -240,6 +240,22 @@ public class NoteController {
         UserAccount userAccount = sessionAuthService.requireUser();
         log.info("导出笔记请求: userId={}", userAccount.getId());
         NoteTransferService.ArchivePayload payload = noteTransferService.exportArchive(userAccount.getId());
+        return buildArchiveResponse(payload);
+    }
+
+    /**
+     * 导出指定分类及其下级分类中的全部笔记。
+     * <p>导出结果为 ZIP 文件，内部结构为「选中分类下的子分类 + Markdown 文件」。</p>
+     */
+    @GetMapping("/categories/{id}/export")
+    public ResponseEntity<byte[]> exportCategoryNotes(@PathVariable String id) {
+        UserAccount userAccount = sessionAuthService.requireUser();
+        log.info("导出分类笔记请求: userId={}, categoryId={}", userAccount.getId(), id);
+        NoteTransferService.ArchivePayload payload = noteTransferService.exportCategoryArchive(userAccount.getId(), id);
+        return buildArchiveResponse(payload);
+    }
+
+    private ResponseEntity<byte[]> buildArchiveResponse(NoteTransferService.ArchivePayload payload) {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
                         .filename(payload.fileName(), StandardCharsets.UTF_8)
