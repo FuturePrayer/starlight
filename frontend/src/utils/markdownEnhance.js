@@ -3,6 +3,21 @@ import mermaid from 'mermaid'
 
 let mermaidRenderSeed = 0
 
+const mermaidPalette = [
+  '#4f9ef8',
+  '#c27af0',
+  '#62d680',
+  '#ffb743',
+  '#8582f3',
+  '#ff6666',
+  '#5fc4ea',
+  '#f97316',
+  '#22c55e',
+  '#e879f9',
+  '#14b8a6',
+  '#facc15'
+]
+
 function getCssVar(name, fallback = '') {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
 }
@@ -15,6 +30,12 @@ function escapeSelector(value) {
 }
 
 function buildMermaidConfig() {
+  const seriesColors = Object.fromEntries(mermaidPalette.flatMap((color, index) => [
+    [`pie${index + 1}`, color],
+    [`cScale${index}`, color],
+    [`git${index}`, color]
+  ]))
+
   return {
     startOnLoad: false,
     securityLevel: 'strict',
@@ -26,20 +47,32 @@ function buildMermaidConfig() {
       curve: 'basis'
     },
     themeVariables: {
-      primaryColor: getCssVar('--sl-card', '#ffffff'),
-      primaryTextColor: getCssVar('--sl-text', '#111111'),
-      primaryBorderColor: getCssVar('--sl-border', '#d0d7de'),
+      ...seriesColors,
+      primaryColor: mermaidPalette[0],
+      primaryTextColor: '#ffffff',
+      primaryBorderColor: '#1d4ed8',
+      secondaryColor: mermaidPalette[1],
+      secondaryTextColor: '#ffffff',
+      secondaryBorderColor: '#7e22ce',
+      tertiaryColor: mermaidPalette[2],
+      tertiaryTextColor: '#ffffff',
+      tertiaryBorderColor: '#15803d',
       lineColor: getCssVar('--sl-text-secondary', '#57606a'),
       textColor: getCssVar('--sl-text', '#111111'),
       mainBkg: getCssVar('--sl-card', '#ffffff'),
       secondBkg: getCssVar('--sl-bg-secondary', '#f6f8fa'),
-      tertiaryColor: getCssVar('--sl-primary-light', '#eef6ff'),
       clusterBkg: getCssVar('--sl-bg-secondary', '#f6f8fa'),
       clusterBorder: getCssVar('--sl-border', '#d0d7de'),
       edgeLabelBackground: getCssVar('--sl-card', '#ffffff'),
-      nodeBorder: getCssVar('--sl-border', '#d0d7de'),
+      nodeBorder: '#1d4ed8',
       background: getCssVar('--sl-bg-secondary', '#ffffff'),
-      fontFamily: getCssVar('--sl-font', 'Segoe UI, sans-serif')
+      fontFamily: getCssVar('--sl-font', 'Segoe UI, sans-serif'),
+      pieTitleTextColor: getCssVar('--sl-text', '#111111'),
+      pieLegendTextColor: getCssVar('--sl-text', '#111111'),
+      pieSectionTextColor: '#ffffff',
+      pieStrokeColor: getCssVar('--sl-bg-secondary', '#ffffff'),
+      pieStrokeWidth: '2px',
+      pieOpacity: '1'
     }
   }
 }
@@ -125,20 +158,38 @@ async function exportPng(svgElement, fileName) {
   downloadBlob(pngBlob, fileName)
 }
 
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.top = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const copied = document.execCommand('copy')
+  textarea.remove()
+
+  if (!copied) {
+    throw new Error('复制失败')
+  }
+}
+
 function buildDiagramFileName(index, kind) {
   return `starlight-mermaid-${String(index).padStart(2, '0')}.${kind}`
 }
 
-function bindExportActions(block, index) {
+function bindMermaidActions(block, index, source) {
   const svgElement = block.querySelector('svg')
-  if (!svgElement) {
-    return
-  }
-
   const svgButton = block.querySelector('[data-export="svg"]')
   const pngButton = block.querySelector('[data-export="png"]')
+  const copyButton = block.querySelector('[data-copy-source]')
 
-  if (svgButton) {
+  if (svgElement && svgButton) {
     svgButton.addEventListener('click', async () => {
       svgButton.disabled = true
       try {
@@ -149,13 +200,34 @@ function bindExportActions(block, index) {
     })
   }
 
-  if (pngButton) {
+  if (svgElement && pngButton) {
     pngButton.addEventListener('click', async () => {
       pngButton.disabled = true
       try {
         await exportPng(svgElement, buildDiagramFileName(index, 'png'))
       } finally {
         pngButton.disabled = false
+      }
+    })
+  }
+
+  if (copyButton) {
+    copyButton.addEventListener('click', async () => {
+      const label = copyButton.textContent
+      copyButton.disabled = true
+      try {
+        await copyTextToClipboard(source)
+        copyButton.textContent = '已复制'
+        setTimeout(() => {
+          copyButton.textContent = label
+        }, 1600)
+      } catch (error) {
+        copyButton.textContent = '复制失败'
+        setTimeout(() => {
+          copyButton.textContent = label
+        }, 1600)
+      } finally {
+        copyButton.disabled = false
       }
     })
   }
@@ -189,12 +261,13 @@ export async function enhanceMarkdown(container) {
           <div class="sl-mermaid__actions">
             <button type="button" class="sl-btn sl-btn--ghost sl-btn--sm" data-export="svg">导出 SVG</button>
             <button type="button" class="sl-btn sl-btn--ghost sl-btn--sm" data-export="png">导出 PNG</button>
+            <button type="button" class="sl-btn sl-btn--ghost sl-btn--sm" data-copy-source>复制源代码</button>
           </div>
         </div>
         <div class="sl-mermaid__surface">${svg}</div>
       `
       bindFunctions?.(block)
-      bindExportActions(block, index + 1)
+      bindMermaidActions(block, index + 1, source)
     } catch (error) {
       const message = error instanceof Error ? error.message : '未知错误'
       block.innerHTML = `
