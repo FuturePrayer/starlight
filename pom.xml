@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.5</version>
+        <version>4.0.6</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>cn.suhoan</groupId>
@@ -41,7 +41,7 @@
     </scm>
     <properties>
         <java.version>25</java.version>
-        <spring-ai.version>2.0.0-M4</spring-ai.version>
+        <spring-ai.version>2.0.0-M6</spring-ai.version>
         <maven.compiler.parameters>true</maven.compiler.parameters>
     </properties>
     <dependencies>
@@ -79,7 +79,7 @@
         <dependency>
             <groupId>com.webauthn4j</groupId>
             <artifactId>webauthn4j-core</artifactId>
-            <version>0.31.2.RELEASE</version>
+            <version>0.31.5.RELEASE</version>
         </dependency>
 
         <dependency>
