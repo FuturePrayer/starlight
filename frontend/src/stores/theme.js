@@ -77,7 +77,7 @@ const BUILTIN_THEMES = [
       '--sl-mark-bg': 'rgba(255, 183, 0, 0.25)',
       '--sl-mark-text': 'inherit',
       '--sl-mark-border': 'rgba(255, 183, 0, 0.5)',
-      ...DARK_CODE_VARS,
+      ...LIGHT_CODE_VARS,
     }
   },
   {

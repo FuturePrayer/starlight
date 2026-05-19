@@ -47,11 +47,13 @@ Starlight is a **Spring Boot 4 + Vue 3** Markdown note-taking application with c
 
 The repository now includes a root-level `docker-compose.yml` configured with:
 
-- combined image: `ghcr.io/futureprayer/starlight:latest`
+- local source build using `deploy/Dockerfile.compose`
+- build output: combined frontend + backend JVM image, not a Native Image
 - database: file-based H2
 - persistent data directory: `./data`
+- local image name: `starlight:local`
 
-Start:
+Build and start:
 
 ```bash
 docker compose up -d
@@ -77,6 +79,8 @@ First-start notes:
 - Git import is disabled by default and must be enabled by an administrator
 
 ### Option 2: Run a single container
+
+Use this option if you want to run a published image instead of building from source:
 
 ```bash
 docker run -d \
@@ -291,8 +295,9 @@ startlight/
 ├─ src/main/resources/     # configuration, Flyway, static assets
 ├─ frontend/               # current Vue 3 + Vite frontend
 ├─ frontend2/              # redesigned frontend, not wired into Docker/workflows yet
-├─ deploy/nginx/           # Nginx template for standalone frontend deployment
-├─ docker-compose.yml      # Compose deployment using default H2 storage
+├─ deploy/nginx/             # Nginx template for standalone frontend deployment
+├─ deploy/Dockerfile.compose # Compose-only source-build Dockerfile
+├─ docker-compose.yml        # Compose file that builds the combined JVM image from source
 ├─ sql/                    # init / reference SQL
 └─ .github/workflows/      # release workflows (if present in the repository)
 ```

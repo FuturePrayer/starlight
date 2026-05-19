@@ -47,11 +47,13 @@ Starlight 是一个基于 **Spring Boot 4 + Vue 3** 的 Markdown 笔记系统，
 
 仓库已提供根目录 `docker-compose.yml`，默认使用：
 
-- 合并镜像：`ghcr.io/futureprayer/starlight:latest`
+- 本地源码构建：使用 `deploy/Dockerfile.compose`
+- 构建产物：前后端合并 JVM 镜像（非 Native Image）
 - 数据库：H2 文件库
 - 数据持久化目录：`./data`
+- 本地镜像名：`starlight:local`
 
-启动：
+构建并启动：
 
 ```bash
 docker compose up -d
@@ -77,6 +79,8 @@ docker compose down
 - Git 导入默认关闭，需管理员手动开启
 
 ### 方式二：直接运行容器
+
+如果希望直接使用已发布镜像，而不是从源码构建：
 
 ```bash
 docker run -d \
@@ -291,8 +295,9 @@ startlight/
 ├─ src/main/resources/     # 配置、Flyway、静态资源
 ├─ frontend/               # 现有 Vue 3 + Vite 前端
 ├─ frontend2/              # 重构中的新前端（暂未接入 Docker / workflow）
-├─ deploy/nginx/           # 独立前端部署的 Nginx 模板
-├─ docker-compose.yml      # 默认 H2 的 Compose 部署文件
+├─ deploy/nginx/             # 独立前端部署的 Nginx 模板
+├─ deploy/Dockerfile.compose # Compose 专用源码构建 Dockerfile
+├─ docker-compose.yml        # 从源码构建 JVM 合并镜像的 Compose 文件
 ├─ sql/                    # 初始化 / 参考 SQL
 └─ .github/workflows/      # 发布流程（如仓库中存在）
 ```

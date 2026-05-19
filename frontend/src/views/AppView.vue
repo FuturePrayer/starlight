@@ -1087,11 +1087,11 @@ async function syncNoteFromRoute() {
 
   try {
     if (routeTrash) {
-      selectedTrashCategoryId.value = null
       await noteStore.openTrashNote(noteId)
+      selectedTrashCategoryId.value = null
     } else {
-      selectedCategoryId.value = null
       await noteStore.openNote(noteId)
+      selectedCategoryId.value = null
     }
     sidebarOpen.value = false
     mobileActionsOpen.value = false
@@ -1163,8 +1163,8 @@ async function handleFinish() {
 
 async function handleOpenNote(id) {
   try {
-    selectedCategoryId.value = null
     await noteStore.openNote(id)
+    selectedCategoryId.value = null
     await syncRouteToCurrentNote({ replace: false })
     sidebarOpen.value = false
     mobileActionsOpen.value = false
@@ -1860,8 +1860,8 @@ async function handleTrashTabClick() {
 
 async function handleOpenTrashNote(id) {
   try {
-    selectedTrashCategoryId.value = null
     await noteStore.openTrashNote(id)
+    selectedTrashCategoryId.value = null
     await syncRouteToCurrentNote({ replace: false })
     sidebarOpen.value = false
     mobileActionsOpen.value = false
