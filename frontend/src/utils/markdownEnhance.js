@@ -300,10 +300,14 @@ async function rasterizeSvgWithCanvg(markup, width, height, scale) {
   return canvasToPngBlob(canvas)
 }
 
-export async function renderMermaidSourceToPng(source, { scale = 2, maxWidth = 600 } = {}) {
+export async function renderMermaidSourceToSvg(source, { idPrefix = 'starlight-mermaid' } = {}) {
   mermaid.initialize(buildMermaidConfig())
-  const renderId = `starlight-docx-mermaid-${++mermaidRenderSeed}`
-  const { svg } = await mermaid.render(renderId, source)
+  const renderId = `${idPrefix}-${++mermaidRenderSeed}`
+  return mermaid.render(renderId, source)
+}
+
+export async function renderMermaidSourceToPng(source, { scale = 2, maxWidth = 600 } = {}) {
+  const { svg } = await renderMermaidSourceToSvg(source, { idPrefix: 'starlight-docx-mermaid' })
   const { width, height } = getSvgMarkupDimensions(svg)
   const markup = normalizeSvgMarkup(svg, width, height)
   const pixelScale = Math.max(window.devicePixelRatio || 1, scale)
@@ -415,8 +419,6 @@ export async function enhanceMarkdown(container) {
     return { diagramCount: 0 }
   }
 
-  mermaid.initialize(buildMermaidConfig())
-
   for (const [index, block] of mermaidBlocks.entries()) {
     const source = decodeURIComponent(block.dataset.mermaidSource || '').trim()
     if (!source) {
@@ -425,8 +427,7 @@ export async function enhanceMarkdown(container) {
     }
 
     try {
-      const renderId = `starlight-mermaid-${++mermaidRenderSeed}`
-      const { svg, bindFunctions } = await mermaid.render(renderId, source)
+      const { svg, bindFunctions } = await renderMermaidSourceToSvg(source)
       block.innerHTML = `
         <div class="sl-mermaid__toolbar">
           <span class="sl-mermaid__label">Mermaid</span>

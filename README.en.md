@@ -267,14 +267,6 @@ npm run dev
 
 The Vite dev server proxies `/api` to `http://localhost:8080`.
 
-The redesigned frontend now lives in `frontend2/` for parallel development and review. It is **not wired into the Dockerfiles, Compose setup, or GitHub workflows yet**:
-
-```bash
-cd frontend2
-npm ci
-npm run dev
-```
-
 ### Backend
 
 ```bash
@@ -294,7 +286,6 @@ startlight/
 ├─ src/main/java/          # Spring Boot backend source
 ├─ src/main/resources/     # configuration, Flyway, static assets
 ├─ frontend/               # current Vue 3 + Vite frontend
-├─ frontend2/              # redesigned frontend, not wired into Docker/workflows yet
 ├─ deploy/nginx/             # Nginx template for standalone frontend deployment
 ├─ deploy/Dockerfile.compose # Compose-only source-build Dockerfile
 ├─ docker-compose.yml        # Compose file that builds the combined JVM image from source

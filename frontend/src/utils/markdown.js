@@ -107,11 +107,11 @@ function renderCodeBlock(content, { lang = '', showLineNumbers = false } = {}) {
   return `<div class="sl-code-block">${langLabel}<pre><code class="sl-code${highlightedClass}${languageClass}">${lineHtml}</code></pre></div>`
 }
 
-function createSlugTracker() {
+export function createSlugTracker() {
   return new Map()
 }
 
-function getUniqueSlug(text, tracker) {
+export function getUniqueSlug(text, tracker) {
   const baseSlug = slugify(text)
   const nextIndex = tracker.get(baseSlug) || 0
   tracker.set(baseSlug, nextIndex + 1)
@@ -181,7 +181,7 @@ export function parseOutline(markdown) {
     .filter(Boolean)
 }
 
-function slugify(text) {
+export function slugify(text) {
   return text
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, '-')

@@ -267,14 +267,6 @@ npm run dev
 
 Vite 开发服务器会将 `/api` 代理到 `http://localhost:8080`。
 
-新的重构版前端位于 `frontend2/`，当前用于并行开发与验收，**尚未接入 Dockerfile、Compose 或 GitHub 工作流**：
-
-```bash
-cd frontend2
-npm ci
-npm run dev
-```
-
 ### 后端
 
 ```bash
@@ -294,7 +286,6 @@ startlight/
 ├─ src/main/java/          # Spring Boot 后端源码
 ├─ src/main/resources/     # 配置、Flyway、静态资源
 ├─ frontend/               # 现有 Vue 3 + Vite 前端
-├─ frontend2/              # 重构中的新前端（暂未接入 Docker / workflow）
 ├─ deploy/nginx/             # 独立前端部署的 Nginx 模板
 ├─ deploy/Dockerfile.compose # Compose 专用源码构建 Dockerfile
 ├─ docker-compose.yml        # 从源码构建 JVM 合并镜像的 Compose 文件

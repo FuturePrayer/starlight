@@ -211,10 +211,6 @@
         </div>
         <div class="topbar-actions" v-if="!isMobile">
           <template v-if="noteStore.editMode">
-            <button class="sl-btn topbar-icon-btn" :title="previewVisible ? '关闭预览' : '打开预览'" :aria-label="previewVisible ? '关闭预览' : '打开预览'" @click="togglePreview">
-              <svg v-if="previewVisible" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0112 20C7 20 2.73 16.89 1 12c.92-2.6 2.63-4.78 4.89-6.32"/><path d="M10.58 10.58A3 3 0 0012 15a3 3 0 002.42-4.42"/><path d="M1 1l22 22"/><path d="M9.88 4.24A10.94 10.94 0 0112 4c5 0 9.27 3.11 11 8a11.76 11.76 0 01-4.29 5.94"/></svg>
-              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
             <button class="sl-btn topbar-icon-btn" :title="noteStore.autosaveEnabled ? '暂停自动保存' : '恢复自动保存'" :aria-label="noteStore.autosaveEnabled ? '暂停自动保存' : '恢复自动保存'" @click="toggleAutosave">
               <svg v-if="noteStore.autosaveEnabled" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
               <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -261,10 +257,6 @@
       <div v-if="isMobile && noteStore.editMode" class="mobile-fab">
         <div :class="['fab-menu', { expanded: mobileActionsOpen }]">
           <div v-if="mobileActionsOpen" class="fab-actions">
-            <button class="sl-btn fab-action-btn" :title="previewVisible ? '关闭预览' : '打开预览'" :aria-label="previewVisible ? '关闭预览' : '打开预览'" @click="togglePreview">
-              <svg v-if="previewVisible" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0112 20C7 20 2.73 16.89 1 12c.92-2.6 2.63-4.78 4.89-6.32"/><path d="M10.58 10.58A3 3 0 0012 15a3 3 0 002.42-4.42"/><path d="M1 1l22 22"/><path d="M9.88 4.24A10.94 10.94 0 0112 4c5 0 9.27 3.11 11 8a11.76 11.76 0 01-4.29 5.94"/></svg>
-              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
             <button class="sl-btn fab-action-btn" :title="noteStore.autosaveEnabled ? '暂停自动保存' : '恢复自动保存'" :aria-label="noteStore.autosaveEnabled ? '暂停自动保存' : '恢复自动保存'" @click="toggleAutosave">
               <svg v-if="noteStore.autosaveEnabled" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
               <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -357,8 +349,8 @@
       </div>
 
       <!-- Edit mode -->
-      <div v-else class="editor-area" :class="{ 'with-preview': previewVisible && !isMobile }">
-        <div class="editor-pane" :class="{ hidden: isMobile && previewVisible }">
+      <div v-else class="editor-area">
+        <div class="editor-pane">
           <div class="editor-statusbar">
             <div class="editor-status-group">
               <span class="editor-status-text">{{ autosaveStatusText }}</span>
@@ -383,23 +375,12 @@
               </div>
             </div>
           </div>
-          <textarea
-            ref="editorTextarea"
+          <RichMarkdownEditor
+            ref="richEditorRef"
             v-model="editorContent"
-            class="editor-textarea"
-            placeholder="# 从这里开始记录你的星光..."
-            @input="handleEditorInput"
-            @scroll="handleEditorScroll"
-          ></textarea>
-        </div>
-        <div
-          v-if="previewVisible"
-          ref="previewPaneRef"
-          class="preview-pane"
-          :class="{ 'mobile-full': isMobile }"
-          @scroll="handlePreviewScroll"
-        >
-          <div ref="previewMarkdownRef" class="markdown-body" v-html="livePreviewHtml"></div>
+            @update:model-value="handleEditorInput"
+            @active-anchor-change="handleEditorActiveAnchorChange"
+          />
         </div>
       </div>
     </main>
@@ -554,8 +535,7 @@ import { renderMarkdown, formatTime, parseOutline } from '@/utils/markdown'
 import {
   enhanceMarkdown,
   scrollMarkdownContainerToHash,
-  detectActiveHeadingAnchor,
-  detectActiveOutlineAnchorByEditor
+  detectActiveHeadingAnchor
 } from '@/utils/markdownEnhance'
 import { exportMarkdownAsDocx } from '@/utils/docxExport'
 import { downloadBlob, sanitizeFileName } from '@/utils/fileDownload'
@@ -568,6 +548,7 @@ import SettingsModal from '@/components/SettingsModal.vue'
 import SiteModal from '@/components/SiteModal.vue'
 import SearchModal from '@/components/SearchModal.vue'
 import MobileTreeBrowser from '@/components/MobileTreeBrowser.vue'
+import RichMarkdownEditor from '@/components/editor/RichMarkdownEditor.vue'
 import { findTreeNodeById, findTreePathById, summarizeTreeSubtree } from '@/utils/directoryTree'
 import { useSidebarWidth } from '@/utils/sidebarLayout'
 
@@ -580,7 +561,6 @@ const toast = useToastStore()
 
 const sidebarOpen = ref(false)
 const sidebarTab = ref('tree')
-const previewVisible = ref(true)
 const mobileActionsOpen = ref(false)
 const mobileTreePath = ref([])
 const mobileTrashPath = ref([])
@@ -615,11 +595,9 @@ const categoryActionState = ref({
 const editorTitle = ref('')
 const editorContent = ref('')
 const editorCategory = ref('')
-const editorTextarea = ref(null)
+const richEditorRef = ref(null)
 const viewerAreaRef = ref(null)
 const viewerMarkdownRef = ref(null)
-const previewPaneRef = ref(null)
-const previewMarkdownRef = ref(null)
 const nowTick = ref(Date.now())
 const saveInProgress = ref(false)
 const activeOutlineAnchor = ref('')
@@ -651,10 +629,6 @@ const {
 })
 let autosaveTimer = null
 let clockTimer = null
-let editorScrollSyncTimer = null
-let previewScrollSyncTimer = null
-let syncFromEditor = false
-let syncFromPreview = false
 let suppressNextHashScroll = false
 let noteContentLongPressTimer = null
 let noteContentLongPressStart = null
@@ -758,8 +732,6 @@ const renderedHtml = computed(() => {
   return renderMarkdown(noteStore.currentNote.markdownContent)
 })
 
-const livePreviewHtml = computed(() => renderMarkdown(editorContent.value))
-
 const outlineSource = computed(() => {
   if (noteStore.editMode) return editorContent.value
   return noteStore.currentNote?.markdownContent || ''
@@ -858,8 +830,6 @@ watch(() => noteStore.editMode, (mode) => {
 function markDirty() { noteStore.dirty = true }
 function handleEditorInput() { noteStore.dirty = true }
 
-function togglePreview() { previewVisible.value = !previewVisible.value }
-
 function normalizeHash(value) {
   return decodeURIComponent(String(value || '').replace(/^#/, '').trim())
 }
@@ -868,99 +838,20 @@ function getOutlineItemByAnchor(anchor) {
   return outlineItems.value.find(item => item.anchor === anchor) || null
 }
 
-function getScrollProgress(element) {
-  if (!element) return 0
-  const maxScrollTop = element.scrollHeight - element.clientHeight
-  if (maxScrollTop <= 0) return 0
-  return element.scrollTop / maxScrollTop
-}
-
-function setScrollProgress(element, progress) {
-  if (!element) return
-  const maxScrollTop = element.scrollHeight - element.clientHeight
-  element.scrollTop = maxScrollTop > 0 ? maxScrollTop * progress : 0
-}
-
-function releaseEditorSyncLock() {
-  clearTimeout(editorScrollSyncTimer)
-  editorScrollSyncTimer = setTimeout(() => {
-    syncFromPreview = false
-  }, 80)
-}
-
-function releasePreviewSyncLock() {
-  clearTimeout(previewScrollSyncTimer)
-  previewScrollSyncTimer = setTimeout(() => {
-    syncFromEditor = false
-  }, 80)
-}
-
-function syncPreviewToEditor() {
-  if (!noteStore.editMode || !previewVisible.value) return
-  const editor = editorTextarea.value
-  const preview = previewPaneRef.value
-  if (!editor || !preview) return
-  syncFromEditor = true
-  setScrollProgress(preview, getScrollProgress(editor))
-  releasePreviewSyncLock()
-}
-
-function syncEditorToPreview() {
-  if (!noteStore.editMode || !previewVisible.value) return
-  const editor = editorTextarea.value
-  const preview = previewPaneRef.value
-  if (!editor || !preview) return
-  syncFromPreview = true
-  setScrollProgress(editor, getScrollProgress(preview))
-  releaseEditorSyncLock()
-}
-
-function getLineOffset(text, lineNumber) {
-  const safeLineNumber = Math.max(1, Number(lineNumber) || 1)
-  let currentLine = 1
-  let offset = 0
-  const content = String(text || '')
-  while (currentLine < safeLineNumber && offset < content.length) {
-    const nextBreak = content.indexOf('\n', offset)
-    if (nextBreak < 0) {
-      return content.length
-    }
-    offset = nextBreak + 1
-    currentLine += 1
+async function scrollEditorToLine(lineNumber, { focus = false, behavior = 'smooth' } = {}) {
+  const outlineItem = outlineItems.value.find(item => item.line === lineNumber)
+  if (!outlineItem?.anchor || !richEditorRef.value?.scrollToHeading) {
+    return false
   }
-  return offset
-}
-
-function scrollEditorToLine(lineNumber, { focus = false, moveCursor = true, behavior = 'smooth' } = {}) {
-  const textarea = editorTextarea.value
-  if (!textarea || !lineNumber) return
-  const lineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight) || 24
-  const targetTop = Math.max((Number(lineNumber) - 1) * lineHeight - lineHeight * 2, 0)
-  syncFromPreview = true
-  textarea.scrollTo({ top: targetTop, behavior })
-  if (moveCursor) {
-    const selectionStart = getLineOffset(editorContent.value, lineNumber)
-    textarea.setSelectionRange(selectionStart, selectionStart)
-  }
+  const scrolled = await richEditorRef.value.scrollToHeading(outlineItem.anchor, { behavior })
   if (focus && !isMobile.value) {
-    textarea.focus()
+    richEditorRef.value.focus?.()
   }
-  releaseEditorSyncLock()
+  return Boolean(scrolled)
 }
 
-function handleEditorScroll() {
-  if (syncFromPreview) return
-  activeOutlineAnchor.value = detectActiveOutlineAnchorByEditor(editorTextarea.value, outlineItems.value)
-  syncPreviewToEditor()
-  if (previewVisible.value) {
-    activeOutlineAnchor.value = detectActiveHeadingAnchor(previewPaneRef.value)
-  }
-}
-
-function handlePreviewScroll() {
-  if (syncFromEditor) return
-  activeOutlineAnchor.value = detectActiveHeadingAnchor(previewPaneRef.value)
-  syncEditorToPreview()
+function handleEditorActiveAnchorChange(anchor) {
+  activeOutlineAnchor.value = anchor || ''
 }
 
 function handleViewerScroll() {
@@ -977,17 +868,12 @@ async function applyCurrentHashScroll(behavior = 'auto') {
   if (noteStore.editMode) {
     const outlineItem = getOutlineItemByAnchor(anchor)
     if (outlineItem) {
-      scrollEditorToLine(outlineItem.line, { moveCursor: false, behavior })
-      if (!previewVisible.value) {
-        return true
-      }
+      return scrollEditorToLine(outlineItem.line, { behavior })
     }
+    return false
   }
 
-  const container = noteStore.editMode && previewVisible.value
-    ? previewPaneRef.value
-    : viewerAreaRef.value
-
+  const container = viewerAreaRef.value
   if (!container) {
     return false
   }
@@ -1003,14 +889,6 @@ async function enhanceViewerContent() {
   if (!scrolled) {
     activeOutlineAnchor.value = detectActiveHeadingAnchor(viewerAreaRef.value)
   }
-}
-
-async function enhancePreviewContent() {
-  if (!noteStore.editMode || !previewVisible.value) return
-  await nextTick()
-  await enhanceMarkdown(previewMarkdownRef.value)
-  syncPreviewToEditor()
-  activeOutlineAnchor.value = detectActiveHeadingAnchor(previewPaneRef.value)
 }
 
 async function updateRouteHash(anchor, { suppressScroll = false } = {}) {
@@ -1031,10 +909,7 @@ async function handleOutlineSelect(item) {
   activeOutlineAnchor.value = item.anchor
 
   if (noteStore.editMode) {
-    scrollEditorToLine(item.line, { focus: true })
-    if (previewVisible.value) {
-      scrollMarkdownContainerToHash(previewPaneRef.value, item.anchor)
-    }
+    await scrollEditorToLine(item.line, { focus: true })
     return
   }
 
@@ -1121,7 +996,15 @@ function formatRelativeTime(value, currentTime) {
   return `${days} 天前`
 }
 
+function syncEditorContent() {
+  const markdown = richEditorRef.value?.getMarkdown?.()
+  if (markdown !== undefined) {
+    editorContent.value = markdown
+  }
+}
+
 function buildNotePayload() {
+  syncEditorContent()
   return {
     title: editorTitle.value,
     markdownContent: editorContent.value,
@@ -1829,7 +1712,6 @@ function handleResize() {
   if (wasMobile !== isMobile.value) {
     sidebarOpen.value = false
   }
-  if (!isMobile.value) previewVisible.value = true
   if (!isMobile.value) mobileActionsOpen.value = false
   syncMobileTreePathFromSelection()
   syncMobileTrashPathFromSelection()
@@ -1945,17 +1827,11 @@ watch([renderedHtml, () => themeStore.currentId], async () => {
   await enhanceViewerContent()
 }, { flush: 'post' })
 
-watch([livePreviewHtml, previewVisible, () => themeStore.currentId], async () => {
-  await enhancePreviewContent()
-}, { flush: 'post' })
-
-watch([() => noteStore.editMode, previewVisible], async () => {
+watch(() => noteStore.editMode, async () => {
   await nextTick()
-  if (noteStore.editMode) {
-    await enhancePreviewContent()
-    return
+  if (!noteStore.editMode) {
+    await enhanceViewerContent()
   }
-  await enhanceViewerContent()
 }, { flush: 'post' })
 
 onMounted(async () => {
@@ -1986,7 +1862,6 @@ onMounted(async () => {
     syncMobileTreePathFromSelection()
     syncMobileTrashPathFromSelection()
     await enhanceViewerContent()
-    await enhancePreviewContent()
   } catch {
     router.replace('/login')
   }
@@ -1999,8 +1874,6 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleContextKeydown)
   clearInterval(autosaveTimer)
   clearInterval(clockTimer)
-  clearTimeout(editorScrollSyncTimer)
-  clearTimeout(previewScrollSyncTimer)
   cancelViewerLongPress()
 })
 </script>
@@ -2503,9 +2376,6 @@ onUnmounted(() => {
   overflow: hidden;
   position: relative;
 }
-.editor-area.with-preview {
-  flex-direction: row;
-}
 .editor-pane {
   flex: 1;
   display: flex;
@@ -2513,7 +2383,6 @@ onUnmounted(() => {
   min-height: 0;
   overflow: hidden;
 }
-.editor-pane.hidden { display: none; }
 .editor-statusbar {
   display: flex;
   align-items: center;
@@ -2563,22 +2432,6 @@ onUnmounted(() => {
   color: var(--sl-text);
 }
 .editor-textarea::placeholder { color: var(--sl-text-tertiary); }
-.preview-pane {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 20px 24px;
-  border-left: 1px solid var(--sl-border);
-  background: var(--sl-bg);
-}
-.preview-pane.mobile-full {
-  border-left: none;
-  position: absolute;
-  inset: 0;
-  z-index: 10;
-  background: var(--sl-bg-secondary);
-}
-
 /* --- Mobile --- */
 .sidebar-toggle {
   position: fixed;
