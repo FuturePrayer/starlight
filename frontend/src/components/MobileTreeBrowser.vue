@@ -12,7 +12,7 @@
         </button>
         <div class="mobile-tree-browser__title">{{ currentTitle }}</div>
       </div>
-      <div class="mobile-tree-browser__crumbs" aria-label="当前目录路径">
+      <div ref="breadcrumbCrumbsRef" class="mobile-tree-browser__crumbs" aria-label="当前目录路径">
         <template
           v-for="(crumb, index) in visibleBreadcrumbs"
           :key="crumb.key"
@@ -27,6 +27,24 @@
             {{ crumb.label }}
           </button>
         </template>
+      </div>
+      <div ref="breadcrumbMeasureRef" class="mobile-tree-browser__breadcrumb-measure" aria-hidden="true">
+        <button
+          v-for="crumb in breadcrumbs"
+          :key="`measure-${crumb.key}`"
+          :class="['mobile-tree-browser__crumb', { active: crumb.path.length === path.length }]"
+          type="button"
+          tabindex="-1"
+          data-breadcrumb-measure
+        >
+          {{ crumb.label }}
+        </button>
+        <span
+          class="mobile-tree-browser__crumb mobile-tree-browser__crumb--ellipsis"
+          data-breadcrumb-ellipsis-measure
+        >
+          ...
+        </span>
       </div>
     </div>
 
@@ -131,7 +149,7 @@
 </template>
 
 <script setup>
-import { computed, onUnmounted } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { findTreeNodeById, getTreeItemsAtPath, getTreeNodeLabel } from '@/utils/directoryTree'
 
 const props = defineProps({
@@ -157,6 +175,11 @@ const emit = defineEmits(['navigate', 'select-note', 'select-category', 'row-con
 let longPressTimer = null
 let longPressStart = null
 let longPressTriggered = false
+let breadcrumbResizeObserver = null
+
+const breadcrumbCrumbsRef = ref(null)
+const breadcrumbMeasureRef = ref(null)
+const measuredTailCrumbCount = ref(normalizeTailCrumbCount(props.tailCrumbCount))
 
 const currentItems = computed(() => getTreeItemsAtPath(props.items, props.path))
 const currentTitle = computed(() => {
@@ -177,7 +200,11 @@ const breadcrumbs = computed(() => {
 })
 const visibleBreadcrumbs = computed(() => {
   const allCrumbs = breadcrumbs.value
-  const tailCount = Math.min(Math.max(Number(props.tailCrumbCount) || 1, 1), 3)
+  const tailCount = Math.min(
+    normalizeTailCrumbCount(measuredTailCrumbCount.value),
+    normalizeTailCrumbCount(props.tailCrumbCount),
+    Math.max(allCrumbs.length - 1, 1)
+  )
   if (allCrumbs.length <= tailCount + 1) {
     return allCrumbs
   }
@@ -188,6 +215,67 @@ const visibleBreadcrumbs = computed(() => {
   ]
 })
 const showPinnedSection = computed(() => !props.path.length && props.pinnedItems.length > 0)
+
+function normalizeTailCrumbCount(value) {
+  return Math.min(Math.max(Number(value) || 1, 1), 3)
+}
+
+function getFlexGap(element) {
+  if (!element || typeof window === 'undefined') return 0
+  const styles = window.getComputedStyle(element)
+  const gap = Number.parseFloat(styles.columnGap || styles.gap || '0')
+  return Number.isFinite(gap) ? gap : 0
+}
+
+function updateMeasuredTailCrumbCount() {
+  const allCrumbs = breadcrumbs.value
+  const maxTailCount = Math.min(
+    normalizeTailCrumbCount(props.tailCrumbCount),
+    Math.max(allCrumbs.length - 1, 1)
+  )
+  const crumbsElement = breadcrumbCrumbsRef.value
+  const measureElement = breadcrumbMeasureRef.value
+
+  if (!crumbsElement || !measureElement || allCrumbs.length <= 1) {
+    measuredTailCrumbCount.value = maxTailCount
+    return
+  }
+
+  const availableWidth = crumbsElement.clientWidth
+  const measuredCrumbs = Array.from(measureElement.querySelectorAll('[data-breadcrumb-measure]'))
+  const measuredEllipsis = measureElement.querySelector('[data-breadcrumb-ellipsis-measure]')
+  if (!availableWidth || measuredCrumbs.length < allCrumbs.length || !measuredEllipsis) {
+    measuredTailCrumbCount.value = maxTailCount
+    return
+  }
+
+  const widths = measuredCrumbs.map(element => element.offsetWidth)
+  const ellipsisWidth = measuredEllipsis.offsetWidth
+  const gap = getFlexGap(crumbsElement)
+  let nextTailCount = 1
+
+  for (let count = 1; count <= maxTailCount; count += 1) {
+    const hiddenTailStart = allCrumbs.length - count
+    const hasHiddenMiddle = hiddenTailStart > 1
+    const visibleCount = 1 + count + (hasHiddenMiddle ? 1 : 0)
+    const tailWidth = widths.slice(hiddenTailStart).reduce((sum, width) => sum + width, 0)
+    const candidateWidth = widths[0]
+      + tailWidth
+      + (hasHiddenMiddle ? ellipsisWidth : 0)
+      + (visibleCount > 1 ? gap * (visibleCount - 1) : 0)
+
+    if (candidateWidth <= availableWidth + 2) {
+      nextTailCount = count
+    }
+  }
+
+  measuredTailCrumbCount.value = nextTailCount
+}
+
+async function syncMeasuredTailCrumbCount() {
+  await nextTick()
+  updateMeasuredTailCrumbCount()
+}
 
 function isCategory(item) {
   return item?.type === 'category'
@@ -321,8 +409,28 @@ function handleBreadcrumbPath(path) {
   emit('navigate', nextPath)
 }
 
+watch(
+  [breadcrumbs, () => props.tailCrumbCount],
+  () => {
+    syncMeasuredTailCrumbCount()
+  },
+  { flush: 'post' }
+)
+
+onMounted(() => {
+  syncMeasuredTailCrumbCount()
+  if (typeof ResizeObserver !== 'undefined' && breadcrumbCrumbsRef.value) {
+    breadcrumbResizeObserver = new ResizeObserver(() => {
+      updateMeasuredTailCrumbCount()
+    })
+    breadcrumbResizeObserver.observe(breadcrumbCrumbsRef.value)
+  }
+})
+
 onUnmounted(() => {
   cancelLongPress()
+  breadcrumbResizeObserver?.disconnect()
+  breadcrumbResizeObserver = null
 })
 </script>
 
@@ -376,6 +484,17 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.mobile-tree-browser__breadcrumb-measure {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  display: flex;
+  gap: 6px;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .mobile-tree-browser__crumb {

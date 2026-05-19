@@ -672,12 +672,7 @@ const topbarTitle = computed(() => {
 
 const isDeletedNote = computed(() => Boolean(noteStore.currentNote?.deletedAt))
 
-const sidebarCrumbTailCount = computed(() => {
-  const availableWidth = isMobile.value ? viewportWidth.value : sidebarWidth.value
-  if (availableWidth < 330) return 1
-  if (availableWidth < 410) return 2
-  return 3
-})
+const sidebarCrumbTailCount = computed(() => 3)
 
 const contextMenuStyle = computed(() => ({
   left: `${contextMenuState.value.x}px`,
@@ -2128,6 +2123,7 @@ onUnmounted(() => {
   display: none;
 }
 .sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumbs) {
+  width: 100%;
   min-width: 0;
   flex-wrap: nowrap;
   gap: 0;
@@ -2152,10 +2148,6 @@ onUnmounted(() => {
 .sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumb.active) {
   color: var(--sl-text);
   background: var(--sl-hover-bg);
-}
-.sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumb.active) {
-  flex: 1 1 auto;
-  max-width: none;
 }
 .sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumb + .mobile-tree-browser__crumb)::before {
   content: '›';
@@ -2738,9 +2730,6 @@ onUnmounted(() => {
   }
   .sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumb) {
     max-width: 118px;
-  }
-  .sidebar-breadcrumb-browser :deep(.mobile-tree-browser__crumb.active) {
-    max-width: none;
   }
   .sidebar-breadcrumb-shell,
   .sidebar-breadcrumb-browser,
