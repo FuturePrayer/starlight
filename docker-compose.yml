@@ -1,6 +1,9 @@
 services:
   starlight:
-    image: ghcr.io/futureprayer/starlight:latest
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.compose
+    image: starlight:local
     container_name: starlight
     restart: unless-stopped
     ports:
