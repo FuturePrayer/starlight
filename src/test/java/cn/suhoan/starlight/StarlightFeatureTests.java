@@ -10,6 +10,8 @@ import cn.suhoan.starlight.entity.UserAccount;
 import cn.suhoan.starlight.entity.UserCredential;
 import cn.suhoan.starlight.repository.ApiKeyRepository;
 import cn.suhoan.starlight.repository.ApiKeyScopeRepository;
+import cn.suhoan.starlight.repository.AssetRepository;
+import cn.suhoan.starlight.repository.NoteAssetRefRepository;
 import jakarta.persistence.EntityManager;
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.server.transport.ServerTransportSecurityException;
@@ -17,6 +19,7 @@ import cn.suhoan.starlight.repository.NoteRepository;
 import cn.suhoan.starlight.repository.NoteShareRepository;
 import cn.suhoan.starlight.repository.UserCredentialRepository;
 import cn.suhoan.starlight.service.ApiKeyService;
+import cn.suhoan.starlight.service.AssetService;
 import cn.suhoan.starlight.service.AuthService;
 import cn.suhoan.starlight.service.McpAuthService;
 import cn.suhoan.starlight.service.McpNoteToolService;
@@ -117,6 +120,15 @@ class StarlightFeatureTests {
 
     @Autowired
     private ApiKeyScopeRepository apiKeyScopeRepository;
+
+    @Autowired
+    private AssetService assetService;
+
+    @Autowired
+    private AssetRepository assetRepository;
+
+    @Autowired
+    private NoteAssetRefRepository noteAssetRefRepository;
 
     @Test
     void firstUserBecomesAdminAndRegistrationDefaultsToDisabled() {
@@ -252,6 +264,60 @@ class StarlightFeatureTests {
                 .map(item -> noteService.getNoteDetail(importer.getId(), item.get("id").toString()))
                 .anyMatch(detail -> detail.get("markdownContent").toString().contains("GET /ping"));
         assertTrue(hasApiContent);
+    }
+
+    @Test
+    void uploadedAssetsTrackReferencesCleanupAndArchiveRoundTrip() throws Exception {
+        UserAccount owner = authService.register("asset-owner@example.com", "123456");
+        settingsService.setAssetUploadEnabled(true);
+        settingsService.setAssetCleanupGraceHours(0);
+        Note note = noteService.createNote(owner, "图片笔记", "# 图片笔记", null);
+
+        Map<String, Object> uploaded = assetService.importImageAsset(
+                owner,
+                "示例 图片.png",
+                pngBytes(),
+                "image/png",
+                note.getId()
+        );
+        String assetId = uploaded.get("id").toString();
+        assertEquals(1, noteAssetRefRepository.countByAssetId(assetId));
+
+        String markdown = "# 图片笔记\n\n![示例](" + uploaded.get("url") + ")";
+        noteService.updateNote(owner, note.getId(), "图片笔记", markdown, null);
+        assertEquals(1, noteAssetRefRepository.countByAssetId(assetId));
+
+        NoteTransferService.ArchivePayload payload = noteTransferService.exportArchive(owner.getId());
+        Map<String, byte[]> zipEntries = unzip(payload.content());
+        assertTrue(zipEntries.containsKey("assets/%E7%A4%BA%E4%BE%8B%20%E5%9B%BE%E7%89%87.png")
+                || zipEntries.containsKey("assets/示例 图片.png"));
+        String exportedMarkdown = new String(zipEntries.get("图片笔记.md"), StandardCharsets.UTF_8);
+        assertTrue(exportedMarkdown.contains("assets/%E7%A4%BA%E4%BE%8B%20%E5%9B%BE%E7%89%87.png"));
+
+        noteService.updateNote(owner, note.getId(), "图片笔记", "# 图片笔记\n\n已删除图片", null);
+        assertEquals(0, noteAssetRefRepository.countByAssetId(assetId));
+        AssetService.CleanupResult cleanupResult = assetService.cleanupUnreferenced(owner, false, "self");
+        assertEquals(1, cleanupResult.count());
+        assertTrue(assetRepository.findById(assetId).orElseThrow().getDeletedAt() != null);
+
+        settingsService.setRegistrationEnabled(true);
+        UserAccount importer = authService.register("asset-importer@example.com", "123456");
+        MockMultipartFile zipFile = new MockMultipartFile(
+                "file",
+                payload.fileName(),
+                "application/zip",
+                payload.content()
+        );
+        noteTransferService.importArchive(importer, zipFile);
+        Map<String, Object> importedNote = noteService.listUserNotes(importer.getId()).stream()
+                .map(item -> noteService.getNoteDetail(importer.getId(), item.get("id").toString()))
+                .filter(detail -> "图片笔记".equals(detail.get("title")))
+                .findFirst()
+                .orElseThrow();
+        String importedMarkdown = importedNote.get("markdownContent").toString();
+        assertTrue(importedMarkdown.contains("/api/assets/"));
+        String importedAssetId = AssetService.extractAssetIdsFromMarkdown(importedMarkdown).iterator().next();
+        assertEquals(1, noteAssetRefRepository.countByAssetId(importedAssetId));
     }
 
     @Test
@@ -717,6 +783,28 @@ class StarlightFeatureTests {
             zipOutputStream.finish();
             return outputStream.toByteArray();
         }
+    }
+
+    private Map<String, byte[]> unzip(byte[] content) throws IOException {
+        Map<String, byte[]> entries = new java.util.HashMap<>();
+        try (ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(content), StandardCharsets.UTF_8)) {
+            var entry = zipInputStream.getNextEntry();
+            while (entry != null) {
+                if (!entry.isDirectory()) {
+                    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                    zipInputStream.transferTo(outputStream);
+                    entries.put(entry.getName(), outputStream.toByteArray());
+                }
+                entry = zipInputStream.getNextEntry();
+            }
+        }
+        return entries;
+    }
+
+    private byte[] pngBytes() {
+        return Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+        );
     }
 
     @SuppressWarnings("unchecked")

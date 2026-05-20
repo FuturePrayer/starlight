@@ -19,6 +19,7 @@ Starlight 是一个基于 **Spring Boot 4 + Vue 3** 的 Markdown 笔记系统，
 - 🌲 无限级分类树、根目录笔记、置顶与回收站
 - 🔎 标题与正文全文搜索
 - 📦 ZIP 导入 / 导出（Markdown + 文件夹结构）
+- 🖼️ 图片上传与资产管理：默认关闭，管理员可开启本地或 S3 兼容存储
 - 🧬 Git 仓库导入：分支选择、目录筛选、重导入覆盖、自动同步与同步记录
 - 🔗 公开分享、密码分享、过期时间、二维码
 - 🌌 星迹书阁：把分类发布为只读公开站点
@@ -129,7 +130,27 @@ mvn spring-boot:run
 | `STARLIGHT_DATASOURCE_PASSWORD` | 空 | 数据库密码 |
 | `STARLIGHT_NOTE_TRASH_RETENTION_DAYS` | `30` | 回收站保留天数 |
 | `STARLIGHT_NOTE_TRASH_CLEANUP_CRON` | `0 20 3 * * *` | 回收站清理计划 |
+| `STARLIGHT_ASSETS_MAX_FILE_SIZE` | `10485760` | 图片上传单文件大小上限，默认 10 MiB |
+| `STARLIGHT_ASSETS_ALLOWED_TYPES` | `image/png,image/jpeg,image/webp,image/gif,image/avif` | 允许上传的图片 MIME 类型 |
+| `STARLIGHT_ASSETS_LOCAL_ROOT` | `./data/assets` | 本地图片资产存储目录 |
+| `STARLIGHT_ASSETS_S3_BUCKET` | 空 | S3 / 兼容 S3 存储桶；为空时管理员不能选择 S3 |
+| `STARLIGHT_ASSETS_S3_REGION` | `cn-east-2` | S3 区域 |
+| `STARLIGHT_ASSETS_S3_ENDPOINT` | 空 | S3 兼容服务端点，例如 SeaweedFS / MinIO |
+| `STARLIGHT_ASSETS_S3_ACCESS_KEY` | 空 | S3 Access Key |
+| `STARLIGHT_ASSETS_S3_SECRET_KEY` | 空 | S3 Secret Key |
+| `STARLIGHT_ASSETS_S3_PATH_STYLE_ACCESS` | `false` | 是否使用 path-style S3 访问 |
+| `STARLIGHT_ASSETS_S3_PREFIX` | `assets` | S3 对象 key 前缀 |
 | `JAVA_OPTS` | 空 | JVM 启动参数（容器场景常用） |
+
+### 图片上传与资产管理
+
+- 图片上传默认关闭；关闭时编辑器仍可插入外部图片链接。
+- 管理员可在 **设置中心 - 管理员 - 图片上传** 中开启上传，并选择本地存储或 S3 / 兼容 S3 存储。
+- S3 凭证和存储桶只能通过启动环境变量配置；如果启动时未配置完整 S3 信息，管理界面只能选择本地存储。
+- 管理员可配置非管理员用户的图片总容量上限；管理员账号不受该上限限制，但用量仍会被统计。
+- 所有用户都可以在 **设置中心 - 图片资产** 查看自己的已用容量、无引用容量，并手动清理自己的无引用资产；管理员还可以查看或清理自己/全站范围。
+- 笔记保存时会根据 Markdown 内容重建图片引用关系；从源码中删除图片链接后，该图片会变为无引用资产，超过清理宽限期后可被清理任务删除。
+- 配置站点 URL 后，图片内容请求会校验 `Referer` 来源，降低带 token 图片地址被外站直接引用的风险。
 
 ### 数据库支持
 

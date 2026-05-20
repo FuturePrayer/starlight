@@ -19,6 +19,7 @@ Starlight is a **Spring Boot 4 + Vue 3** Markdown note-taking application with c
 - 🌲 Unlimited category tree, root-level notes, pinning, and trash
 - 🔎 Full-text search across titles and note content
 - 📦 ZIP import / export with Markdown + folder structure
+- 🖼️ Image uploads and asset management: disabled by default, with admin-controlled local or S3-compatible storage
 - 🧬 Git repository import with branch selection, directory filtering, overwrite reimport, auto-sync, and sync history
 - 🔗 Public share links, password-protected shares, expiration, and QR codes
 - 🌌 Starlight Site: publish a category as a read-only public website
@@ -129,7 +130,27 @@ Default runtime settings live in `src/main/resources/application.yaml`.
 | `STARLIGHT_DATASOURCE_PASSWORD` | empty | Database password |
 | `STARLIGHT_NOTE_TRASH_RETENTION_DAYS` | `30` | Trash retention period in days |
 | `STARLIGHT_NOTE_TRASH_CLEANUP_CRON` | `0 20 3 * * *` | Trash cleanup cron |
+| `STARLIGHT_ASSETS_MAX_FILE_SIZE` | `10485760` | Per-image upload limit, 10 MiB by default |
+| `STARLIGHT_ASSETS_ALLOWED_TYPES` | `image/png,image/jpeg,image/webp,image/gif,image/avif` | Allowed image MIME types |
+| `STARLIGHT_ASSETS_LOCAL_ROOT` | `./data/assets` | Local image asset storage directory |
+| `STARLIGHT_ASSETS_S3_BUCKET` | empty | S3 / S3-compatible bucket; when empty, admins cannot select S3 |
+| `STARLIGHT_ASSETS_S3_REGION` | `cn-east-2` | S3 region |
+| `STARLIGHT_ASSETS_S3_ENDPOINT` | empty | S3-compatible endpoint, such as SeaweedFS or MinIO |
+| `STARLIGHT_ASSETS_S3_ACCESS_KEY` | empty | S3 access key |
+| `STARLIGHT_ASSETS_S3_SECRET_KEY` | empty | S3 secret key |
+| `STARLIGHT_ASSETS_S3_PATH_STYLE_ACCESS` | `false` | Whether to use path-style S3 access |
+| `STARLIGHT_ASSETS_S3_PREFIX` | `assets` | S3 object key prefix |
 | `JAVA_OPTS` | empty | JVM startup options, useful in containers |
+
+### Image uploads and asset management
+
+- Image uploads are disabled by default. When disabled, the editor still allows users to insert external image URLs.
+- Administrators can enable uploads in **Settings - Admin - Image uploads** and choose either local storage or S3 / S3-compatible storage.
+- S3 credentials and bucket settings are startup configuration only. If complete S3 settings are not provided at startup, the admin UI only allows local storage.
+- Administrators can configure the total image quota for non-admin users. Admin accounts are exempt from that quota, but their usage is still tracked.
+- All users can view their own used capacity and unreferenced capacity in **Settings - Image assets**, and can manually clean their own unreferenced assets. Admins can also view or clean either their own assets or all users' assets.
+- Note saves rebuild image references from the current Markdown content. If a user removes an uploaded image link from the raw Markdown, that image becomes unreferenced and can be deleted by cleanup after the configured grace period.
+- When a site URL is configured, image content requests validate the `Referer` origin to reduce direct hotlinking of tokenized image URLs from other sites.
 
 ### Database support
 

@@ -197,6 +197,92 @@
           </div>
         </div>
 
+        <div v-else-if="currentTab === 'assets'" class="settings-panel">
+          <div class="settings-panel__header">
+            <h3>图片资产</h3>
+            <p>查看已上传图片占用，并清理不再被笔记引用的图片。</p>
+          </div>
+
+          <section class="settings-section-card">
+            <div class="settings-section-card__header">
+              <div>
+                <h4>我的用量</h4>
+                <p>{{ assetSettings.uploadEnabled ? `当前使用 ${assetProviderLabel} 存储` : '管理员尚未开启上传，仍可在编辑器中插入图片链接。' }}</p>
+              </div>
+              <button class="sl-btn sl-btn--ghost sl-btn--sm" :disabled="assetUsageLoading" @click="loadAssetState">
+                {{ assetUsageLoading ? '刷新中...' : '刷新' }}
+              </button>
+            </div>
+            <div class="asset-upload-status" :class="{ 'asset-upload-status--enabled': assetSettings.uploadEnabled }">
+              <span class="asset-upload-status__dot" aria-hidden="true"></span>
+              <span>管理员{{ assetSettings.uploadEnabled ? '已开启' : '未开启' }}图片上传</span>
+            </div>
+            <div class="asset-metric-grid">
+              <div class="asset-metric">
+                <span class="asset-metric__label">已用容量</span>
+                <strong>{{ formatBytes(assetUsage.usedBytes) }}</strong>
+              </div>
+              <div class="asset-metric">
+                <span class="asset-metric__label">无引用容量</span>
+                <strong>{{ formatBytes(assetUsage.unreferencedBytes) }}</strong>
+              </div>
+              <div class="asset-metric">
+                <span class="asset-metric__label">容量上限</span>
+                <strong>{{ assetUsage.quotaBytes == null ? '不限' : formatBytes(assetUsage.quotaBytes) }}</strong>
+              </div>
+            </div>
+            <div v-if="assetUsage.quotaBytes" class="asset-meter" aria-hidden="true">
+              <span :style="{ width: assetUsagePercent }"></span>
+            </div>
+          </section>
+
+          <section class="settings-section-card">
+            <div class="settings-section-card__header">
+              <div>
+                <h4>无引用资产清理</h4>
+                <p>清理前会先统计数量与体积，确认后再删除实际文件。</p>
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button class="sl-btn sl-btn--danger" :disabled="assetCleanupBusy" @click="handleAssetCleanup('self')">
+                {{ assetCleanupBusy ? '检查中...' : '清理我的无引用资产' }}
+              </button>
+            </div>
+          </section>
+
+          <section v-if="authStore.isAdmin" class="settings-section-card">
+            <div class="settings-section-card__header">
+              <div>
+                <h4>管理员视图</h4>
+                <p>可查看或清理自己的资产，也可以切换到全站范围。</p>
+              </div>
+              <select v-model="adminAssetScope" class="sl-select asset-scope-select" @change="loadAdminAssetUsage">
+                <option value="self">仅我</option>
+                <option value="all">全部用户</option>
+              </select>
+            </div>
+            <div class="asset-metric-grid">
+              <div class="asset-metric">
+                <span class="asset-metric__label">已用容量</span>
+                <strong>{{ formatBytes(adminAssetUsage.usedBytes) }}</strong>
+              </div>
+              <div class="asset-metric">
+                <span class="asset-metric__label">无引用容量</span>
+                <strong>{{ formatBytes(adminAssetUsage.unreferencedBytes) }}</strong>
+              </div>
+              <div class="asset-metric">
+                <span class="asset-metric__label">范围</span>
+                <strong>{{ adminAssetScope === 'all' ? '全站' : '仅我' }}</strong>
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button class="sl-btn sl-btn--danger" :disabled="adminAssetCleanupBusy" @click="handleAssetCleanup(adminAssetScope, true)">
+                {{ adminAssetCleanupBusy ? '检查中...' : '清理当前范围' }}
+              </button>
+            </div>
+          </section>
+        </div>
+
         <div v-else-if="currentTab === 'admin'" class="settings-panel">
           <div class="settings-panel__header">
             <h3>管理员设置</h3>
@@ -252,6 +338,50 @@
               <div class="field-hint">0 或负数表示不限制。建议根据服务器性能设置一个较小值，防止恶意导入造成压力。</div>
             </div>
           </div>
+
+          <section class="settings-section-card asset-admin-card">
+            <div class="settings-section-card__header">
+              <div>
+                <h4>图片上传</h4>
+                <p>上传开关关闭时，编辑器只允许插入外部图片链接。</p>
+              </div>
+              <span class="sl-badge">{{ assetS3Available ? 'S3 已配置' : '仅本地存储' }}</span>
+            </div>
+            <div class="settings-form-grid">
+              <div class="form-field settings-form-field">
+                <label class="sl-label">上传开关</label>
+                <label class="sl-switch-row">
+                  <input v-model="adminForm.assetUploadEnabled" type="checkbox" />
+                  <span>{{ adminForm.assetUploadEnabled ? '已开启' : '已关闭' }}</span>
+                </label>
+              </div>
+              <div class="form-field settings-form-field">
+                <label class="sl-label">存储后端</label>
+                <select v-model="adminForm.assetStorageProvider" class="sl-select">
+                  <option value="local">本地</option>
+                  <option value="s3" :disabled="!assetS3Available">S3 / 兼容 S3</option>
+                </select>
+                <div v-if="!assetS3Available" class="field-hint">启动时未配置 S3，当前只能保存到本地。</div>
+              </div>
+              <div class="form-field settings-form-field">
+                <label class="sl-label">非管理员总额度（MiB）</label>
+                <input v-model.number="assetQuotaMiB" class="sl-input" type="number" min="0" />
+                <div class="field-hint">0 表示不限制；管理员不受此额度限制。</div>
+              </div>
+              <div class="form-field settings-form-field">
+                <label class="sl-label">清理宽限期（小时）</label>
+                <input v-model.number="adminForm.assetCleanupGraceHours" class="sl-input" type="number" min="0" />
+                <div class="field-hint">图片从笔记中移除后，超过该时间才会被清理任务删除。</div>
+              </div>
+              <div class="form-field settings-form-field settings-form-field--full">
+                <label class="sl-label">访问来源校验</label>
+                <div class="field-hint">
+                  {{ adminForm.shareBaseUrl ? '已配置站点 URL，图片内容请求会校验 Referer 来源。' : '未配置站点 URL，图片内容请求不校验 Referer。' }}
+                </div>
+              </div>
+            </div>
+          </section>
+
           <div class="settings-actions">
             <button class="sl-btn sl-btn--primary" :disabled="adminSaving" @click="handleAdminSave">
               {{ adminSaving ? '保存中...' : '保存管理员设置' }}
@@ -503,7 +633,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { adminApi, apiKeyApi, authApi, base64urlToBuffer, bufferToBase64url } from '@/api'
+import { adminApi, apiKeyApi, assetApi, authApi, base64urlToBuffer, bufferToBase64url } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useToastStore } from '@/stores/toast'
@@ -524,6 +654,8 @@ const props = defineProps({
   }
 })
 
+defineEmits(['close'])
+
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
 const toast = useToastStore()
@@ -537,10 +669,11 @@ const navItems = computed(() => {
   const items = [
     { id: 'profile', title: '个人资料', desc: '昵称、密码' },
     { id: 'security', title: '安全设置', desc: 'TOTP、通行密钥' },
-    { id: 'apiKeys', title: 'API Key', desc: '集成权限与目录范围' }
+    { id: 'apiKeys', title: 'API Key', desc: '集成权限与目录范围' },
+    { id: 'assets', title: '图片资产', desc: '容量、清理' }
   ]
   if (authStore.isAdmin) {
-    items.push({ id: 'admin', title: '管理员', desc: '注册、MCP、Git 导入' })
+    items.push({ id: 'admin', title: '管理员', desc: '注册、安全、上传' })
   }
   return items
 })
@@ -604,9 +737,56 @@ const adminForm = ref({
   passkeyEnabled: false,
   mcpEnabled: false,
   gitImportEnabled: false,
-  gitImportMaxConcurrent: 2
+  gitImportMaxConcurrent: 2,
+  assetUploadEnabled: false,
+  assetStorageProvider: 'local',
+  assetUserQuotaBytes: 104857600,
+  assetCleanupGraceHours: 168
 })
 const showMcpInfoModal = ref(false)
+const assetSettings = ref({
+  uploadEnabled: false,
+  storageProvider: 'local',
+  s3Available: false,
+  userQuotaBytes: 104857600,
+  cleanupGraceHours: 168
+})
+const assetUsage = ref({
+  usedBytes: 0,
+  unreferencedBytes: 0,
+  quotaBytes: null
+})
+const adminAssetUsage = ref({
+  usedBytes: 0,
+  unreferencedBytes: 0,
+  quotaBytes: null
+})
+const assetUsageLoading = ref(false)
+const assetCleanupBusy = ref(false)
+const adminAssetCleanupBusy = ref(false)
+const adminAssetScope = ref('self')
+const assetS3Available = ref(false)
+
+const assetProviderLabel = computed(() => {
+  return assetSettings.value.storageProvider === 's3' ? 'S3 / 兼容 S3' : '本地'
+})
+
+const assetUsagePercent = computed(() => {
+  const quota = Number(assetUsage.value.quotaBytes || 0)
+  if (!quota) return '0%'
+  const used = Number(assetUsage.value.usedBytes || 0)
+  return `${Math.min(100, Math.max(0, (used / quota) * 100)).toFixed(2)}%`
+})
+
+const assetQuotaMiB = computed({
+  get() {
+    return Math.round(Number(adminForm.value.assetUserQuotaBytes || 0) / 1024 / 1024)
+  },
+  set(value) {
+    const numberValue = Math.max(0, Number(value || 0))
+    adminForm.value.assetUserQuotaBytes = Math.round(numberValue * 1024 * 1024)
+  }
+})
 
 const mcpTools = [
   {
@@ -679,7 +859,8 @@ onMounted(async () => {
     loadThemeOptions(),
     loadSecurityState(),
     loadApiKeys(),
-    loadAdminSettings()
+    loadAdminSettings(),
+    loadAssetState()
   ])
 })
 
@@ -747,20 +928,70 @@ async function loadAdminSettings() {
   if (!authStore.isAdmin) return
   try {
     const settings = await adminApi.getSettings()
-    adminForm.value = {
-      registrationEnabled: Boolean(settings.registrationEnabled),
-      shareBaseUrl: settings.shareBaseUrl || '',
-      totpEnabled: Boolean(settings.totpEnabled),
-      passkeyEnabled: Boolean(settings.passkeyEnabled),
-      mcpEnabled: Boolean(settings.mcpEnabled),
-      gitImportEnabled: Boolean(settings.gitImportEnabled),
-      gitImportMaxConcurrent: Number(settings.gitImportMaxConcurrent ?? 2)
-    }
+    applyAdminSettings(settings)
     siteUrlHttps.value = Boolean(settings.siteUrlHttps)
     totpGlobalEnabled.value = Boolean(settings.totpEnabled)
     passkeyGlobalEnabled.value = Boolean(settings.passkeyEnabled)
+    assetS3Available.value = Boolean(settings.assetS3Available)
+    await loadAdminAssetUsage()
   } catch (err) {
     toast.error(err.message)
+  }
+}
+
+async function loadAssetState() {
+  assetUsageLoading.value = true
+  try {
+    const [settings, usage] = await Promise.all([
+      assetApi.settings(),
+      assetApi.usage()
+    ])
+    assetSettings.value = {
+      uploadEnabled: Boolean(settings.uploadEnabled),
+      storageProvider: settings.storageProvider || 'local',
+      s3Available: Boolean(settings.s3Available),
+      userQuotaBytes: Number(settings.userQuotaBytes ?? 104857600),
+      cleanupGraceHours: Number(settings.cleanupGraceHours ?? 168)
+    }
+    assetUsage.value = normalizeUsage(usage)
+  } catch (err) {
+    toast.error(err.message || '图片资产状态加载失败')
+  } finally {
+    assetUsageLoading.value = false
+  }
+}
+
+async function loadAdminAssetUsage() {
+  if (!authStore.isAdmin) return
+  try {
+    adminAssetUsage.value = normalizeUsage(await assetApi.adminUsage(adminAssetScope.value))
+  } catch (err) {
+    toast.error(err.message || '管理员资产用量加载失败')
+  }
+}
+
+function normalizeUsage(usage = {}) {
+  return {
+    usedBytes: Number(usage.usedBytes || 0),
+    unreferencedBytes: Number(usage.unreferencedBytes || 0),
+    quotaBytes: usage.quotaBytes == null ? null : Number(usage.quotaBytes || 0),
+    scope: usage.scope || 'self'
+  }
+}
+
+function applyAdminSettings(settings = {}) {
+  adminForm.value = {
+    registrationEnabled: Boolean(settings.registrationEnabled),
+    shareBaseUrl: settings.shareBaseUrl || '',
+    totpEnabled: Boolean(settings.totpEnabled),
+    passkeyEnabled: Boolean(settings.passkeyEnabled),
+    mcpEnabled: Boolean(settings.mcpEnabled),
+    gitImportEnabled: Boolean(settings.gitImportEnabled),
+    gitImportMaxConcurrent: Number(settings.gitImportMaxConcurrent ?? 2),
+    assetUploadEnabled: Boolean(settings.assetUploadEnabled),
+    assetStorageProvider: settings.assetStorageProvider || 'local',
+    assetUserQuotaBytes: Number(settings.assetUserQuotaBytes ?? 104857600),
+    assetCleanupGraceHours: Number(settings.assetCleanupGraceHours ?? 168)
   }
 }
 
@@ -1090,25 +1321,64 @@ async function handleAdminSave() {
       adminForm.value.passkeyEnabled = false
       return
     }
-    const saved = await adminApi.saveSettings({ ...adminForm.value })
-    adminForm.value = {
-      registrationEnabled: Boolean(saved.registrationEnabled),
-      shareBaseUrl: saved.shareBaseUrl || '',
-      totpEnabled: Boolean(saved.totpEnabled),
-      passkeyEnabled: Boolean(saved.passkeyEnabled),
-      mcpEnabled: Boolean(saved.mcpEnabled),
-      gitImportEnabled: Boolean(saved.gitImportEnabled),
-      gitImportMaxConcurrent: Number(saved.gitImportMaxConcurrent ?? 2)
+    if (adminForm.value.assetStorageProvider === 's3' && !assetS3Available.value) {
+      adminForm.value.assetStorageProvider = 'local'
     }
+    adminForm.value.assetUserQuotaBytes = Math.max(0, Math.round(Number(adminForm.value.assetUserQuotaBytes || 0)))
+    adminForm.value.assetCleanupGraceHours = Math.max(0, Math.round(Number(adminForm.value.assetCleanupGraceHours || 0)))
+    const saved = await adminApi.saveSettings({ ...adminForm.value })
+    applyAdminSettings(saved)
     siteUrlHttps.value = Boolean(saved.siteUrlHttps)
     passkeyGlobalEnabled.value = Boolean(saved.passkeyEnabled)
     totpGlobalEnabled.value = Boolean(saved.totpEnabled)
+    assetS3Available.value = Boolean(saved.assetS3Available)
+    await loadAssetState()
+    await loadAdminAssetUsage()
     toast.success('管理员设置已保存')
   } catch (err) {
     toast.error(err.message)
   } finally {
     adminSaving.value = false
   }
+}
+
+async function handleAssetCleanup(scope = 'self', admin = false) {
+  const busyRef = admin ? adminAssetCleanupBusy : assetCleanupBusy
+  busyRef.value = true
+  try {
+    const preview = admin
+      ? await assetApi.adminCleanup({ dryRun: true, scope })
+      : await assetApi.cleanup({ dryRun: true, scope: 'self' })
+    if (!preview.count) {
+      toast.info('当前没有可清理的无引用资产')
+      return
+    }
+    const scopeText = admin && scope === 'all' ? '全部用户' : '当前账号'
+    confirmState.value = {
+      visible: true,
+      message: `将清理${scopeText} ${preview.count} 个无引用资产，释放 ${formatBytes(preview.bytes)}。确定继续？`,
+      callback: async () => {
+        const result = admin
+          ? await assetApi.adminCleanup({ dryRun: false, scope })
+          : await assetApi.cleanup({ dryRun: false, scope: 'self' })
+        toast.success(`已清理 ${result.count} 个图片资产`)
+        await loadAssetState()
+        await loadAdminAssetUsage()
+      }
+    }
+  } catch (err) {
+    toast.error(err.message || '清理任务执行失败')
+  } finally {
+    busyRef.value = false
+  }
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes || 0)
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`
+  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MiB`
+  return `${(value / 1024 / 1024 / 1024).toFixed(1)} GiB`
 }
 
 function copyText(text, { silent = false } = {}) {
@@ -1277,6 +1547,76 @@ function handlePromptOk() {
   color: var(--sl-success);
   font-weight: 600;
   margin-bottom: 10px;
+}
+.asset-admin-card {
+  margin-top: 4px;
+}
+.asset-upload-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 7px 10px;
+  border: 1px solid var(--sl-border);
+  border-radius: var(--sl-radius);
+  background: var(--sl-card);
+  color: var(--sl-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.asset-upload-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--sl-text-tertiary);
+}
+.asset-upload-status--enabled {
+  border-color: color-mix(in srgb, var(--sl-success) 35%, var(--sl-border));
+  background: color-mix(in srgb, var(--sl-success) 10%, var(--sl-card));
+  color: var(--sl-success);
+}
+.asset-upload-status--enabled .asset-upload-status__dot {
+  background: var(--sl-success);
+}
+.asset-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.asset-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--sl-border);
+  border-radius: var(--sl-radius);
+  background: var(--sl-card);
+}
+.asset-metric__label {
+  font-size: 12px;
+  color: var(--sl-text-tertiary);
+}
+.asset-metric strong {
+  color: var(--sl-text);
+  font-size: 16px;
+}
+.asset-meter {
+  height: 8px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sl-bg);
+  border: 1px solid var(--sl-border);
+}
+.asset-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sl-primary);
+}
+.asset-scope-select {
+  width: 150px;
 }
 .qr-container {
   text-align: center;
@@ -1561,7 +1901,8 @@ function handlePromptOk() {
     grid-template-columns: 1fr;
   }
   .mcp-summary-grid,
-  .mcp-tool-list {
+  .mcp-tool-list,
+  .asset-metric-grid {
     grid-template-columns: 1fr;
   }
   .settings-nav {

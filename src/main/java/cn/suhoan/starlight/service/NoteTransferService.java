@@ -1,5 +1,6 @@
 package cn.suhoan.starlight.service;
 
+import cn.suhoan.starlight.entity.Asset;
 import cn.suhoan.starlight.entity.Category;
 import cn.suhoan.starlight.entity.Note;
 import cn.suhoan.starlight.entity.UserAccount;
@@ -25,6 +26,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipInputStream;
@@ -43,6 +46,8 @@ public class NoteTransferService {
 
     private static final Logger log = LoggerFactory.getLogger(NoteTransferService.class);
     private static final DateTimeFormatter FILE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    private static final Pattern ASSET_URL_PATTERN = Pattern.compile("/api/assets/([0-9a-fA-F-]{36})/content(?:\\?[^\\s)\"']*)?");
+    private static final Pattern MARKDOWN_IMAGE_URL_PATTERN = Pattern.compile("(!\\[[^\\]]*]\\()([^\\s)]+)((?:\\s+\"[^\"]*\")?\\))");
     private static final Set<String> WINDOWS_RESERVED_NAMES = Set.of(
             "CON", "PRN", "AUX", "NUL",
             "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
@@ -52,13 +57,19 @@ public class NoteTransferService {
     private final NoteRepository noteRepository;
     private final CategoryRepository categoryRepository;
     private final NoteService noteService;
+    private final AssetService assetService;
+    private final SettingsService settingsService;
 
     public NoteTransferService(NoteRepository noteRepository,
                                CategoryRepository categoryRepository,
-                               NoteService noteService) {
+                               NoteService noteService,
+                               AssetService assetService,
+                               SettingsService settingsService) {
         this.noteRepository = noteRepository;
         this.categoryRepository = categoryRepository;
         this.noteService = noteService;
+        this.assetService = assetService;
+        this.settingsService = settingsService;
     }
 
     /**
@@ -88,12 +99,14 @@ public class NoteTransferService {
 
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
              ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream, StandardCharsets.UTF_8)) {
+            ExportAssetContext assetContext = new ExportAssetContext(ownerId);
             ExportStat stat = writeDirectoryContents(
                     zipOutputStream,
                     "",
                     childCategories,
                     notesByCategory,
-                    ROOT_KEY
+                    ROOT_KEY,
+                    assetContext
             );
             zipOutputStream.finish();
             byte[] bytes = outputStream.toByteArray();
@@ -142,12 +155,14 @@ public class NoteTransferService {
         String safeRootName = sanitizePathSegment(rootCategory.getName(), "未命名分类");
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
              ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream, StandardCharsets.UTF_8)) {
+            ExportAssetContext assetContext = new ExportAssetContext(ownerId);
             ExportStat nestedStat = writeDirectoryContents(
                     zipOutputStream,
                     "",
                     childCategories,
                     notesByCategory,
-                    rootCategory.getId()
+                    rootCategory.getId(),
+                    assetContext
             );
             zipOutputStream.finish();
             byte[] bytes = outputStream.toByteArray();
@@ -180,6 +195,7 @@ public class NoteTransferService {
         if (parsedArchive.directories().isEmpty() && parsedArchive.noteEntries().isEmpty()) {
             throw new IllegalArgumentException("ZIP 包中未找到可导入的 Markdown 文件或目录");
         }
+        boolean importAssets = settingsService.isAssetUploadEnabled();
 
         List<Category> existingCategories = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(owner.getId());
         Map<String, Category> categoryByRelation = new HashMap<>();
@@ -203,7 +219,13 @@ public class NoteTransferService {
 
             String title = resolveImportedNoteTitle(noteEntry.fileName());
             String categoryId = categoryResult.lastCategory() == null ? null : categoryResult.lastCategory().getId();
-            noteService.createNote(owner, title, noteEntry.markdownContent(), categoryId);
+            Note note = noteService.createNote(owner, title, noteEntry.markdownContent(), categoryId);
+            if (importAssets && !parsedArchive.binaryEntries().isEmpty()) {
+                String rewrittenMarkdown = importArchiveAssets(owner, note, noteEntry, parsedArchive.binaryEntries());
+                if (!rewrittenMarkdown.equals(noteEntry.markdownContent())) {
+                    noteService.updateNote(owner, note.getId(), title, rewrittenMarkdown, categoryId);
+                }
+            }
             createdNoteCount++;
         }
 
@@ -232,7 +254,8 @@ public class NoteTransferService {
                                               String parentPath,
                                               Map<String, List<Category>> childCategories,
                                               Map<String, List<Note>> notesByCategory,
-                                              String parentId) throws IOException {
+                                              String parentId,
+                                              ExportAssetContext assetContext) throws IOException {
         int categoryCount = 0;
         int noteCount = 0;
 
@@ -252,7 +275,8 @@ public class NoteTransferService {
                     directoryPath,
                     childCategories,
                     notesByCategory,
-                    category.getId()
+                    category.getId(),
+                    assetContext
             );
             categoryCount += nestedStat.categoryCount();
             noteCount += nestedStat.noteCount();
@@ -265,7 +289,8 @@ public class NoteTransferService {
         NameAllocator fileNameAllocator = new NameAllocator();
         for (Note note : directoryNotes) {
             String safeFileBaseName = fileNameAllocator.allocate(sanitizePathSegment(note.getTitle(), "未命名笔记"));
-            putTextEntry(zipOutputStream, parentPath + safeFileBaseName + ".md", note.getMarkdownContent());
+            String markdown = rewriteAssetLinksForExport(zipOutputStream, note, parentPath, assetContext);
+            putTextEntry(zipOutputStream, parentPath + safeFileBaseName + ".md", markdown);
             noteCount++;
         }
 
@@ -279,6 +304,7 @@ public class NoteTransferService {
     private ParsedArchive parseArchive(MultipartFile file, String originalFilename) {
         Set<String> directoryPathSet = new HashSet<>();
         List<ArchiveNoteEntry> noteEntries = new ArrayList<>();
+        Map<String, ArchiveBinaryEntry> binaryEntries = new HashMap<>();
         int ignoredEntryCount = 0;
 
         try (InputStream inputStream = file.getInputStream();
@@ -303,8 +329,17 @@ public class NoteTransferService {
 
                 String fileName = segments.get(segments.size() - 1);
                 if (!isMarkdownFile(fileName)) {
-                    ignoredEntryCount++;
-                    log.debug("忽略非 Markdown 文件: fileName={}, entry={}", originalFilename, entry.getName());
+                    if (isImageFile(fileName)) {
+                        binaryEntries.put(String.join("/", segments), new ArchiveBinaryEntry(
+                                String.join("/", segments),
+                                fileName,
+                                readEntryBytes(zipInputStream),
+                                contentTypeForFilename(fileName)
+                        ));
+                    } else {
+                        ignoredEntryCount++;
+                        log.debug("忽略非 Markdown 文件: fileName={}, entry={}", originalFilename, entry.getName());
+                    }
                     continue;
                 }
 
@@ -313,6 +348,7 @@ public class NoteTransferService {
                 noteEntries.add(new ArchiveNoteEntry(
                         new ArrayList<>(categorySegments),
                         fileName,
+                        String.join("/", segments),
                         readEntryContent(zipInputStream)
                 ));
             }
@@ -330,7 +366,7 @@ public class NoteTransferService {
                         .thenComparing(path -> String.join("/", path), String.CASE_INSENSITIVE_ORDER))
                 .toList();
 
-        return new ParsedArchive(directories, noteEntries, ignoredEntryCount);
+        return new ParsedArchive(directories, noteEntries, binaryEntries, ignoredEntryCount);
     }
 
     /**
@@ -396,6 +432,15 @@ public class NoteTransferService {
         zipOutputStream.closeEntry();
     }
 
+    /** 向 ZIP 中写入二进制文件条目。 */
+    private void putBinaryEntry(ZipOutputStream zipOutputStream, String entryPath, byte[] bytes) throws IOException {
+        ZipEntry entry = new ZipEntry(entryPath);
+        entry.setTime(System.currentTimeMillis());
+        zipOutputStream.putNextEntry(entry);
+        zipOutputStream.write(bytes == null ? new byte[0] : bytes);
+        zipOutputStream.closeEntry();
+    }
+
     /** 读取当前 ZIP 条目的文本内容。 */
     private String readEntryContent(ZipInputStream zipInputStream) throws IOException {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -405,6 +450,17 @@ public class NoteTransferService {
             outputStream.write(buffer, 0, length);
         }
         return outputStream.toString(StandardCharsets.UTF_8);
+    }
+
+    /** 读取当前 ZIP 条目的二进制内容。 */
+    private byte[] readEntryBytes(ZipInputStream zipInputStream) throws IOException {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int length;
+        while ((length = zipInputStream.read(buffer)) != -1) {
+            outputStream.write(buffer, 0, length);
+        }
+        return outputStream.toByteArray();
     }
 
     /**
@@ -465,6 +521,172 @@ public class NoteTransferService {
         int dotIndex = fileName.lastIndexOf('.');
         String baseName = dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
         return normalizeImportedName(baseName, "未命名笔记");
+    }
+
+    private String rewriteAssetLinksForExport(ZipOutputStream zipOutputStream,
+                                              Note note,
+                                              String noteDirectory,
+                                              ExportAssetContext assetContext) throws IOException {
+        String markdown = note.getMarkdownContent() == null ? "" : note.getMarkdownContent();
+        Set<String> assetIds = AssetService.extractAssetIdsFromMarkdown(markdown);
+        if (assetIds.isEmpty()) {
+            return markdown;
+        }
+        Map<String, Asset> assets = assetService.findOwnedAssetsByIds(assetContext.ownerId(), assetIds);
+        if (assets.isEmpty()) {
+            return markdown;
+        }
+        Matcher matcher = ASSET_URL_PATTERN.matcher(markdown);
+        StringBuffer buffer = new StringBuffer();
+        while (matcher.find()) {
+            Asset asset = assets.get(matcher.group(1));
+            if (asset == null) {
+                continue;
+            }
+            String assetPath = assetContext.ensureWritten(zipOutputStream, asset);
+            String relativePath = encodeMarkdownUrl(relativizeZipPath(noteDirectory, assetPath));
+            matcher.appendReplacement(buffer, Matcher.quoteReplacement(relativePath));
+        }
+        matcher.appendTail(buffer);
+        return buffer.toString();
+    }
+
+    private String importArchiveAssets(UserAccount owner,
+                                       Note note,
+                                       ArchiveNoteEntry noteEntry,
+                                       Map<String, ArchiveBinaryEntry> binaryEntries) {
+        String markdown = noteEntry.markdownContent() == null ? "" : noteEntry.markdownContent();
+        Matcher matcher = MARKDOWN_IMAGE_URL_PATTERN.matcher(markdown);
+        StringBuffer buffer = new StringBuffer();
+        Map<String, String> uploadedByPath = new HashMap<>();
+        while (matcher.find()) {
+            String url = matcher.group(2);
+            if (isExternalOrDataUrl(url)) {
+                continue;
+            }
+            String entryPath = resolveArchiveReference(noteEntry.entryPath(), url);
+            ArchiveBinaryEntry binaryEntry = binaryEntries.get(entryPath);
+            if (binaryEntry == null) {
+                continue;
+            }
+            String uploadedUrl = uploadedByPath.computeIfAbsent(entryPath, ignored -> {
+                Map<String, Object> response = assetService.importImageAsset(
+                        owner,
+                        binaryEntry.fileName(),
+                        binaryEntry.bytes(),
+                        binaryEntry.contentType(),
+                        note.getId()
+                );
+                return String.valueOf(response.get("url"));
+            });
+            matcher.appendReplacement(buffer, Matcher.quoteReplacement(matcher.group(1) + uploadedUrl + matcher.group(3)));
+        }
+        matcher.appendTail(buffer);
+        return buffer.toString();
+    }
+
+    private String relativizeZipPath(String fromDirectory, String targetPath) {
+        List<String> from = splitPath(fromDirectory);
+        List<String> target = splitPath(targetPath);
+        int common = 0;
+        while (common < from.size() && common < target.size() && from.get(common).equals(target.get(common))) {
+            common++;
+        }
+        List<String> result = new ArrayList<>();
+        for (int index = common; index < from.size(); index++) {
+            result.add("..");
+        }
+        result.addAll(target.subList(common, target.size()));
+        return result.isEmpty() ? targetPath : String.join("/", result);
+    }
+
+    private String resolveArchiveReference(String noteEntryPath, String url) {
+        String decoded = decodeUrlPath(url);
+        String basePath = "";
+        int slashIndex = noteEntryPath.lastIndexOf('/');
+        if (slashIndex >= 0) {
+            basePath = noteEntryPath.substring(0, slashIndex + 1);
+        }
+        String path = decoded.startsWith("/") ? decoded.substring(1) : basePath + decoded;
+        List<String> result = new ArrayList<>();
+        for (String segment : path.split("/")) {
+            if (segment.isBlank() || ".".equals(segment)) {
+                continue;
+            }
+            if ("..".equals(segment)) {
+                if (!result.isEmpty()) {
+                    result.remove(result.size() - 1);
+                }
+                continue;
+            }
+            result.add(segment);
+        }
+        return String.join("/", result);
+    }
+
+    private String decodeUrlPath(String url) {
+        String value = url == null ? "" : url.trim();
+        int queryIndex = value.indexOf('?');
+        if (queryIndex >= 0) {
+            value = value.substring(0, queryIndex);
+        }
+        int hashIndex = value.indexOf('#');
+        if (hashIndex >= 0) {
+            value = value.substring(0, hashIndex);
+        }
+        try {
+            return java.net.URLDecoder.decode(value, StandardCharsets.UTF_8);
+        } catch (Exception exception) {
+            return value;
+        }
+    }
+
+    private String encodeMarkdownUrl(String path) {
+        return String.join("/", splitPath(path).stream()
+                .map(segment -> java.net.URLEncoder.encode(segment, StandardCharsets.UTF_8)
+                        .replace("+", "%20"))
+                .toList());
+    }
+
+    private boolean isExternalOrDataUrl(String url) {
+        String lower = url == null ? "" : url.trim().toLowerCase(Locale.ROOT);
+        return lower.isBlank()
+                || lower.startsWith("http://")
+                || lower.startsWith("https://")
+                || lower.startsWith("//")
+                || lower.startsWith("data:")
+                || lower.startsWith("/api/assets/");
+    }
+
+    private boolean isImageFile(String fileName) {
+        String lowerName = fileName.toLowerCase(Locale.ROOT);
+        return lowerName.endsWith(".png")
+                || lowerName.endsWith(".jpg")
+                || lowerName.endsWith(".jpeg")
+                || lowerName.endsWith(".webp")
+                || lowerName.endsWith(".gif")
+                || lowerName.endsWith(".avif");
+    }
+
+    private String contentTypeForFilename(String fileName) {
+        String lowerName = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
+        if (lowerName.endsWith(".png")) return "image/png";
+        if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) return "image/jpeg";
+        if (lowerName.endsWith(".webp")) return "image/webp";
+        if (lowerName.endsWith(".gif")) return "image/gif";
+        if (lowerName.endsWith(".avif")) return "image/avif";
+        return "application/octet-stream";
+    }
+
+    private String extensionForContentType(String contentType) {
+        return switch (contentType == null ? "" : contentType) {
+            case "image/png" -> ".png";
+            case "image/jpeg" -> ".jpg";
+            case "image/webp" -> ".webp";
+            case "image/gif" -> ".gif";
+            case "image/avif" -> ".avif";
+            default -> ".bin";
+        };
     }
 
     /** 规范化导入后的名称。 */
@@ -554,11 +776,18 @@ public class NoteTransferService {
     }
 
     /** 单个 Markdown 条目的解析结果。 */
-    private record ArchiveNoteEntry(List<String> categorySegments, String fileName, String markdownContent) {
+    private record ArchiveNoteEntry(List<String> categorySegments, String fileName, String entryPath, String markdownContent) {
+    }
+
+    /** 单个图片条目的解析结果。 */
+    private record ArchiveBinaryEntry(String entryPath, String fileName, byte[] bytes, String contentType) {
     }
 
     /** ZIP 解析后的整体结果。 */
-    private record ParsedArchive(List<List<String>> directories, List<ArchiveNoteEntry> noteEntries, int ignoredEntryCount) {
+    private record ParsedArchive(List<List<String>> directories,
+                                 List<ArchiveNoteEntry> noteEntries,
+                                 Map<String, ArchiveBinaryEntry> binaryEntries,
+                                 int ignoredEntryCount) {
     }
 
     /** 递归写入 ZIP 时的统计信息。 */
@@ -567,6 +796,34 @@ public class NoteTransferService {
 
     /** 确保分类路径存在后的结果。 */
     private record EnsureCategoryResult(Category lastCategory, int createdCount) {
+    }
+
+    private final class ExportAssetContext {
+        private final String ownerId;
+        private final Map<String, String> exportedPaths = new HashMap<>();
+        private final NameAllocator assetNameAllocator = new NameAllocator();
+
+        private ExportAssetContext(String ownerId) {
+            this.ownerId = ownerId;
+        }
+
+        private String ownerId() {
+            return ownerId;
+        }
+
+        private String ensureWritten(ZipOutputStream zipOutputStream, Asset asset) throws IOException {
+            String existing = exportedPaths.get(asset.getId());
+            if (existing != null) {
+                return existing;
+            }
+            String fileName = sanitizePathSegment(asset.getOriginalFilename(), asset.getId() + extensionForContentType(asset.getContentType()));
+            String path = "assets/" + assetNameAllocator.allocate(fileName);
+            try (InputStream inputStream = assetService.openContent(asset).inputStream()) {
+                putBinaryEntry(zipOutputStream, path, inputStream.readAllBytes());
+            }
+            exportedPaths.put(asset.getId(), path);
+            return path;
+        }
     }
 
     /**

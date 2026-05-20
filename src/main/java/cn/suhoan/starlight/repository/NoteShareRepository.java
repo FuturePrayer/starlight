@@ -18,6 +18,10 @@ public interface NoteShareRepository extends JpaRepository<NoteShare, String> {
 
     Optional<NoteShare> findByToken(String token);
 
+    Optional<NoteShare> findByTokenAndNoteDeletedAtIsNull(String token);
+
+    boolean existsByToken(String token);
+
     long countByNoteId(String noteId);
 
     void deleteByNoteId(String noteId);

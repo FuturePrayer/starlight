@@ -39,6 +39,14 @@ public class SettingsService {
     public static final String GIT_IMPORT_MAX_CONCURRENT_KEY = "git.import.max-concurrent";
     /** 配置项：用于加密可复制 API Key 明文的服务端密钥 */
     public static final String API_KEY_COPY_ENCRYPTION_KEY = "api-key.copy.encryption-key";
+    /** 配置项：图片上传开关 */
+    public static final String ASSETS_UPLOAD_ENABLED_KEY = "assets.upload.enabled";
+    /** 配置项：图片存储后端 */
+    public static final String ASSETS_STORAGE_PROVIDER_KEY = "assets.storage.provider";
+    /** 配置项：非管理员单用户图片额度 */
+    public static final String ASSETS_USER_QUOTA_BYTES_KEY = "assets.user.quota-bytes";
+    /** 配置项：无引用图片清理宽限期 */
+    public static final String ASSETS_CLEANUP_GRACE_HOURS_KEY = "assets.cleanup.grace-hours";
 
     private final AppSettingRepository appSettingRepository;
     private final UserAccountRepository userAccountRepository;
@@ -176,6 +184,68 @@ public class SettingsService {
         }
         log.info("设置 Git 导入最大并发数: limit={}", limit);
         saveValue(GIT_IMPORT_MAX_CONCURRENT_KEY, Integer.toString(limit));
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isAssetUploadEnabled() {
+        return Boolean.parseBoolean(getValue(ASSETS_UPLOAD_ENABLED_KEY, "false"));
+    }
+
+    public void setAssetUploadEnabled(boolean enabled) {
+        log.info("设置图片上传开关: enabled={}", enabled);
+        saveValue(ASSETS_UPLOAD_ENABLED_KEY, Boolean.toString(enabled));
+    }
+
+    @Transactional(readOnly = true)
+    public String getAssetStorageProvider() {
+        String provider = getValue(ASSETS_STORAGE_PROVIDER_KEY, "local").trim().toLowerCase();
+        return "s3".equals(provider) ? "s3" : "local";
+    }
+
+    public void setAssetStorageProvider(String provider) {
+        String normalized = provider == null ? "local" : provider.trim().toLowerCase();
+        if (!"local".equals(normalized) && !"s3".equals(normalized)) {
+            throw new IllegalArgumentException("图片存储后端仅支持 local 或 s3");
+        }
+        log.info("设置图片存储后端: provider={}", normalized);
+        saveValue(ASSETS_STORAGE_PROVIDER_KEY, normalized);
+    }
+
+    @Transactional(readOnly = true)
+    public long getAssetUserQuotaBytes() {
+        try {
+            return Long.parseLong(getValue(ASSETS_USER_QUOTA_BYTES_KEY, "104857600").trim());
+        } catch (Exception exception) {
+            return 104857600L;
+        }
+    }
+
+    public void setAssetUserQuotaBytes(long quotaBytes) {
+        if (quotaBytes < 0) {
+            throw new IllegalArgumentException("图片容量上限不能为负数");
+        }
+        log.info("设置非管理员图片容量上限: quotaBytes={}", quotaBytes);
+        saveValue(ASSETS_USER_QUOTA_BYTES_KEY, Long.toString(quotaBytes));
+    }
+
+    @Transactional(readOnly = true)
+    public int getAssetCleanupGraceHours() {
+        try {
+            return Integer.parseInt(getValue(ASSETS_CLEANUP_GRACE_HOURS_KEY, "168").trim());
+        } catch (Exception exception) {
+            return 168;
+        }
+    }
+
+    public void setAssetCleanupGraceHours(int graceHours) {
+        if (graceHours < 0) {
+            throw new IllegalArgumentException("清理宽限期不能为负数");
+        }
+        if (graceHours > 24 * 365) {
+            throw new IllegalArgumentException("清理宽限期不能超过 365 天");
+        }
+        log.info("设置图片清理宽限期: graceHours={}", graceHours);
+        saveValue(ASSETS_CLEANUP_GRACE_HOURS_KEY, Integer.toString(graceHours));
     }
 
     @Transactional(readOnly = true)

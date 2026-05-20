@@ -134,8 +134,13 @@ public class ShareService {
      */
     @Transactional(readOnly = true)
     public Map<String, Object> openShare(String token, String password) {
-        NoteShare share = noteShareRepository.findByToken(token)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "分享链接不存在"));
+        NoteShare share = noteShareRepository.findByTokenAndNoteDeletedAtIsNull(token)
+                .orElseThrow(() -> {
+                    if (noteShareRepository.existsByToken(token)) {
+                        return new ResponseStatusException(FORBIDDEN, "该笔记已移入回收站，分享暂不可用");
+                    }
+                    return new ResponseStatusException(NOT_FOUND, "分享链接不存在");
+                });
         if (share.getNote().getDeletedAt() != null) {
             log.warn("分享链接访问失败，笔记已进入回收站: shareId={}, noteId={}", share.getId(), share.getNote().getId());
             throw new ResponseStatusException(FORBIDDEN, "该笔记已移入回收站，分享暂不可用");

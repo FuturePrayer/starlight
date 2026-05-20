@@ -53,6 +53,7 @@ public class NoteService {
     private final ApiKeyScopeRepository apiKeyScopeRepository;
     private final MarkdownService markdownService;
     private final StarlightProperties starlightProperties;
+    private final AssetService assetService;
 
     public NoteService(NoteRepository noteRepository,
                        CategoryRepository categoryRepository,
@@ -60,7 +61,8 @@ public class NoteService {
                        GitNoteSourceRepository gitNoteSourceRepository,
                        ApiKeyScopeRepository apiKeyScopeRepository,
                        MarkdownService markdownService,
-                       StarlightProperties starlightProperties) {
+                       StarlightProperties starlightProperties,
+                       AssetService assetService) {
         this.noteRepository = noteRepository;
         this.categoryRepository = categoryRepository;
         this.noteShareRepository = noteShareRepository;
@@ -68,6 +70,7 @@ public class NoteService {
         this.apiKeyScopeRepository = apiKeyScopeRepository;
         this.markdownService = markdownService;
         this.starlightProperties = starlightProperties;
+        this.assetService = assetService;
     }
 
     /**
@@ -89,6 +92,7 @@ public class NoteService {
         note.setPlainText(markdownService.stripToPlainText(note.getMarkdownContent()));
         note.setCategory(resolveCategory(owner.getId(), categoryId));
         Note saved = noteRepository.save(note);
+        assetService.rebuildNoteReferences(saved);
         log.info("笔记创建成功: noteId={}, ownerId={}, title={}", saved.getId(), owner.getId(), saved.getTitle());
         return saved;
     }
@@ -112,6 +116,7 @@ public class NoteService {
         note.setPlainText(markdownService.stripToPlainText(note.getMarkdownContent()));
         note.setCategory(resolveCategory(owner.getId(), categoryId));
         Note saved = noteRepository.save(note);
+        assetService.rebuildNoteReferences(saved);
         log.info("笔记更新成功: noteId={}, ownerId={}", saved.getId(), owner.getId());
         return saved;
     }
@@ -936,6 +941,7 @@ public class NoteService {
         if (notes == null || notes.isEmpty()) {
             return new NotePurgeStat(0, 0);
         }
+        assetService.removeNoteReferences(notes);
         int removedShareCount = 0;
         for (Note note : notes) {
             long shareCount = noteShareRepository.countByNoteId(note.getId());

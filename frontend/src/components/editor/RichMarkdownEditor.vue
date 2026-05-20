@@ -62,9 +62,14 @@
         <button class="rich-md-editor__tool" type="button" title="移除链接" :disabled="!isActive('link')" @click="unsetLink">
           <Unlink :size="16" />
         </button>
-        <button class="rich-md-editor__tool" type="button" title="图片" @click="insertImage">
-          <ImageIcon :size="16" />
-        </button>
+        <div class="rich-md-editor__split-tool">
+          <button class="rich-md-editor__tool" type="button" title="上传图片" :disabled="uploadingImage" @click="openImageUpload">
+            <ImageUp :size="16" />
+          </button>
+          <button class="rich-md-editor__tool" type="button" title="插入图片链接" @click="insertImageUrl">
+            <LinkIcon :size="16" />
+          </button>
+        </div>
         <button class="rich-md-editor__tool" type="button" title="分割线" @click="insertHorizontalRule">
           <Minus :size="16" />
         </button>
@@ -142,6 +147,14 @@
       <button class="rich-md-editor__mini rich-md-editor__mini--danger" type="button" @click="tableCommand('deleteTable')">删表</button>
     </div>
 
+    <input
+      ref="imageInput"
+      class="rich-md-editor__file-input"
+      type="file"
+      accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+      @change="handleImageInputChange"
+    />
+
     <textarea
       v-if="sourceModeInternal"
       ref="sourceTextarea"
@@ -149,11 +162,22 @@
       class="rich-md-editor__source"
       spellcheck="false"
       placeholder="# 从这里开始记录你的星光..."
+      @paste="handlePaste"
+      @drop="handleDrop"
+      @dragover.prevent
       @input="handleSourceInput"
       @scroll="handleSourceScroll"
     ></textarea>
 
-    <div v-else ref="editorScrollHost" class="rich-md-editor__surface" @scroll="handleRichScroll">
+    <div
+      v-else
+      ref="editorScrollHost"
+      class="rich-md-editor__surface"
+      @scroll="handleRichScroll"
+      @paste="handlePaste"
+      @drop="handleDrop"
+      @dragover.prevent
+    >
       <EditorContent v-if="editor" :editor="editor" class="rich-md-editor__content" />
     </div>
   </div>
@@ -161,6 +185,8 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { assetApi } from '@/api'
+import { useToastStore } from '@/stores/toast'
 import { Editor, EditorContent, VueNodeViewRenderer } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
@@ -187,6 +213,7 @@ import {
   FileCode2,
   Highlighter,
   Image as ImageIcon,
+  ImageUp,
   Italic,
   Link as LinkIcon,
   List,
@@ -211,7 +238,8 @@ import {
 import CodeBlockNodeView from './CodeBlockNodeView.vue'
 
 const props = defineProps({
-  modelValue: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  noteId: { type: String, default: '' }
 })
 
 const emit = defineEmits([
@@ -227,10 +255,15 @@ const sourceModeInternal = ref(shouldPreferSourceMode(props.modelValue))
 const sourceMarkdown = ref(normalizeEditorMarkdown(props.modelValue))
 const sourceTextarea = ref(null)
 const editorScrollHost = ref(null)
+const imageInput = ref(null)
+const toast = useToastStore()
+const assetSettings = ref(null)
+const uploadingImage = ref(false)
 let applyingExternalContent = false
 
 const codeLanguages = COMMON_CODE_LANGUAGES
 const unsupportedFeatures = computed(() => getRichEditorUnsupportedFeatures(sourceMarkdown.value || props.modelValue))
+const uploadEnabled = computed(() => Boolean(assetSettings.value?.uploadEnabled))
 
 const extensions = [
   StarterKit.configure({
@@ -298,6 +331,12 @@ editor.value = new Editor({
     attributes: {
       class: 'rich-md-editor__prosemirror markdown-body',
       spellcheck: 'false'
+    },
+    handlePaste(view, event) {
+      return handleEditorPasteOrDrop(event)
+    },
+    handleDrop(view, event) {
+      return handleEditorPasteOrDrop(event)
     }
   },
   onUpdate: ({ editor: currentEditor }) => {
@@ -371,6 +410,8 @@ watch(sourceModeInternal, value => {
 onBeforeUnmount(() => {
   editor.value?.destroy()
 })
+
+loadAssetSettings()
 
 const canUndo = computed(() => {
   editorRevision.value
@@ -465,11 +506,128 @@ function unsetLink() {
   editor.value?.chain().focus().unsetLink().run()
 }
 
-function insertImage() {
+function insertImageUrl() {
   const src = window.prompt('图片地址')
   if (!src?.trim()) return
   const alt = window.prompt('图片说明（可选）') || ''
-  editor.value?.chain().focus().setImage({ src: src.trim(), alt }).run()
+  insertImageMarkdownOrNode({ src: src.trim(), alt })
+}
+
+async function loadAssetSettings() {
+  try {
+    assetSettings.value = await assetApi.settings()
+  } catch {
+    assetSettings.value = { uploadEnabled: false }
+  }
+}
+
+function openImageUpload() {
+  if (!uploadEnabled.value) {
+    insertImageUrl()
+    return
+  }
+  imageInput.value?.click()
+}
+
+async function handleImageInputChange(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (file) {
+    await uploadImageFile(file)
+  }
+}
+
+function handlePaste(event) {
+  handleEditorPasteOrDrop(event)
+}
+
+function handleDrop(event) {
+  handleEditorPasteOrDrop(event)
+}
+
+function handleEditorPasteOrDrop(event) {
+  if (event?.defaultPrevented) return false
+  const file = firstImageFile(event?.clipboardData || event?.dataTransfer)
+  if (!file) return false
+  if (!uploadEnabled.value) {
+    event.preventDefault()
+    toast.info('图片上传未开启，可通过图片链接插入')
+    return true
+  }
+  event.preventDefault()
+  uploadImageFile(file)
+  return true
+}
+
+function firstImageFile(dataTransfer) {
+  const files = Array.from(dataTransfer?.files || [])
+  return files.find(file => file?.type?.startsWith('image/')) || null
+}
+
+async function uploadImageFile(file) {
+  if (!uploadEnabled.value) {
+    toast.info('图片上传未开启，可通过图片链接插入')
+    return
+  }
+  const maxFileSize = Number(assetSettings.value?.maxFileSize || 0)
+  if (maxFileSize > 0 && file.size > maxFileSize) {
+    toast.error(`图片超过单文件上限：${formatBytes(maxFileSize)}`)
+    return
+  }
+  uploadingImage.value = true
+  try {
+    const result = await assetApi.uploadImage(file, { noteId: props.noteId })
+    insertImageMarkdownOrNode({
+      src: result.url,
+      alt: result.originalFilename || file.name || 'image',
+      markdown: result.markdown
+    })
+    toast.success('图片已上传')
+  } catch (err) {
+    toast.error(err.message || '图片上传失败')
+  } finally {
+    uploadingImage.value = false
+  }
+}
+
+function insertImageMarkdownOrNode({ src, alt = '', markdown = '' }) {
+  if (!src) return
+  if (sourceModeInternal.value) {
+    insertSourceText(markdown || `![${escapeMarkdownLabel(alt)}](${src})`)
+    return
+  }
+  editor.value?.chain().focus().setImage({ src, alt }).run()
+}
+
+function insertSourceText(text) {
+  const textarea = sourceTextarea.value
+  const current = sourceMarkdown.value || ''
+  if (!textarea) {
+    sourceMarkdown.value = `${current}${current && !current.endsWith('\n') ? '\n' : ''}${text}`
+    emitMarkdown(sourceMarkdown.value)
+    return
+  }
+  const start = textarea.selectionStart ?? current.length
+  const end = textarea.selectionEnd ?? start
+  const next = current.slice(0, start) + text + current.slice(end)
+  sourceMarkdown.value = next
+  emitMarkdown(next)
+  nextTick(() => {
+    textarea.focus()
+    textarea.setSelectionRange(start + text.length, start + text.length)
+  })
+}
+
+function escapeMarkdownLabel(value) {
+  return String(value || 'image').replace(/[[\]\\]/g, '\\$&')
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes || 0)
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`
+  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MiB`
+  return `${(value / 1024 / 1024 / 1024).toFixed(1)} GiB`
 }
 
 function insertHorizontalRule() {
@@ -687,6 +845,16 @@ defineExpose({
   color: var(--sl-text-secondary);
   background: transparent;
   cursor: pointer;
+}
+
+.rich-md-editor__split-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.rich-md-editor__file-input {
+  display: none;
 }
 
 .rich-md-editor__tool:hover,

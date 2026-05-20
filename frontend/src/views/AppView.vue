@@ -378,6 +378,7 @@
           <RichMarkdownEditor
             ref="richEditorRef"
             v-model="editorContent"
+            :note-id="noteStore.currentNote?.id || ''"
             @update:model-value="handleEditorInput"
             @active-anchor-change="handleEditorActiveAnchorChange"
           />
