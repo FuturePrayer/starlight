@@ -19,6 +19,9 @@ public class StarlightProperties {
     /** 图片资产相关配置。 */
     private Assets assets = new Assets();
 
+    /** Git 导入相关配置。 */
+    private Git git = new Git();
+
     public NoteTrash getNoteTrash() {
         return noteTrash;
     }
@@ -33,6 +36,14 @@ public class StarlightProperties {
 
     public void setAssets(Assets assets) {
         this.assets = assets;
+    }
+
+    public Git getGit() {
+        return git;
+    }
+
+    public void setGit(Git git) {
+        this.git = git;
     }
 
     /**
@@ -191,6 +202,34 @@ public class StarlightProperties {
             public void setPrefix(String prefix) {
                 this.prefix = prefix;
             }
+        }
+    }
+
+    /**
+     * Git 导入配置。
+     */
+    public static class Git {
+
+        /** 允许访问的 Git 仓库 Host，逗号分隔，支持通配符前缀 {@code *.example.com}。 */
+        private String allowedHosts = "github.com,*.github.com,gitee.com,*.gitee.com,gitlab.com,*.gitlab.com,bitbucket.org,*.bitbucket.org,codeberg.org,*.codeberg.org,sourceforge.net,*.sourceforge.net,git.sr.ht,*.sr.ht,atomgit.com,*.atomgit.com,gitcode.com,*.gitcode.com";
+
+        /** JGit 远程访问超时时间，单位秒。 */
+        private int timeoutSeconds = 20;
+
+        public String getAllowedHosts() {
+            return allowedHosts;
+        }
+
+        public void setAllowedHosts(String allowedHosts) {
+            this.allowedHosts = allowedHosts;
+        }
+
+        public int getTimeoutSeconds() {
+            return timeoutSeconds;
+        }
+
+        public void setTimeoutSeconds(int timeoutSeconds) {
+            this.timeoutSeconds = timeoutSeconds;
         }
     }
 }

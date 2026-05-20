@@ -1,5 +1,7 @@
 package cn.suhoan.starlight.controller;
 
+import cn.dev33.satoken.exception.NotLoginException;
+import cn.dev33.satoken.exception.NotPermissionException;
 import cn.suhoan.starlight.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,16 +33,19 @@ public class ApiExceptionHandler {
                 .body(ApiResponse.error(exception.getReason() == null ? "请求失败" : exception.getReason()));
     }
 
+    @ExceptionHandler(NotLoginException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotLogin(NotLoginException exception) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("请先登录"));
+    }
+
+    @ExceptionHandler(NotPermissionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotPermission(NotPermissionException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("没有操作权限"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneric(Exception exception) {
         log.error("请求处理失败", exception);
-        String simpleName = exception.getClass().getSimpleName();
-        if (simpleName.contains("NotLogin")) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("请先登录"));
-        }
-        if (simpleName.contains("NotPermission")) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("没有操作权限"));
-        }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(exception.getMessage() == null ? "服务器开小差了" : exception.getMessage()));
     }
 }

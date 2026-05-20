@@ -20,7 +20,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -41,10 +40,6 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 public class NoteService {
 
     private static final Logger log = LoggerFactory.getLogger(NoteService.class);
-    private static final Comparator<Note> PINNED_NOTE_COMPARATOR = Comparator
-            .comparing(Note::getPinnedAt, Comparator.nullsLast(Comparator.reverseOrder()))
-            .thenComparing(Note::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()))
-            .thenComparing(Note::getTitle, String.CASE_INSENSITIVE_ORDER);
 
     private final NoteRepository noteRepository;
     private final CategoryRepository categoryRepository;
@@ -54,6 +49,9 @@ public class NoteService {
     private final MarkdownService markdownService;
     private final StarlightProperties starlightProperties;
     private final AssetService assetService;
+    private final NoteTreeService noteTreeService;
+    private final NoteViewMapper noteViewMapper;
+    private final CategoryHierarchyService categoryHierarchyService;
 
     public NoteService(NoteRepository noteRepository,
                        CategoryRepository categoryRepository,
@@ -62,7 +60,10 @@ public class NoteService {
                        ApiKeyScopeRepository apiKeyScopeRepository,
                        MarkdownService markdownService,
                        StarlightProperties starlightProperties,
-                       AssetService assetService) {
+                       AssetService assetService,
+                       NoteTreeService noteTreeService,
+                       NoteViewMapper noteViewMapper,
+                       CategoryHierarchyService categoryHierarchyService) {
         this.noteRepository = noteRepository;
         this.categoryRepository = categoryRepository;
         this.noteShareRepository = noteShareRepository;
@@ -71,6 +72,9 @@ public class NoteService {
         this.markdownService = markdownService;
         this.starlightProperties = starlightProperties;
         this.assetService = assetService;
+        this.noteTreeService = noteTreeService;
+        this.noteViewMapper = noteViewMapper;
+        this.categoryHierarchyService = categoryHierarchyService;
     }
 
     /**
@@ -180,7 +184,7 @@ public class NoteService {
     public List<Map<String, Object>> listUserNotes(String ownerId) {
         List<Map<String, Object>> result = new ArrayList<>();
         for (Note note : noteRepository.findByOwnerIdAndDeletedAtIsNullOrderByUpdatedAtDesc(ownerId)) {
-            result.add(toSummary(note));
+            result.add(noteViewMapper.toSummary(note));
         }
         return result;
     }
@@ -195,7 +199,7 @@ public class NoteService {
     public List<Map<String, Object>> listTrashNotes(String ownerId) {
         List<Map<String, Object>> result = new ArrayList<>();
         for (Note note : noteRepository.findByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDesc(ownerId)) {
-            result.add(toSummary(note));
+            result.add(noteViewMapper.toSummary(note));
         }
         return result;
     }
@@ -207,47 +211,7 @@ public class NoteService {
      */
     @Transactional(readOnly = true)
     public Map<String, Object> buildTrashTree(String ownerId) {
-        List<Category> allCategories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
-        List<Category> deletedCategories = allCategories.stream()
-                .filter(category -> category.getDeletedAt() != null)
-                .toList();
-        List<Note> deletedNotes = noteRepository.findByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDesc(ownerId);
-
-        Map<String, Map<String, Object>> categoryNodeMap = new HashMap<>();
-        Set<String> deletedCategoryIds = new LinkedHashSet<>();
-        for (Category category : deletedCategories) {
-            categoryNodeMap.put(category.getId(), toTrashCategoryNode(category));
-            deletedCategoryIds.add(category.getId());
-        }
-
-        List<Map<String, Object>> roots = new ArrayList<>();
-        for (Category category : deletedCategories) {
-            Map<String, Object> node = categoryNodeMap.get(category.getId());
-            Category parent = category.getParent();
-            if (parent != null && deletedCategoryIds.contains(parent.getId())) {
-                castChildren(categoryNodeMap.get(parent.getId())).add(node);
-            } else {
-                roots.add(node);
-            }
-        }
-
-        for (Note note : deletedNotes) {
-            if (note.getCategory() != null && deletedCategoryIds.contains(note.getCategory().getId())) {
-                castChildren(categoryNodeMap.get(note.getCategory().getId())).add(toTrashTreeNote(note));
-            } else {
-                roots.add(toTrashTreeNote(note));
-            }
-        }
-
-        sortTrashItems(roots);
-        decorateTrashCategoryStats(roots);
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("items", roots);
-        result.put("noteCount", deletedNotes.size());
-        result.put("categoryCount", deletedCategories.size());
-        result.put("totalCount", deletedNotes.size() + deletedCategories.size());
-        return result;
+        return noteTreeService.buildTrashTree(ownerId);
     }
 
     /**
@@ -285,7 +249,8 @@ public class NoteService {
         LocalDateTime deletedAt = LocalDateTime.now();
         note.setDeletedAt(deletedAt);
         noteRepository.save(note);
-        log.info("笔记已移入回收站: noteId={}, ownerId={}, purgeAt={}", noteId, ownerId, calculatePurgeAt(deletedAt));
+        log.info("笔记已移入回收站: noteId={}, ownerId={}, purgeAt={}",
+                noteId, ownerId, noteViewMapper.calculatePurgeAt(deletedAt));
     }
 
     /**
@@ -297,7 +262,7 @@ public class NoteService {
      */
     public Note restoreNote(String ownerId, String noteId) {
         Note note = getOwnedTrashNote(ownerId, noteId);
-        if (!isTrashNoteRestorable(note)) {
+        if (!noteViewMapper.isTrashNoteRestorable(note)) {
             throw new IllegalArgumentException("请先处理所属分类，再恢复该笔记");
         }
         note.setDeletedAt(null);
@@ -366,118 +331,7 @@ public class NoteService {
                                          Set<String> accessibleCategoryIds,
                                          String rootCategoryId,
                                          Integer depth) {
-        List<Category> allCategories = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(ownerId);
-        List<Note> allNotes = noteRepository.findByOwnerIdAndDeletedAtIsNullOrderByUpdatedAtDesc(ownerId);
-
-        String normalizedRootCategoryId = normalizeNullableCategoryId(rootCategoryId);
-        int safeDepth = depth == null ? Integer.MAX_VALUE : Math.max(depth, 0);
-
-        boolean restricted = accessibleCategoryIds != null;
-        List<Category> visibleCategories = restricted
-                ? allCategories.stream().filter(category -> accessibleCategoryIds.contains(category.getId())).toList()
-                : allCategories;
-
-        Map<String, Integer> depthMap = computeCategoryDepths(visibleCategories, normalizedRootCategoryId, safeDepth);
-        Set<String> includedCategoryIds = depthMap.keySet();
-
-        List<Category> categories = visibleCategories.stream()
-                .filter(category -> includedCategoryIds.contains(category.getId()))
-                .toList();
-        List<Note> notes = restricted
-                ? allNotes.stream()
-                .filter(note -> isNoteIncluded(note, normalizedRootCategoryId, includedCategoryIds))
-                .toList()
-                : allNotes.stream()
-                .filter(note -> isNoteIncluded(note, normalizedRootCategoryId, includedCategoryIds))
-                .toList();
-
-        Map<String, Map<String, Object>> categoryMap = new HashMap<>();
-        List<Map<String, Object>> roots = new ArrayList<>();
-
-        // 构建分类的父子关系映射，用于继承 siteToken 标记
-        Map<String, String> parentIdMap = new HashMap<>();
-        Map<String, String> siteTokenMap = new HashMap<>();
-
-        for (Category category : categories) {
-            Map<String, Object> node = new HashMap<>();
-            node.put("id", category.getId());
-            node.put("name", category.getName());
-            node.put("type", "category");
-            node.put("siteToken", category.getSiteToken());
-            node.put("children", new ArrayList<Map<String, Object>>());
-            categoryMap.put(category.getId(), node);
-
-            // 记录父子关系和 siteToken 信息
-            if (category.getParent() != null) {
-                parentIdMap.put(category.getId(), category.getParent().getId());
-            }
-            if (category.getSiteToken() != null) {
-                siteTokenMap.put(category.getId(), category.getSiteToken());
-            }
-        }
-
-        // 为每个分类计算 inheritedSiteToken（从祖先继承的站点标识）
-        for (Category category : categories) {
-            Map<String, Object> node = categoryMap.get(category.getId());
-            if (category.getSiteToken() == null) {
-                // 沿父链向上查找，看是否有祖先开启了星迹书阁
-                String pid = parentIdMap.get(category.getId());
-                while (pid != null) {
-                    if (siteTokenMap.containsKey(pid)) {
-                        node.put("inheritedSiteToken", siteTokenMap.get(pid));
-                        node.put("inheritedFromId", pid);
-                        break;
-                    }
-                    pid = parentIdMap.get(pid);
-                }
-            }
-        }
-
-        for (Category category : categories) {
-            Map<String, Object> node = categoryMap.get(category.getId());
-            if (normalizedRootCategoryId != null && normalizedRootCategoryId.equals(category.getId())) {
-                roots.add(node);
-                continue;
-            }
-            if (category.getParent() != null) {
-                Map<String, Object> parent = categoryMap.get(category.getParent().getId());
-                if (parent != null) {
-                    castChildren(parent).add(node);
-                    continue;
-                }
-            }
-            roots.add(node);
-        }
-
-        List<Map<String, Object>> pinnedItems = notes.stream()
-                .filter(Note::isPinnedFlag)
-                .sorted(PINNED_NOTE_COMPARATOR)
-                .map(this::toTreeNote)
-                .toList();
-        for (Note note : notes) {
-            if (note.isPinnedFlag()) {
-                continue;
-            }
-            Map<String, Object> node = toTreeNote(note);
-            if (note.getCategory() != null) {
-                Map<String, Object> categoryNode = categoryMap.get(note.getCategory().getId());
-                if (categoryNode != null) {
-                    castChildren(categoryNode).add(node);
-                    continue;
-                }
-            }
-            if (normalizedRootCategoryId == null) {
-                roots.add(node);
-            }
-        }
-
-        roots.sort(Comparator.comparing(item -> item.get("name").toString()));
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("items", roots);
-        data.put("pinnedItems", pinnedItems);
-        data.put("trashCount", restricted ? 0 : noteRepository.countByOwnerIdAndDeletedAtIsNotNull(ownerId)
-                + categoryRepository.countByOwnerIdAndDeletedAtIsNotNull(ownerId));
-        return data;
+        return noteTreeService.buildTree(ownerId, accessibleCategoryIds, rootCategoryId, depth);
     }
 
     /** 查询当前用户拥有的分类。 */
@@ -568,7 +422,7 @@ public class NoteService {
             if (category.getId().equals(newParent.getId())) {
                 throw new IllegalArgumentException("分类不能移动到自身下方");
             }
-            Set<String> descendants = collectDescendantCategoryIds(owner.getId(), category.getId());
+            Set<String> descendants = categoryHierarchyService.collectActiveDescendantIds(owner.getId(), category.getId());
             if (descendants.contains(newParent.getId())) {
                 throw new IllegalArgumentException("分类不能移动到自己的子分类下");
             }
@@ -588,7 +442,7 @@ public class NoteService {
     public CategoryTrashOperationResult deleteCategory(String ownerId, String categoryId) {
         Category category = getOwnedCategory(ownerId, categoryId);
         List<Category> allCategories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
-        Set<String> descendants = collectDescendantCategoryIds(allCategories, category.getId());
+        Set<String> descendants = categoryHierarchyService.collectDescendantIds(allCategories, category.getId());
         LocalDateTime deletedAt = LocalDateTime.now();
 
         List<Category> categoriesToTrash = allCategories.stream()
@@ -632,12 +486,12 @@ public class NoteService {
      */
     public CategoryTrashOperationResult restoreTrashCategory(String ownerId, String categoryId) {
         Category category = getOwnedTrashCategory(ownerId, categoryId);
-        if (!isTrashCategoryRestorable(category)) {
+        if (!noteViewMapper.isTrashCategoryRestorable(category)) {
             throw new IllegalArgumentException("请先恢复父分类，再恢复该分类");
         }
 
         List<Category> allCategories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
-        Set<String> descendants = collectDescendantCategoryIds(allCategories, category.getId());
+        Set<String> descendants = categoryHierarchyService.collectDescendantIds(allCategories, category.getId());
         LocalDateTime deletedAt = category.getDeletedAt();
 
         List<Category> categoriesToRestore = allCategories.stream()
@@ -683,7 +537,7 @@ public class NoteService {
      * @throws ResponseStatusException 当分类不存在时
      */
     private Category resolveCategory(String ownerId, String categoryId) {
-        String normalizedCategoryId = normalizeNullableCategoryId(categoryId);
+        String normalizedCategoryId = CategoryIdNormalizer.normalizeNullableCategoryId(categoryId);
         if (normalizedCategoryId == null) {
             return null;
         }
@@ -696,101 +550,7 @@ public class NoteService {
      * <p>兼容 MCP / Web 客户端把“无分类”错误传成字符串 "null" 的场景。</p>
      */
     public static String normalizeNullableCategoryId(String categoryId) {
-        if (categoryId == null) {
-            return null;
-        }
-        String normalized = categoryId.trim();
-        if (normalized.isBlank() || "null".equalsIgnoreCase(normalized) || "undefined".equalsIgnoreCase(normalized)) {
-            return null;
-        }
-        return normalized;
-    }
-
-    /** 收集某个分类及其所有子分类 ID。 */
-    private Set<String> collectDescendantCategoryIds(String ownerId, String rootCategoryId) {
-        List<Category> categories = categoryRepository.findByOwnerIdAndDeletedAtIsNullOrderByNameAsc(ownerId);
-        return collectDescendantCategoryIds(categories, rootCategoryId);
-    }
-
-    /** 基于指定分类集合收集某个分类及其所有子分类 ID。 */
-    private Set<String> collectDescendantCategoryIds(List<Category> categories, String rootCategoryId) {
-        Map<String, List<String>> childrenMap = new HashMap<>();
-        for (Category category : categories) {
-            if (category.getParent() == null) {
-                continue;
-            }
-            childrenMap.computeIfAbsent(category.getParent().getId(), ignored -> new ArrayList<>())
-                    .add(category.getId());
-        }
-        Set<String> result = new LinkedHashSet<>();
-        ArrayList<String> queue = new ArrayList<>();
-        result.add(rootCategoryId);
-        queue.add(rootCategoryId);
-        while (!queue.isEmpty()) {
-            String currentId = queue.removeFirst();
-            for (String childId : childrenMap.getOrDefault(currentId, List.of())) {
-                if (result.add(childId)) {
-                    queue.add(childId);
-                }
-            }
-        }
-        return result;
-    }
-
-    /** 计算分类相对根节点的深度。 */
-    private Map<String, Integer> computeCategoryDepths(List<Category> categories, String rootCategoryId, int safeDepth) {
-        Map<String, Integer> depthMap = new HashMap<>();
-        Map<String, List<Category>> childrenMap = new HashMap<>();
-        Category rootCategory = null;
-        for (Category category : categories) {
-            if (rootCategoryId != null && rootCategoryId.equals(category.getId())) {
-                rootCategory = category;
-            }
-            if (category.getParent() != null) {
-                childrenMap.computeIfAbsent(category.getParent().getId(), ignored -> new ArrayList<>())
-                        .add(category);
-            }
-        }
-
-        if (rootCategoryId != null && rootCategory == null) {
-            return depthMap;
-        }
-
-        ArrayList<Category> queue = new ArrayList<>();
-        if (rootCategory != null) {
-            depthMap.put(rootCategory.getId(), 0);
-            queue.add(rootCategory);
-        } else {
-            for (Category category : categories) {
-                if (category.getParent() == null) {
-                    depthMap.put(category.getId(), 0);
-                    queue.add(category);
-                }
-            }
-        }
-
-        while (!queue.isEmpty()) {
-            Category current = queue.removeFirst();
-            int currentDepth = depthMap.getOrDefault(current.getId(), 0);
-            if (currentDepth >= safeDepth) {
-                continue;
-            }
-            for (Category child : childrenMap.getOrDefault(current.getId(), List.of())) {
-                if (!depthMap.containsKey(child.getId())) {
-                    depthMap.put(child.getId(), currentDepth + 1);
-                    queue.add(child);
-                }
-            }
-        }
-        return depthMap;
-    }
-
-    /** 判断笔记是否应出现在当前根节点与深度限制下。 */
-    private boolean isNoteIncluded(Note note, String rootCategoryId, Set<String> includedCategoryIds) {
-        if (note.getCategory() == null) {
-            return rootCategoryId == null;
-        }
-        return includedCategoryIds.contains(note.getCategory().getId());
+        return CategoryIdNormalizer.normalizeNullableCategoryId(categoryId);
     }
 
     /**
@@ -810,130 +570,11 @@ public class NoteService {
         return "未命名笔记";
     }
 
-    /** 将笔记转换为摘要 Map（用于列表展示） */
-    private Map<String, Object> toSummary(Note note) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", note.getId());
-        map.put("title", note.getTitle());
-        map.put("categoryId", note.getCategory() == null ? null : note.getCategory().getId());
-        map.put("updatedAt", note.getUpdatedAt());
-        map.put("deletedAt", note.getDeletedAt());
-        map.put("purgeAt", calculatePurgeAt(note.getDeletedAt()));
-        map.put("pinnedFlag", note.isPinnedFlag());
-        map.put("restorable", isTrashNoteRestorable(note));
-        return map;
-    }
-
     /**
      * 将笔记转换为详情 Map（用于笔记详情页展示）。
      */
     public Map<String, Object> toDetail(Note note) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", note.getId());
-        map.put("title", note.getTitle());
-        map.put("markdownContent", note.getMarkdownContent());
-        map.put("outlineJson", note.getOutlineJson());
-        map.put("categoryId", note.getCategory() == null ? null : note.getCategory().getId());
-        map.put("updatedAt", note.getUpdatedAt());
-        map.put("createdAt", note.getCreatedAt());
-        map.put("deletedAt", note.getDeletedAt());
-        map.put("purgeAt", calculatePurgeAt(note.getDeletedAt()));
-        map.put("pinnedFlag", note.isPinnedFlag());
-        map.put("restorable", isTrashNoteRestorable(note));
-        return map;
-    }
-
-    /** 将回收站分类转换为树节点。 */
-    private Map<String, Object> toTrashCategoryNode(Category category) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", category.getId());
-        map.put("name", category.getName());
-        map.put("type", "category");
-        map.put("parentId", category.getParent() == null ? null : category.getParent().getId());
-        map.put("deletedAt", category.getDeletedAt());
-        map.put("purgeAt", calculatePurgeAt(category.getDeletedAt()));
-        map.put("restorable", isTrashCategoryRestorable(category));
-        map.put("children", new ArrayList<Map<String, Object>>());
-        return map;
-    }
-
-    /** 将回收站中的笔记转换为树节点。 */
-    private Map<String, Object> toTrashTreeNote(Note note) {
-        Map<String, Object> map = new LinkedHashMap<>(toSummary(note));
-        map.put("name", note.getTitle());
-        map.put("type", "note");
-        return map;
-    }
-
-    /** 将笔记转换为目录树节点。 */
-    private Map<String, Object> toTreeNote(Note note) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", note.getId());
-        map.put("name", note.getTitle());
-        map.put("type", "note");
-        map.put("categoryId", note.getCategory() == null ? null : note.getCategory().getId());
-        map.put("updatedAt", note.getUpdatedAt());
-        map.put("pinnedFlag", note.isPinnedFlag());
-        return map;
-    }
-
-    /** 根据删除时间计算自动清理时间。 */
-    private LocalDateTime calculatePurgeAt(LocalDateTime deletedAt) {
-        if (deletedAt == null) {
-            return null;
-        }
-        return deletedAt.plusDays(getRetentionDays());
-    }
-
-    /** 判断回收站笔记当前是否允许直接恢复。 */
-    private boolean isTrashNoteRestorable(Note note) {
-        if (note == null || note.getDeletedAt() == null) {
-            return false;
-        }
-        return note.getCategory() == null || note.getCategory().getDeletedAt() == null;
-    }
-
-    /** 判断回收站分类当前是否允许直接恢复。 */
-    private boolean isTrashCategoryRestorable(Category category) {
-        if (category == null || category.getDeletedAt() == null) {
-            return false;
-        }
-        return category.getParent() == null || category.getParent().getDeletedAt() == null;
-    }
-
-    /** 对回收站树做稳定排序：分类在前、笔记在后，并递归处理子节点。 */
-    private void sortTrashItems(List<Map<String, Object>> items) {
-        for (Map<String, Object> item : items) {
-            if ("category".equals(item.get("type"))) {
-                sortTrashItems(castChildren(item));
-            }
-        }
-        items.sort((left, right) -> {
-            int typeOrder = Boolean.compare(
-                    !"category".equals(left.get("type")),
-                    !"category".equals(right.get("type"))
-            );
-            if (typeOrder != 0) {
-                return typeOrder;
-            }
-            return String.valueOf(left.get("name")).compareToIgnoreCase(String.valueOf(right.get("name")));
-        });
-    }
-
-    /** 为回收站分类节点补充直接子项统计信息。 */
-    private void decorateTrashCategoryStats(List<Map<String, Object>> items) {
-        for (Map<String, Object> item : items) {
-            if (!"category".equals(item.get("type"))) {
-                continue;
-            }
-            List<Map<String, Object>> children = castChildren(item);
-            long childCategoryCount = children.stream().filter(child -> "category".equals(child.get("type"))).count();
-            long childNoteCount = children.stream().filter(child -> "note".equals(child.get("type"))).count();
-            item.put("childCategoryCount", childCategoryCount);
-            item.put("childNoteCount", childNoteCount);
-            item.put("hasChildren", !children.isEmpty());
-            decorateTrashCategoryStats(children);
-        }
+        return noteViewMapper.toDetail(note);
     }
 
     /** 永久删除一组已进入回收站的笔记，并顺带清理分享记录。 */
@@ -962,7 +603,7 @@ public class NoteService {
     private CategoryTrashOperationResult purgeTrashCategoryInternal(String ownerId,
                                                                     String categoryId,
                                                                     List<Category> allCategories) {
-        Set<String> descendants = collectDescendantCategoryIds(allCategories, categoryId);
+        Set<String> descendants = categoryHierarchyService.collectDescendantIds(allCategories, categoryId);
         List<Category> categoriesToPurge = allCategories.stream()
                 .filter(item -> descendants.contains(item.getId()))
                 .filter(item -> item.getDeletedAt() != null)
@@ -990,7 +631,7 @@ public class NoteService {
         apiKeyScopeRepository.deleteByCategoryIdIn(categoryIdsToPurge);
 
         List<Category> sortedCategories = new ArrayList<>(categoriesToPurge);
-        sortedCategories.sort(Comparator.comparingInt(this::categoryDepth).reversed());
+        sortedCategories.sort(Comparator.comparingInt(categoryHierarchyService::depth).reversed());
         for (Category item : sortedCategories) {
             categoryRepository.delete(item);
         }
@@ -1032,17 +673,6 @@ public class NoteService {
         return removedCategoryCount;
     }
 
-    /** 计算分类在树中的深度，根分类深度为 0。 */
-    private int categoryDepth(Category category) {
-        int depth = 0;
-        Category current = category == null ? null : category.getParent();
-        while (current != null) {
-            depth++;
-            current = current.getParent();
-        }
-        return depth;
-    }
-
     /** 删除分类结果。 */
     public record CategoryTrashOperationResult(String categoryId, int categoryCount, int noteCount) {
     }
@@ -1056,10 +686,5 @@ public class NoteService {
         return Math.max(starlightProperties.getNoteTrash().getRetentionDays(), 1);
     }
 
-    /** 安全地将 children 属性转为 List */
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> castChildren(Map<String, Object> node) {
-        return (List<Map<String, Object>>) node.get("children");
-    }
 }
 

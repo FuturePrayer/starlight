@@ -14,3 +14,7 @@ spring:
       ddl-auto: none
     open-in-view: false
 
+starlight:
+  git:
+    allowed-hosts: example.com,*.example.com,github.com,*.github.com,gitee.com,*.gitee.com,localhost
+    timeout-seconds: 7

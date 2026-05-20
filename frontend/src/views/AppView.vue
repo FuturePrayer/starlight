@@ -540,6 +540,8 @@ import {
 } from '@/utils/markdownEnhance'
 import { exportMarkdownAsDocx } from '@/utils/docxExport'
 import { downloadBlob, sanitizeFileName } from '@/utils/fileDownload'
+import { createAutosaveScheduler } from '@/utils/autosaveScheduler'
+import { createLongPressController } from '@/utils/longPress'
 import OutlineList from '@/components/OutlineList.vue'
 import ImportExportModal from '@/components/ImportExportModal.vue'
 import PopupLayer from '@/components/PopupLayer.vue'
@@ -628,11 +630,24 @@ const {
   minWidth: 280,
   maxWidth: 480
 })
-let autosaveTimer = null
-let clockTimer = null
 let suppressNextHashScroll = false
-let noteContentLongPressTimer = null
-let noteContentLongPressStart = null
+const viewerLongPress = createLongPressController({
+  onTrigger: ({ point, payload }) => {
+    if (!payload || !canUseCurrentNoteContextMenu()) return
+    openContextMenu({
+      x: point.x,
+      y: point.y,
+      ...payload
+    })
+  }
+})
+const autosaveScheduler = createAutosaveScheduler({
+  shouldSave: () => noteStore.editMode && noteStore.autosaveEnabled && noteStore.dirty && !saveInProgress.value,
+  save: () => persistNote({ successMessage: '自动保存完成', source: 'auto' }),
+  onTick: () => {
+    nowTick.value = Date.now()
+  }
+})
 
 
 const topbarTitle = computed(() => {
@@ -1177,18 +1192,9 @@ function handleViewerContextMenu(event) {
 
 function startViewerLongPress(event) {
   if (!canUseCurrentNoteContextMenu()) return
-  if (event?.pointerType === 'mouse') return
-  cancelViewerLongPress()
-  noteContentLongPressStart = {
-    x: event?.clientX || 0,
-    y: event?.clientY || 0
-  }
-  noteContentLongPressTimer = window.setTimeout(() => {
-    if (!noteContentLongPressStart || !canUseCurrentNoteContextMenu()) return
-    event?.preventDefault?.()
-    openContextMenu({
-      x: noteContentLongPressStart.x,
-      y: noteContentLongPressStart.y,
+  viewerLongPress.start(event, () => {
+    if (!canUseCurrentNoteContextMenu()) return null
+    return {
       source: 'viewer',
       mode: 'tree',
       item: {
@@ -1196,25 +1202,16 @@ function startViewerLongPress(event) {
         type: 'note',
         name: noteStore.currentNote.title || '未命名笔记'
       }
-    })
-  }, 560)
+    }
+  })
 }
 
 function handleViewerLongPressMove(event) {
-  if (!noteContentLongPressStart) return
-  const dx = Math.abs((event?.clientX || 0) - noteContentLongPressStart.x)
-  const dy = Math.abs((event?.clientY || 0) - noteContentLongPressStart.y)
-  if (dx > 8 || dy > 8) {
-    cancelViewerLongPress()
-  }
+  viewerLongPress.move(event)
 }
 
 function cancelViewerLongPress() {
-  if (noteContentLongPressTimer) {
-    window.clearTimeout(noteContentLongPressTimer)
-    noteContentLongPressTimer = null
-  }
-  noteContentLongPressStart = null
+  viewerLongPress.cancel()
 }
 
 async function handleContextMenuAction(actionKey) {
@@ -1848,15 +1845,7 @@ onMounted(async () => {
     await themeStore.loadThemes()
     await noteStore.refreshTree()
     await noteStore.refreshTrash()
-    // Autosave every 30s
-    autosaveTimer = setInterval(async () => {
-      if (noteStore.editMode && noteStore.autosaveEnabled && noteStore.dirty && !saveInProgress.value) {
-        await persistNote({ successMessage: '自动保存完成', source: 'auto' })
-      }
-    }, 30000)
-    clockTimer = setInterval(() => {
-      nowTick.value = Date.now()
-    }, 1000)
+    autosaveScheduler.start()
     appReady.value = true
     activeOutlineAnchor.value = normalizeHash(route.hash)
     await syncNoteFromRoute()
@@ -1873,8 +1862,7 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   document.removeEventListener('keydown', handleContextKeydown)
-  clearInterval(autosaveTimer)
-  clearInterval(clockTimer)
+  autosaveScheduler.stop()
   cancelViewerLongPress()
 })
 </script>

@@ -38,6 +38,9 @@ Starlight 是一个基于 **Spring Boot 4 + Vue 3** 的 Markdown 笔记系统，
 
 - Git 导入功能默认关闭，需管理员在设置中心手动开启，并可设置同时导入任务数量限制。
 - 仅支持 `http://` / `https://` 仓库地址；私有仓库可在 URL 中嵌入认证信息，例如 `https://token@github.com/...`。
+- 服务端只允许访问 Git Host 白名单中的仓库，并会拒绝解析到本机、内网、链路本地、组播、CGNAT 或文档保留地址的 Host，降低 SSRF 风险。
+- 默认 Git Host 白名单包含 GitHub、Gitee、GitLab、Bitbucket、Codeberg、SourceForge、SourceHut、AtomGit、GitCode 等常见代码托管域名；可通过 `STARLIGHT_GIT_ALLOWED_HOSTS` 覆盖。
+- Git 远程分支解析与浅克隆使用 `STARLIGHT_GIT_TIMEOUT_SECONDS` 控制网络超时，默认 20 秒。
 - 首次导入会先解析远程分支并浅克隆到临时目录，用户可选择仓库内导入目录与目标分类；导入结束后临时目录会被删除。
 - 重新导入会克隆最新内容、覆盖已修改的导入笔记，并硬删除上一轮导入留下的旧数据（包含回收站中的相关笔记）。
 - 自动同步不要求用户编写 Cron 表达式，前端直接提供频率与时区配置；后端会保存最近 5 条同步记录，单次失败不会阻断后续同步。
@@ -130,6 +133,8 @@ mvn spring-boot:run
 | `STARLIGHT_DATASOURCE_PASSWORD` | 空 | 数据库密码 |
 | `STARLIGHT_NOTE_TRASH_RETENTION_DAYS` | `30` | 回收站保留天数 |
 | `STARLIGHT_NOTE_TRASH_CLEANUP_CRON` | `0 20 3 * * *` | 回收站清理计划 |
+| `STARLIGHT_GIT_ALLOWED_HOSTS` | `github.com,*.github.com,gitee.com,*.gitee.com,gitlab.com,*.gitlab.com,bitbucket.org,*.bitbucket.org,codeberg.org,*.codeberg.org,sourceforge.net,*.sourceforge.net,git.sr.ht,*.sr.ht,atomgit.com,*.atomgit.com,gitcode.com,*.gitcode.com` | Git 导入允许访问的 Host 白名单，逗号分隔，支持 `*.example.com` 子域通配 |
+| `STARLIGHT_GIT_TIMEOUT_SECONDS` | `20` | Git 分支解析与浅克隆网络超时秒数 |
 | `STARLIGHT_ASSETS_MAX_FILE_SIZE` | `10485760` | 图片上传单文件大小上限，默认 10 MiB |
 | `STARLIGHT_ASSETS_ALLOWED_TYPES` | `image/png,image/jpeg,image/webp,image/gif,image/avif` | 允许上传的图片 MIME 类型 |
 | `STARLIGHT_ASSETS_LOCAL_ROOT` | `./data/assets` | 本地图片资产存储目录 |

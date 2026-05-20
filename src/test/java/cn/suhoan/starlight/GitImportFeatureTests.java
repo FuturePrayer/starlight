@@ -82,6 +82,40 @@ class GitImportFeatureTests {
     }
 
     @Test
+    void gitImportStatusShouldExposeSecurityConfiguration() {
+        authService.register("git-status@example.com", "123456");
+        settingsService.setGitImportEnabled(true);
+
+        Map<String, Object> status = gitImportService.getFeatureStatus();
+
+        assertEquals(true, status.get("enabled"));
+        assertTrue(status.get("allowedHosts").toString().contains("example.com"));
+        assertEquals(7, status.get("timeoutSeconds"));
+    }
+
+    @Test
+    void gitImportShouldRejectHostOutsideAllowList() {
+        UserAccount user = authService.register("git-host-deny@example.com", "123456");
+        settingsService.setGitImportEnabled(true);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> gitImportService.createPreview(user, "https://not-allowed.invalid/demo.git", "main"));
+
+        assertTrue(exception.getMessage().contains("白名单"));
+    }
+
+    @Test
+    void gitImportShouldRejectLocalOrPrivateResolvedAddressEvenWhenHostAllowed() {
+        UserAccount user = authService.register("git-private-deny@example.com", "123456");
+        settingsService.setGitImportEnabled(true);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> gitImportService.createPreview(user, "https://localhost/demo.git", "main"));
+
+        assertTrue(exception.getMessage().contains("内网或本机地址"));
+    }
+
+    @Test
     void gitImportShouldCreateSourceAndImportMarkdownTree() throws Exception {
         UserAccount user = authService.register("git-import@example.com", "123456");
         settingsService.setGitImportEnabled(true);

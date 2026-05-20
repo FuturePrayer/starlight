@@ -38,6 +38,9 @@ Starlight is a **Spring Boot 4 + Vue 3** Markdown note-taking application with c
 
 - Git import is disabled by default. An administrator must enable it manually in Settings and can also set the maximum number of concurrent import tasks.
 - Only `http://` and `https://` repository URLs are supported. Private repositories can embed credentials in the URL, for example `https://token@github.com/...`.
+- The server only accesses repositories whose Git host is in the allowlist, and rejects hosts that resolve to local, private, link-local, multicast, CGNAT, or documentation-reserved addresses to reduce SSRF risk.
+- The default Git host allowlist includes common code hosting domains such as GitHub, Gitee, GitLab, Bitbucket, Codeberg, SourceForge, SourceHut, AtomGit, and GitCode. Override it with `STARLIGHT_GIT_ALLOWED_HOSTS`.
+- Remote branch resolution and shallow clones use `STARLIGHT_GIT_TIMEOUT_SECONDS` as the network timeout. The default is 20 seconds.
 - The first import resolves remote branches and performs a shallow clone into a temporary working directory. Users can then choose both the repository subdirectory to import and the target category. The temporary directory is deleted after the import finishes.
 - Reimport always clones the latest content, overwrites previously imported notes even if the user edited them, and hard-deletes old imported data, including related notes that are already in trash.
 - Auto-sync uses a structured UI instead of raw Cron expressions. The backend stores the latest 5 sync records, and one failed run does not block later scheduled runs.
@@ -130,6 +133,8 @@ Default runtime settings live in `src/main/resources/application.yaml`.
 | `STARLIGHT_DATASOURCE_PASSWORD` | empty | Database password |
 | `STARLIGHT_NOTE_TRASH_RETENTION_DAYS` | `30` | Trash retention period in days |
 | `STARLIGHT_NOTE_TRASH_CLEANUP_CRON` | `0 20 3 * * *` | Trash cleanup cron |
+| `STARLIGHT_GIT_ALLOWED_HOSTS` | `github.com,*.github.com,gitee.com,*.gitee.com,gitlab.com,*.gitlab.com,bitbucket.org,*.bitbucket.org,codeberg.org,*.codeberg.org,sourceforge.net,*.sourceforge.net,git.sr.ht,*.sr.ht,atomgit.com,*.atomgit.com,gitcode.com,*.gitcode.com` | Git import host allowlist, comma-separated, with `*.example.com` wildcard support for subdomains |
+| `STARLIGHT_GIT_TIMEOUT_SECONDS` | `20` | Network timeout in seconds for Git branch resolution and shallow clones |
 | `STARLIGHT_ASSETS_MAX_FILE_SIZE` | `10485760` | Per-image upload limit, 10 MiB by default |
 | `STARLIGHT_ASSETS_ALLOWED_TYPES` | `image/png,image/jpeg,image/webp,image/gif,image/avif` | Allowed image MIME types |
 | `STARLIGHT_ASSETS_LOCAL_ROOT` | `./data/assets` | Local image asset storage directory |

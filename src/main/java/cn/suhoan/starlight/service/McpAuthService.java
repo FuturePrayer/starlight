@@ -74,7 +74,7 @@ public class McpAuthService {
 
     /** 断言分类在当前 key 的权限范围内。 */
     public void assertCategoryAccessible(McpApiKeyPrincipal principal, String categoryId) {
-        String normalizedCategoryId = NoteService.normalizeNullableCategoryId(categoryId);
+        String normalizedCategoryId = CategoryIdNormalizer.normalizeNullableCategoryId(categoryId);
         if (normalizedCategoryId == null || principal.allowAllCategories()) {
             return;
         }

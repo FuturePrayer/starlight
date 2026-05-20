@@ -62,6 +62,7 @@ public class GitImportService {
     private static final long PREVIEW_EXPIRE_MINUTES = 20;
 
     private final GitRepositoryClient gitRepositoryClient;
+    private final GitRemoteSecurityService gitRemoteSecurityService;
     private final SettingsService settingsService;
     private final NoteService noteService;
     private final CategoryRepository categoryRepository;
@@ -71,12 +72,14 @@ public class GitImportService {
     private final GitImportBindingRepository gitImportBindingRepository;
     private final GitSyncHistoryRepository gitSyncHistoryRepository;
     private final TransactionTemplate transactionTemplate;
+    private final CategoryHierarchyService categoryHierarchyService;
     private final Object importSlotMonitor = new Object();
     private final ConcurrentHashMap<String, PreviewSession> previewSessions = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ReentrantLock> sourceLocks = new ConcurrentHashMap<>();
     private volatile int activeImportCount = 0;
 
     public GitImportService(GitRepositoryClient gitRepositoryClient,
+                            GitRemoteSecurityService gitRemoteSecurityService,
                             SettingsService settingsService,
                             NoteService noteService,
                             CategoryRepository categoryRepository,
@@ -85,8 +88,10 @@ public class GitImportService {
                             GitNoteSourceRepository gitNoteSourceRepository,
                             GitImportBindingRepository gitImportBindingRepository,
                             GitSyncHistoryRepository gitSyncHistoryRepository,
-                            TransactionTemplate transactionTemplate) {
+                            TransactionTemplate transactionTemplate,
+                            CategoryHierarchyService categoryHierarchyService) {
         this.gitRepositoryClient = gitRepositoryClient;
+        this.gitRemoteSecurityService = gitRemoteSecurityService;
         this.settingsService = settingsService;
         this.noteService = noteService;
         this.categoryRepository = categoryRepository;
@@ -96,6 +101,7 @@ public class GitImportService {
         this.gitImportBindingRepository = gitImportBindingRepository;
         this.gitSyncHistoryRepository = gitSyncHistoryRepository;
         this.transactionTemplate = transactionTemplate;
+        this.categoryHierarchyService = categoryHierarchyService;
     }
 
     /** 查询当前用户可见的 Git 导入功能状态。 */
@@ -103,12 +109,15 @@ public class GitImportService {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("enabled", isGitImportEnabled());
         data.put("maxConcurrentImports", getMaxConcurrentImports());
+        data.put("allowedHosts", gitRemoteSecurityService.allowedHosts());
+        data.put("timeoutSeconds", gitRemoteSecurityService.timeoutSeconds());
         return data;
     }
 
     /** 解析仓库分支。 */
     public Map<String, Object> resolveBranches(String repositoryUrl) {
         ensureGitImportEnabled();
+        gitRemoteSecurityService.verify(repositoryUrl);
         List<String> branches = gitRepositoryClient.listBranches(repositoryUrl);
         if (branches.isEmpty()) {
             throw new IllegalArgumentException("未解析到任何可用分支");
@@ -126,6 +135,7 @@ public class GitImportService {
      */
     public Map<String, Object> createPreview(UserAccount owner, String repositoryUrl, String branchName) {
         ensureGitImportEnabled();
+        gitRemoteSecurityService.verify(repositoryUrl);
         String normalizedBranchName = normalizeRequired(branchName, "请选择仓库分支");
         ImportSlot slot = acquireImportSlot();
         Path tempDirectory = null;
@@ -318,6 +328,7 @@ public class GitImportService {
                                         String triggerType,
                                         boolean forceReimport,
                                         boolean skipIfBusy) {
+        gitRemoteSecurityService.verify(source.getRepositoryUrl());
         ReentrantLock sourceLock = sourceLocks.computeIfAbsent(source.getId(), ignored -> new ReentrantLock());
         boolean locked;
         if (skipIfBusy) {
@@ -510,7 +521,7 @@ public class GitImportService {
 
         Set<String> allSubtreeCategoryIds = new HashSet<>();
         for (String categoryId : topLevelCategoryIds) {
-            allSubtreeCategoryIds.addAll(collectDescendantCategoryIds(ownerId, categoryId));
+            allSubtreeCategoryIds.addAll(categoryHierarchyService.collectAllDescendantIds(ownerId, categoryId));
         }
 
         Set<String> noteIdsToDelete = bindings.stream()
@@ -528,7 +539,7 @@ public class GitImportService {
         if (!allSubtreeCategoryIds.isEmpty()) {
             List<Category> categories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId).stream()
                     .filter(category -> allSubtreeCategoryIds.contains(category.getId()))
-                    .sorted(Comparator.comparingInt((Category category) -> categoryDepth(category)).reversed())
+                    .sorted(Comparator.comparingInt((Category category) -> categoryHierarchyService.depth(category)).reversed())
                     .toList();
             for (Category category : categories) {
                 categoryRepository.delete(category);
@@ -601,40 +612,6 @@ public class GitImportService {
         noteShareRepository.flush();
         noteRepository.deleteAll(notes);
         noteRepository.flush();
-    }
-
-    private Set<String> collectDescendantCategoryIds(String ownerId, String rootCategoryId) {
-        List<Category> categories = categoryRepository.findByOwnerIdOrderByNameAsc(ownerId);
-        Map<String, List<String>> childrenMap = new HashMap<>();
-        for (Category category : categories) {
-            if (category.getParent() != null) {
-                childrenMap.computeIfAbsent(category.getParent().getId(), ignored -> new ArrayList<>())
-                        .add(category.getId());
-            }
-        }
-        Set<String> result = new HashSet<>();
-        ArrayList<String> queue = new ArrayList<>();
-        result.add(rootCategoryId);
-        queue.add(rootCategoryId);
-        while (!queue.isEmpty()) {
-            String current = queue.removeFirst();
-            for (String childId : childrenMap.getOrDefault(current, List.of())) {
-                if (result.add(childId)) {
-                    queue.add(childId);
-                }
-            }
-        }
-        return result;
-    }
-
-    private int categoryDepth(Category category) {
-        int depth = 0;
-        Category current = category.getParent();
-        while (current != null) {
-            depth++;
-            current = current.getParent();
-        }
-        return depth;
     }
 
     private ImportSchedule validateSchedule(boolean autoSyncEnabled,

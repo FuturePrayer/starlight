@@ -106,7 +106,7 @@ public class McpScopeService {
      * <p>与普通浏���不同，受限 API Key 不允许把目标分类写到真实根目录或权限容器目录。</p>
      */
     public void assertWritableCategoryAccessible(McpApiKeyPrincipal principal, String categoryId) {
-        String normalizedCategoryId = NoteService.normalizeNullableCategoryId(categoryId);
+        String normalizedCategoryId = CategoryIdNormalizer.normalizeNullableCategoryId(categoryId);
         if (principal.allowAllCategories()) {
             return;
         }
@@ -119,7 +119,7 @@ public class McpScopeService {
                                            ScopeRootDescriptor rootDescriptor,
                                            String requestedCategoryId,
                                            Map<String, Category> categoryById) {
-        String normalizedCategoryId = NoteService.normalizeNullableCategoryId(requestedCategoryId);
+        String normalizedCategoryId = CategoryIdNormalizer.normalizeNullableCategoryId(requestedCategoryId);
         if (principal.allowAllCategories()) {
             if (normalizedCategoryId == null) {
                 return QueryTarget.rootView(null, Map.of(), Set.of());
